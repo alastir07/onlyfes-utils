@@ -1,0 +1,31 @@
+{
+  "name": "onlyfes-bot",
+  "version": "0.0.1",
+  "description": "Discord.js bot for OSRS OnlyFEs clan utilities",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alastir07/onlyfes-utils.git"
+  },
+  "keywords": [
+    "discord",
+    "osrs",
+    "bot"
+  ],
+  "author": "OnlyFEs team",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/alastir07/onlyfes-utils/issues"
+  },
+  "homepage": "https://github.com/alastir07/onlyfes-utils#readme",
+  "dependencies": {
+    "discord.js": "^14.19.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.27.0",
+    "eslint": "^9.27.0"
+  }
+}
