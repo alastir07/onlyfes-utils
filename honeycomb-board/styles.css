@@ -1,0 +1,768 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    display: flex;
+    min-height: 100vh;
+    background-color: #000;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+}
+
+.controls {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.edit-controls {
+    display: none;
+    gap: 10px;
+}
+
+.edit-controls.active {
+    display: flex;
+}
+
+.toggle-button {
+    padding: 8px 16px;
+    background-color: #333;
+    color: white;
+    border: 2px solid #666;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.toggle-button.edit-mode {
+    background-color: #4CAF50;
+    border-color: #45a049;
+}
+
+.controls button:not(.toggle-button) {
+    padding: 8px 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.controls button:hover {
+    background-color: #45a049;
+}
+
+.game-board {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    background-color: #222;
+    --hex-size: 50px;
+    --hex-width: 86.6px;
+    --hex-height: 100px;
+}
+
+.game-board.edit-mode {
+    background-color: #2a2a2a;
+}
+
+.game-board.dragging {
+    cursor: grabbing;
+}
+
+.hex {
+    position: absolute;
+    width: var(--hex-width);
+    height: var(--hex-height);
+    margin: 0;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.hex::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #666;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0.4;
+    transition: opacity 0.2s, background-color 0.2s;
+}
+
+.hex.filled::before {
+    background-color: #0066ff;
+    opacity: 1;
+}
+
+.hex::after {
+    content: '';
+    position: absolute;
+    width: calc(100% - 8px);
+    height: calc(100% - 8px);
+    top: 4px;
+    left: 4px;
+    background-color: #000;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.hex.filled::after {
+    opacity: 1;
+}
+
+.hex-content {
+    position: absolute;
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+    top: 8px;
+    left: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.hex.filled .hex-content {
+    opacity: 1;
+}
+
+.game-board:not(.edit-mode) .hex:not(.filled) {
+    display: none;
+}
+
+.edit-mode .hex:hover::before {
+    background-color: #888;
+}
+
+.tile-details {
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 350px;
+    height: 100vh;
+    background: #1a1a1a;
+    color: #fff;
+    padding: 20px;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.tile-details.active {
+    transform: translateX(0);
+}
+
+.tile-details-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.details-section {
+    background: #2a2a2a;
+    padding: 15px;
+    border-radius: 5px;
+}
+
+.details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.details-header h3 {
+    margin: 0;
+    color: #ccc;
+    font-size: 1.1em;
+}
+
+.details-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.edit-link {
+    background: none;
+    border: none;
+    color: #4CAF50;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.reset-link {
+    background: none;
+    border: none;
+    color: #f44336;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.edit-link:hover {
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.reset-link:hover {
+    background: rgba(244, 67, 54, 0.1);
+}
+
+.details-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.details-label {
+    color: #888;
+    font-size: 0.9em;
+}
+
+.details-value {
+    padding: 8px;
+    background: #333;
+    border-radius: 4px;
+    min-height: 20px;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.tile-details button {
+    padding: 8px 16px;
+    margin: 4px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.tile-details button:hover {
+    background-color: #45a049;
+}
+
+.tile-details button.remove-button {
+    background-color: #f44336;
+}
+
+.tile-details button.remove-button:hover {
+    background-color: #d32f2f;
+}
+
+.tile-actions {
+    margin-top: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.add-tile-actions {
+    margin-top: 16px;
+    border-top: 1px solid #444;
+    padding-top: 16px;
+}
+
+.add-tile-actions h3 {
+    margin-bottom: 8px;
+}
+
+.add-tile-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+/* Position classes for add buttons */
+.add-button-right { transform: translate(75%, 0); }
+.add-button-topright { transform: translate(37.5%, -75%); }
+.add-button-topleft { transform: translate(-37.5%, -75%); }
+.add-button-left { transform: translate(-75%, 0); }
+.add-button-bottomleft { transform: translate(-37.5%, 75%); }
+.add-button-bottomright { transform: translate(37.5%, 75%); }
+
+/* Entry and Exit Point Arrows */
+.entry-point, .exit-point {
+    position: absolute;
+    width: 30px;
+    height: 20px;
+    transform-origin: center;
+}
+
+.entry-point::before, .exit-point::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    clip-path: polygon(0 30%, 70% 30%, 70% 0%, 100% 50%, 70% 100%, 70% 70%, 0 70%);
+}
+
+.entry-point::before {
+    background-color: #4CAF50;
+}
+
+.exit-point::before {
+    background-color: #FF9800;
+}
+
+/* Arrow positions */
+.arrow-east {
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.arrow-west {
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%) rotate(180deg);
+}
+
+.arrow-northeast {
+    left: 75%;
+    top: 0;
+    transform: rotate(-60deg);
+}
+
+.arrow-northwest {
+    left: 25%;
+    top: 0;
+    transform: rotate(-120deg);
+}
+
+.arrow-southeast {
+    left: 75%;
+    bottom: 0;
+    transform: rotate(60deg);
+}
+
+.arrow-southwest {
+    left: 25%;
+    bottom: 0;
+    transform: rotate(120deg);
+}
+
+/* Entry/Exit Point Controls */
+.point-actions {
+    margin: 20px 0;
+    padding: 15px;
+    background: #2a2a2a;
+    border-radius: 5px;
+}
+
+.direction-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.direction-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.direction-control span {
+    width: 80px;
+    text-transform: capitalize;
+}
+
+.direction-control button {
+    flex: 1;
+    padding: 4px 8px;
+    background: #333;
+    border: 1px solid currentColor;
+    transition: background-color 0.2s;
+}
+
+.direction-control button:hover {
+    background: #444;
+}
+
+.entry-controls, .exit-controls {
+    flex: 1;
+}
+
+.entry-controls h4, .exit-controls h4 {
+    color: #ccc;
+    margin: 0 0 10px 0;
+}
+
+.entry-controls button, .exit-controls button {
+    display: block;
+    width: 100%;
+    margin: 5px 0;
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    background: #333;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.entry-controls button:hover {
+    background: #4CAF50;
+}
+
+.exit-controls button:hover {
+    background: #FF9800;
+}
+
+.entry-controls .remove-button:hover,
+.exit-controls .remove-button:hover {
+    background: #f44336;
+}
+
+.entry-arrow, .exit-arrow {
+    position: absolute;
+    width: 20px;
+    height: 10px;
+    pointer-events: none;
+}
+
+.entry-arrow::before, .exit-arrow::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.entry-arrow::before {
+    background-color: #4CAF50;
+}
+
+.exit-arrow::before {
+    background-color: #FF9800;
+}
+
+/* Arrow positions - perpendicular to faces */
+.arrow-east {
+    left: 100%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.arrow-west {
+    right: 100%;
+    top: 50%;
+    transform: translate(50%, -50%) rotate(180deg);
+}
+
+.arrow-northeast {
+    left: 75%;
+    top: 0;
+    transform: translate(-50%, -50%) rotate(-30deg);
+}
+
+.arrow-northwest {
+    left: 25%;
+    top: 0;
+    transform: translate(-50%, -50%) rotate(-150deg);
+}
+
+.arrow-southeast {
+    left: 75%;
+    bottom: 0;
+    transform: translate(-50%, 50%) rotate(30deg);
+}
+
+.arrow-southwest {
+    left: 25%;
+    bottom: 0;
+    transform: translate(-50%, 50%) rotate(150deg);
+}
+
+/* Flip entry arrows to point inward */
+.entry-arrow.arrow-east { transform: translate(-50%, -50%) rotate(180deg); }
+.entry-arrow.arrow-west { transform: translate(50%, -50%); }
+.entry-arrow.arrow-northeast { transform: translate(-50%, -50%) rotate(150deg); }
+.entry-arrow.arrow-northwest { transform: translate(-50%, -50%) rotate(30deg); }
+.entry-arrow.arrow-southeast { transform: translate(-50%, 50%) rotate(-150deg); }
+.entry-arrow.arrow-southwest { transform: translate(-50%, 50%) rotate(-30deg); }
+
+/* Context Menu Styles */
+.context-menu {
+    position: fixed;
+    background: #333;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 5px 0;
+    min-width: 150px;
+    z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.context-menu-item {
+    padding: 8px 15px;
+    cursor: pointer;
+    color: #fff;
+    transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+    background-color: #444;
+}
+
+.context-menu-item.danger {
+    color: #ff4444;
+}
+
+.context-menu-item.danger:hover {
+    background-color: #662222;
+}
+
+/* Zoom Controls */
+.zoom-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.zoom-controls button {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #333;
+    color: white;
+    border: 1px solid #666;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.zoom-controls button:hover {
+    background: #444;
+    border-color: #888;
+    transform: scale(1.1);
+}
+
+/* Remove Edge Arrow styles */
+.edge-arrow,
+.edge-arrow:hover,
+.edge-arrow.top,
+.edge-arrow.bottom,
+.edge-arrow.left,
+.edge-arrow.right,
+.game-board:not(.edit-mode) .edge-arrow {
+    display: none;
+}
+
+.edit-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.edit-textarea {
+    width: 100%;
+    min-height: 60px;
+    padding: 8px;
+    background: #333;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: white;
+    resize: vertical;
+}
+
+.edit-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.edit-actions button {
+    padding: 4px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.edit-actions button:first-child {
+    background: #4CAF50;
+    color: white;
+}
+
+.edit-actions button:last-child {
+    background: #666;
+    color: white;
+}
+
+.image-section {
+    margin-top: 20px;
+    padding: 15px;
+    background: #2a2a2a;
+    border-radius: 5px;
+}
+
+.image-section h3 {
+    color: #ccc;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.image-preview {
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.image-preview img {
+    max-width: 100%;
+    max-height: 150px;
+    border-radius: 4px;
+}
+
+.image-section input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    background: #333;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: white;
+    margin-bottom: 8px;
+}
+
+.image-section button {
+    width: 100%;
+    padding: 8px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.image-section button:hover {
+    background: #45a049;
+}
+
+.item-search-section {
+    background: #2a2a2a;
+    padding: 15px;
+    border-radius: 5px;
+    margin-top: 20px;
+}
+
+.item-search-section h3 {
+    margin: 0 0 10px 0;
+    color: #ccc;
+    font-size: 1.1em;
+}
+
+.search-container {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    width: 100%;
+}
+
+.search-container input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #333;
+    color: #fff;
+    font-size: 14px;
+}
+
+.search-container input:focus {
+    outline: none;
+    border-color: #4CAF50;
+}
+
+.search-container button {
+    white-space: nowrap;
+    padding: 8px 12px;
+}
+
+.search-results {
+    min-height: 20px;
+}
+
+.search-results .loading {
+    color: #888;
+    font-style: italic;
+}
+
+.search-results .no-results {
+    color: #888;
+    font-style: italic;
+}
+
+.search-results .error {
+    color: #f44336;
+}
+
+.details-value a {
+    color: #4CAF50;
+    text-decoration: none;
+}
+
+.details-value a:hover {
+    text-decoration: underline;
+}
+
+.border-color-section {
+    margin-top: 20px;
+    padding: 15px;
+    background: #2a2a2a;
+    border-radius: 5px;
+}
+
+.border-color-section h3 {
+    color: #ccc;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.color-picker-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.color-picker-container input[type="color"] {
+    width: 50px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.color-picker-container .color-value {
+    color: #fff;
+    font-family: monospace;
+    font-size: 0.9em;
+}
