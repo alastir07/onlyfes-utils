@@ -1,0 +1,18 @@
+GEM
+  specs:
+    csv (3.3.2)
+    date (3.3.4)
+    optparse (0.3.1)
+    time (0.2.2)
+      date
+
+PLATFORMS
+  x64-mingw-ucrt
+
+DEPENDENCIES
+  csv
+  optparse
+  time
+
+BUNDLED WITH
+   2.6.4
