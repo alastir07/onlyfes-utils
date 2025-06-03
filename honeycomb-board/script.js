@@ -743,34 +743,60 @@ class HexGrid {
 
     shareBoard() {
         const boardData = {
-            viewportX: this.viewportX,
-            viewportY: this.viewportY,
-            zoom: this.zoom,
-            tiles: Array.from(this.tiles.entries())
+            v: 1, // version number for future compatibility
+            x: Math.round(this.viewportX),
+            y: Math.round(this.viewportY),
+            z: Math.round(this.zoom * 100) / 100, // round to 2 decimal places
+            t: Array.from(this.tiles.entries())
                 .filter(([_, tile]) => tile.element.classList.contains('filled'))
                 .map(([key, tile]) => ({
-                    key,
+                    k: key,
                     q: tile.q,
                     r: tile.r,
-                    backgroundImage: tile.backgroundImage,
-                    details: tile.details
+                    i: tile.backgroundImage.replace(/url\(['"](.+)['"]\)/, '$1'),
+                    d: tile.details.description
                 }))
         };
 
-        // Convert to base64 for URL
-        const encodedData = btoa(JSON.stringify(boardData));
-        const shareUrl = `${window.location.origin}/view.html?board=${encodedData}`;
+        // Compress the data
+        const compressedData = this.compressBoardData(boardData);
+        
+        // Check if the URL would be too long
+        const maxUrlLength = 2000; // Most browsers support at least 2000 characters
+        const baseUrl = `${window.location.origin}/view.html?board=`;
+        
+        if (compressedData.length + baseUrl.length > maxUrlLength) {
+            // If too long, save to localStorage and use a reference
+            const boardId = 'board_' + Date.now();
+            localStorage.setItem(boardId, compressedData);
+            const shareUrl = `${baseUrl}${boardId}`;
+            this.copyToClipboard(shareUrl);
+            alert('Board data is large. A reference link has been copied to your clipboard. This link will work as long as you keep this browser open.');
+        } else {
+            const shareUrl = `${baseUrl}${compressedData}`;
+            this.copyToClipboard(shareUrl);
+            alert('Share link copied to clipboard!');
+        }
+    }
 
-        // Create a temporary input to copy the URL
+    compressBoardData(data) {
+        // Convert to a more compact format
+        const compact = JSON.stringify(data)
+            .replace(/"([^"]+)":/g, '$1:') // Remove quotes from property names
+            .replace(/,/g, ';') // Use semicolons instead of commas
+            .replace(/"/g, "'"); // Use single quotes instead of double quotes
+        
+        // Encode to base64
+        return btoa(compact);
+    }
+
+    copyToClipboard(text) {
         const tempInput = document.createElement('input');
-        tempInput.value = shareUrl;
+        tempInput.value = text;
         document.body.appendChild(tempInput);
         tempInput.select();
         document.execCommand('copy');
         document.body.removeChild(tempInput);
-
-        // Show a notification
-        alert('Share link copied to clipboard!');
     }
 }
 

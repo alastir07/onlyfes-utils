@@ -49,32 +49,54 @@
                 
                 if (boardData) {
                     try {
-                        const decodedData = JSON.parse(atob(boardData));
+                        let decodedData;
+                        // Check if this is a localStorage reference
+                        if (boardData.startsWith('board_')) {
+                            const storedData = localStorage.getItem(boardData);
+                            if (!storedData) {
+                                throw new Error('Board data not found in localStorage');
+                            }
+                            decodedData = this.decompressBoardData(storedData);
+                        } else {
+                            decodedData = this.decompressBoardData(boardData);
+                        }
                         this.loadBoardData(decodedData);
                     } catch (error) {
                         console.error('Error loading board data:', error);
+                        alert('Error loading board data. The link may be invalid or expired.');
                     }
                 }
+            }
+
+            decompressBoardData(data) {
+                // Decode from base64
+                const decoded = atob(data);
+                // Convert back to standard JSON format
+                const standard = decoded
+                    .replace(/([a-zA-Z0-9_]+):/g, '"$1":') // Add quotes back to property names
+                    .replace(/;/g, ',') // Convert semicolons back to commas
+                    .replace(/'/g, '"'); // Convert single quotes back to double quotes
+                return JSON.parse(standard);
             }
 
             loadBoardData(boardData) {
                 // Initialize empty grid first
                 this.initializeGrid();
                 
-                this.viewportX = boardData.viewportX || window.innerWidth / 2;
-                this.viewportY = boardData.viewportY || window.innerHeight / 2;
-                this.zoom = boardData.zoom || 1;
+                this.viewportX = boardData.x || window.innerWidth / 2;
+                this.viewportY = boardData.y || window.innerHeight / 2;
+                this.zoom = boardData.z || 1;
                 
                 // Fill and update tiles
-                boardData.tiles.forEach(tileData => {
-                    const { q, r, backgroundImage, details } = tileData;
+                boardData.t.forEach(tileData => {
+                    const { q, r, i, d } = tileData;
                     const key = `${q},${r}`;
                     const tile = this.tiles.get(key);
                     if (tile) {
                         tile.element.classList.add('filled');
-                        tile.backgroundImage = backgroundImage;
-                        tile.details = details;
-                        tile.element.querySelector('.hex-content').style.backgroundImage = backgroundImage;
+                        tile.backgroundImage = `url("${i}")`;
+                        tile.details = { description: d };
+                        tile.element.querySelector('.hex-content').style.backgroundImage = tile.backgroundImage;
                     }
                 });
 
