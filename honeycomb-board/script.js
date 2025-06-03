@@ -47,6 +47,7 @@ class HexGrid {
             document.getElementById('boardFile').click();
         });
         document.getElementById('boardFile').addEventListener('change', (e) => this.loadBoard(e));
+        document.getElementById('shareBoard').addEventListener('click', () => this.shareBoard());
 
         // Create edge arrows
         this.createEdgeArrows();
@@ -738,6 +739,38 @@ class HexGrid {
         }
 
         this.updateTilePositions();
+    }
+
+    shareBoard() {
+        const boardData = {
+            viewportX: this.viewportX,
+            viewportY: this.viewportY,
+            zoom: this.zoom,
+            tiles: Array.from(this.tiles.entries())
+                .filter(([_, tile]) => tile.element.classList.contains('filled'))
+                .map(([key, tile]) => ({
+                    key,
+                    q: tile.q,
+                    r: tile.r,
+                    backgroundImage: tile.backgroundImage,
+                    details: tile.details
+                }))
+        };
+
+        // Convert to base64 for URL
+        const encodedData = btoa(JSON.stringify(boardData));
+        const shareUrl = `${window.location.origin}/view.html?board=${encodedData}`;
+
+        // Create a temporary input to copy the URL
+        const tempInput = document.createElement('input');
+        tempInput.value = shareUrl;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+
+        // Show a notification
+        alert('Share link copied to clipboard!');
     }
 }
 
