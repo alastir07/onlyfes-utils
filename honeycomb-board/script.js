@@ -49,6 +49,9 @@ class HexGrid {
         document.getElementById('boardFile').addEventListener('change', (e) => this.loadBoard(e));
         document.getElementById('shareBoard').addEventListener('click', () => this.shareBoard());
 
+        // Add sidebar toggle listener
+        document.getElementById('toggleSidebar').addEventListener('click', () => this.toggleSidebar());
+
         // Create edge arrows
         this.createEdgeArrows();
     }
@@ -474,17 +477,25 @@ class HexGrid {
         let content = `
             <div class="tile-details-content">
                 <div class="details-section">
-                    <div class="details-header">
-                        <h3>Details</h3>
-                        ${this.isEditMode ? `
-                            <div class="details-actions">
-                                <button class="edit-link" onclick="hexGrid.startEditing('${key}', 'description')">Edit</button>
+                    ${this.isEditMode ? `
+                        <div class="details-header">
+                            <h3>Details</h3>
+                            <div class="details-actions" id="detailsActions">
+                                <button class="edit-link" onclick="hexGrid.startEditing('${key}')">Edit</button>
                                 <button class="reset-link" onclick="hexGrid.resetTile('${key}')">Reset</button>
                             </div>
-                        ` : ''}
-                    </div>
+                        </div>
+                    ` : ''}
+                    ${this.isEditMode ? `
+                        <div class="details-field">
+                            <span class="details-label">Title:</span>
+                            <div class="details-value" id="tileTitle">
+                                ${tile.details.title || `Tile ${key}`}
+                            </div>
+                        </div>
+                    ` : ''}
                     <div class="details-field">
-                        <span class="details-label">Description:</span>
+                        ${this.isEditMode ? `<span class="details-label">Description:</span>` : ''}
                         <div class="details-value" id="tileDescription">
                             ${tile.details.description}
                         </div>
@@ -501,7 +512,7 @@ class HexGrid {
                     </div>
                 ` : ''}
                 <div class="image-section">
-                    <h3>Image</h3>
+                    ${this.isEditMode ? `<h3>Image</h3>` : ''}
                     <div class="image-preview">
                         <img src="${tile.backgroundImage.replace(/url\(['"](.+)['"]\)/, '$1')}" alt="Tile preview">
                     </div>
@@ -512,6 +523,14 @@ class HexGrid {
 
         this.tileContent.innerHTML = content;
         this.tileDetails.classList.add('active');
+
+        // Update the sidebar header with the tile title in view mode
+        if (!this.isEditMode) {
+            const headerTitle = this.tileDetails.querySelector('.tile-details-header h2');
+            if (headerTitle) {
+                headerTitle.textContent = tile.details.title || `Tile ${key}`;
+            }
+        }
     }
 
     async searchOSRSItem(key) {
@@ -575,6 +594,7 @@ class HexGrid {
         // Reset to default values
         tile.backgroundImage = 'url("https://via.placeholder.com/100x115")';
         tile.element.querySelector('.hex-content').style.backgroundImage = tile.backgroundImage;
+        tile.details.title = `Tile ${key}`;
         tile.details.description = 'Click to edit details';
 
         // Refresh the tile details view
@@ -595,22 +615,44 @@ class HexGrid {
     }
 
     // Edit tile details
-    startEditing(key, field) {
+    startEditing(key) {
+        this.currentEditingKey = key;
         const tile = this.tiles.get(key);
         if (!tile) return;
 
-        const container = document.getElementById('tileDescription');
-        const currentValue = tile.details[field];
-        
-        container.innerHTML = `
+        // Hide the action buttons
+        const detailsActions = document.getElementById('detailsActions');
+        if (detailsActions) {
+            detailsActions.style.display = 'none';
+        }
+
+        // Set up title editing
+        const titleContainer = document.getElementById('tileTitle');
+        const titleValue = tile.details.title || `Tile ${key}`;
+        titleContainer.innerHTML = `
             <div class="edit-field">
-                <div id="editor"></div>
-                <div class="edit-actions">
-                    <button onclick="hexGrid.saveEdit('${key}', '${field}')">Save</button>
-                    <button onclick="hexGrid.cancelEdit('${key}', '${field}')">Cancel</button>
-                </div>
+                <input type="text" class="edit-textarea" value="${titleValue}">
             </div>
         `;
+
+        // Set up description editing
+        const descContainer = document.getElementById('tileDescription');
+        const descValue = tile.details.description || '';
+        descContainer.innerHTML = `
+            <div class="edit-field">
+                <div id="editor"></div>
+            </div>
+        `;
+
+        // Add save/cancel buttons at the bottom of the details section
+        const detailsSection = document.querySelector('.details-section');
+        const actionButtons = document.createElement('div');
+        actionButtons.className = 'edit-actions';
+        actionButtons.innerHTML = `
+            <button onclick="hexGrid.saveEdit('${key}')">Save</button>
+            <button onclick="hexGrid.cancelEdit('${key}')">Cancel</button>
+        `;
+        detailsSection.appendChild(actionButtons);
 
         // Initialize TinyMCE
         tinymce.init({
@@ -620,42 +662,106 @@ class HexGrid {
             plugins: [
                 'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
                 'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-                'insertdatetime', 'media', 'table', 'help', 'wordcount'
+                'insertdatetime', 'media', 'table', 'help', 'wordcount', 'textcolor'
             ],
             toolbar: 'undo redo | blocks | ' +
-                'bold italic backcolor | alignleft aligncenter ' +
+                'bold italic | forecolor backcolor | link | alignleft aligncenter ' +
                 'alignright alignjustify | bullist numlist outdent indent | ' +
                 'removeformat | help',
-            content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, San Francisco, Segoe UI, Roboto, Helvetica Neue, sans-serif; font-size: 14px; }',
+            content_style: `
+                body { 
+                    font-family: -apple-system, BlinkMacSystemFont, San Francisco, Segoe UI, Roboto, Helvetica Neue, sans-serif; 
+                    font-size: 14px; 
+                    color: #fff; 
+                    margin: 0;
+                    padding: 8px;
+                }
+                ul, ol {
+                    margin: 0;
+                    padding-left: 2em;
+                }
+                li {
+                    margin: 0.25em 0;
+                }
+                p {
+                    margin: 0.5em 0;
+                }
+            `,
+            formats: {
+                indent: { selector: 'p,h1,h2,h3,h4,h5,h6,td,th,div,ul,ol,li', styles: { marginLeft: '2em' } },
+                outdent: { selector: 'p,h1,h2,h3,h4,h5,h6,td,th,div,ul,ol,li', styles: { marginLeft: '0' } }
+            },
+            lists_indent_on_tab: true,
             setup: (editor) => {
                 editor.on('init', () => {
-                    editor.setContent(currentValue);
+                    editor.setContent(descValue);
                 });
-            }
+            },
+            promotion: false,
+            branding: false,
+            referrer_policy: 'origin'
         });
     }
 
-    saveEdit(key, field) {
+    saveEdit(key) {
         const tile = this.tiles.get(key);
         if (!tile) return;
 
-        const editor = tinymce.get('editor');
-        if (!editor) return;
+        // Get title value
+        const titleInput = document.querySelector('#tileTitle .edit-textarea');
+        const titleValue = titleInput.value;
 
-        const newValue = editor.getContent();
-        
-        if (newValue) {
-            tile.details[field] = newValue;
-            editor.remove(); // Clean up the editor
-            this.showTileDetails(key);
+        // Get description value
+        const editor = tinymce.get('editor');
+        const descValue = editor ? editor.getContent() : '';
+
+        // Update tile details
+        if (titleValue) {
+            tile.details.title = titleValue;
         }
+        if (descValue) {
+            tile.details.description = descValue;
+        }
+
+        // Clean up
+        if (editor) {
+            editor.remove();
+        }
+
+        // Show the action buttons again
+        const detailsActions = document.getElementById('detailsActions');
+        if (detailsActions) {
+            detailsActions.style.display = 'flex';
+        }
+
+        // Remove the save/cancel buttons
+        const actionButtons = document.querySelector('.edit-actions');
+        if (actionButtons) {
+            actionButtons.remove();
+        }
+
+        this.showTileDetails(key);
     }
 
-    cancelEdit(key, field) {
+    cancelEdit(key) {
+        // Clean up TinyMCE
         const editor = tinymce.get('editor');
         if (editor) {
-            editor.remove(); // Clean up the editor
+            editor.remove();
         }
+
+        // Show the action buttons again
+        const detailsActions = document.getElementById('detailsActions');
+        if (detailsActions) {
+            detailsActions.style.display = 'flex';
+        }
+
+        // Remove the save/cancel buttons
+        const actionButtons = document.querySelector('.edit-actions');
+        if (actionButtons) {
+            actionButtons.remove();
+        }
+
         this.showTileDetails(key);
     }
 
@@ -1108,6 +1214,16 @@ class HexGrid {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+
+    toggleSidebar() {
+        this.tileDetails.classList.toggle('expanded');
+        // If there's an active editor, reinitialize it to adjust to new width
+        const editor = tinymce.get('editor');
+        if (editor) {
+            editor.remove();
+            this.startEditing(this.currentEditingKey);
+        }
     }
 }
 

@@ -70,6 +70,7 @@ body {
     --hex-size: 50px;
     --hex-width: 86.6px;
     --hex-height: 100px;
+    transition: margin-right 0.3s ease;
 }
 
 .game-board.edit-mode {
@@ -162,25 +163,93 @@ body {
     color: #fff;
     padding: 20px;
     transform: translateX(100%);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s ease, width 0.3s ease;
     z-index: 1000;
     overflow-y: auto;
+}
+
+.tile-details.expanded {
+    width: 1000px;
 }
 
 .tile-details.active {
     transform: translateX(0);
 }
 
+.tile-details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.tile-details-header h2 {
+    margin: 0;
+    font-size: 1.5em;
+    color: #fff;
+}
+
+.toggle-sidebar {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.tile-details.expanded .toggle-sidebar {
+    transform: rotate(180deg);
+}
+
+.toggle-sidebar:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Adjust TinyMCE editor for expanded sidebar */
+.tile-details.expanded .tox-tinymce {
+    width: 100% !important;
+}
+
+.tile-details.expanded .tox .tox-toolbar__primary {
+    width: 100% !important;
+}
+
+.tile-details.expanded .tox .tox-toolbar__group {
+    flex-wrap: nowrap !important;
+}
+
+.tile-details.expanded .tox .tox-toolbar__group:not(:last-of-type) {
+    border-right: 1px solid #444 !important;
+}
+
+/* Ensure the game board adjusts when sidebar is expanded */
+.game-board {
+    transition: margin-right 0.3s ease;
+}
+
+.tile-details.active ~ .game-board {
+    margin-right: 350px;
+}
+
+.tile-details.active.expanded ~ .game-board {
+    margin-right: 600px;
+}
+
 .tile-details-content {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    min-height: 100%;
 }
 
 .details-section {
     background: #2a2a2a;
     padding: 15px;
     border-radius: 5px;
+    flex: 1;
 }
 
 .details-header {
@@ -249,6 +318,16 @@ body {
     min-height: 20px;
     word-break: break-word;
     line-height: 1.4;
+}
+
+.details-value ul, .details-value ol {
+    list-style-type: disc;
+    padding-left: 2em;
+    margin: 0.5em 0;
+}
+
+.details-value li {
+    margin: 0.25em 0;
 }
 
 .tile-details button {
@@ -585,13 +664,18 @@ body {
 
 .edit-textarea {
     width: 100%;
-    min-height: 60px;
     padding: 8px;
     background: #333;
     border: 1px solid #444;
     border-radius: 4px;
     color: white;
-    resize: vertical;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.edit-textarea:focus {
+    outline: none;
+    border-color: #4CAF50;
 }
 
 .edit-actions {
@@ -619,7 +703,7 @@ body {
 }
 
 .image-section {
-    margin-top: 20px;
+    margin-top: auto;
     padding: 15px;
     background: #2a2a2a;
     border-radius: 5px;
@@ -770,16 +854,18 @@ body {
 
 /* TinyMCE Editor Styles */
 .tox-tinymce {
-    border: 1px solid #444 !important;
+    border: 1px solid #666 !important;
     border-radius: 4px !important;
+    background: #1a1a1a !important;
 }
 
 .tox .tox-toolbar__primary {
-    background: #333 !important;
+    background: #2a2a2a !important;
+    border-bottom: 1px solid #666 !important;
 }
 
 .tox .tox-toolbar__group {
-    border-color: #444 !important;
+    border-color: #666 !important;
 }
 
 .tox .tox-tbtn {
@@ -792,17 +878,157 @@ body {
 
 .tox .tox-tbtn--enabled {
     background: #4CAF50 !important;
+    color: #fff !important;
 }
 
 .tox .tox-tbtn--enabled:hover {
     background: #45a049 !important;
 }
 
+.tox .tox-tbtn svg {
+    fill: #fff !important;
+}
+
+.tox .tox-tbtn--disabled svg {
+    fill: #666 !important;
+}
+
 .tox .tox-edit-area__iframe {
-    background: #222 !important;
+    background: #1a1a1a !important;
 }
 
 .tox .tox-edit-area__iframe body {
-    background: #222 !important;
+    background: #1a1a1a !important;
     color: #fff !important;
+}
+
+/* Editor content styles */
+.tox .tox-edit-area__iframe p,
+.tox .tox-edit-area__iframe h1,
+.tox .tox-edit-area__iframe h2,
+.tox .tox-edit-area__iframe h3,
+.tox .tox-edit-area__iframe h4,
+.tox .tox-edit-area__iframe h5,
+.tox .tox-edit-area__iframe h6,
+.tox .tox-edit-area__iframe li {
+    color: #fff !important;
+}
+
+.tox .tox-edit-area__iframe a {
+    color: #4CAF50 !important;
+}
+
+.tox .tox-edit-area__iframe a:hover {
+    color: #45a049 !important;
+}
+
+/* Toolbar button states */
+.tox .tox-tbtn--bespoke {
+    background: #333 !important;
+    color: #fff !important;
+}
+
+.tox .tox-tbtn--bespoke:hover {
+    background: #444 !important;
+}
+
+.tox .tox-tbtn--bespoke[aria-pressed="true"] {
+    background: #4CAF50 !important;
+    color: #fff !important;
+}
+
+/* Dropdown menus */
+.tox .tox-menu {
+    background: #2a2a2a !important;
+    border: 1px solid #666 !important;
+}
+
+.tox .tox-collection__item {
+    color: #fff !important;
+}
+
+.tox .tox-collection__item:hover {
+    background: #444 !important;
+}
+
+.tox .tox-collection__item--active {
+    background: #4CAF50 !important;
+    color: #fff !important;
+}
+
+/* Status bar */
+.tox .tox-statusbar {
+    background: #2a2a2a !important;
+    border-top: 1px solid #666 !important;
+    color: #fff !important;
+}
+
+.tox .tox-statusbar__path-item {
+    color: #fff !important;
+}
+
+/* Dialog boxes */
+.tox .tox-dialog {
+    background: #2a2a2a !important;
+    border: 1px solid #666 !important;
+}
+
+.tox .tox-dialog__header {
+    background: #333 !important;
+    border-bottom: 1px solid #666 !important;
+}
+
+.tox .tox-dialog__title {
+    color: #fff !important;
+}
+
+.tox .tox-dialog__body {
+    color: #fff !important;
+}
+
+.tox .tox-dialog__footer {
+    background: #333 !important;
+    border-top: 1px solid #666 !important;
+}
+
+.tox .tox-dialog__footer-end button {
+    background: #4CAF50 !important;
+    color: #fff !important;
+    border: none !important;
+}
+
+.tox .tox-dialog__footer-end button:hover {
+    background: #45a049 !important;
+}
+
+.tox .tox-dialog__footer-end button.tox-button--secondary {
+    background: #666 !important;
+}
+
+.tox .tox-dialog__footer-end button.tox-button--secondary:hover {
+    background: #777 !important;
+}
+
+/* Input fields in dialogs */
+.tox .tox-textfield,
+.tox .tox-textarea {
+    background: #1a1a1a !important;
+    border: 1px solid #666 !important;
+    color: #fff !important;
+}
+
+.tox .tox-textfield:focus,
+.tox .tox-textarea:focus {
+    border-color: #4CAF50 !important;
+}
+
+/* Checkboxes and radio buttons */
+.tox .tox-checkbox__input:checked + .tox-checkbox__label::before {
+    background: #4CAF50 !important;
+    border-color: #4CAF50 !important;
+}
+
+.tox .tox-radio__input:checked + .tox-radio__label::before {
+    background: #4CAF50 !important;
+    border-color: #4CAF50 !important;
 }
