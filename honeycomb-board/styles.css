@@ -598,6 +598,7 @@ body {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+    margin-top: 8px;
 }
 
 .edit-actions button {
@@ -765,4 +766,43 @@ body {
     color: #fff;
     font-family: monospace;
     font-size: 0.9em;
+}
+
+/* TinyMCE Editor Styles */
+.tox-tinymce {
+    border: 1px solid #444 !important;
+    border-radius: 4px !important;
+}
+
+.tox .tox-toolbar__primary {
+    background: #333 !important;
+}
+
+.tox .tox-toolbar__group {
+    border-color: #444 !important;
+}
+
+.tox .tox-tbtn {
+    color: #fff !important;
+}
+
+.tox .tox-tbtn:hover {
+    background: #444 !important;
+}
+
+.tox .tox-tbtn--enabled {
+    background: #4CAF50 !important;
+}
+
+.tox .tox-tbtn--enabled:hover {
+    background: #45a049 !important;
+}
+
+.tox .tox-edit-area__iframe {
+    background: #222 !important;
+}
+
+.tox .tox-edit-area__iframe body {
+    background: #222 !important;
+    color: #fff !important;
 }

@@ -604,29 +604,58 @@ class HexGrid {
         
         container.innerHTML = `
             <div class="edit-field">
-                <textarea class="edit-textarea">${currentValue}</textarea>
+                <div id="editor"></div>
                 <div class="edit-actions">
                     <button onclick="hexGrid.saveEdit('${key}', '${field}')">Save</button>
                     <button onclick="hexGrid.cancelEdit('${key}', '${field}')">Cancel</button>
                 </div>
             </div>
         `;
+
+        // Initialize TinyMCE
+        tinymce.init({
+            target: document.getElementById('editor'),
+            height: 300,
+            menubar: false,
+            plugins: [
+                'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                'insertdatetime', 'media', 'table', 'help', 'wordcount'
+            ],
+            toolbar: 'undo redo | blocks | ' +
+                'bold italic backcolor | alignleft aligncenter ' +
+                'alignright alignjustify | bullist numlist outdent indent | ' +
+                'removeformat | help',
+            content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, San Francisco, Segoe UI, Roboto, Helvetica Neue, sans-serif; font-size: 14px; }',
+            setup: (editor) => {
+                editor.on('init', () => {
+                    editor.setContent(currentValue);
+                });
+            }
+        });
     }
 
     saveEdit(key, field) {
         const tile = this.tiles.get(key);
         if (!tile) return;
 
-        const textarea = document.querySelector('.edit-textarea');
-        const newValue = textarea.value.trim();
+        const editor = tinymce.get('editor');
+        if (!editor) return;
+
+        const newValue = editor.getContent();
         
         if (newValue) {
             tile.details[field] = newValue;
+            editor.remove(); // Clean up the editor
             this.showTileDetails(key);
         }
     }
 
     cancelEdit(key, field) {
+        const editor = tinymce.get('editor');
+        if (editor) {
+            editor.remove(); // Clean up the editor
+        }
         this.showTileDetails(key);
     }
 
