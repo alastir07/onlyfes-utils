@@ -743,60 +743,342 @@ class HexGrid {
 
     shareBoard() {
         const boardData = {
-            v: 1, // version number for future compatibility
-            x: Math.round(this.viewportX),
-            y: Math.round(this.viewportY),
-            z: Math.round(this.zoom * 100) / 100, // round to 2 decimal places
-            t: Array.from(this.tiles.entries())
+            viewportX: this.viewportX,
+            viewportY: this.viewportY,
+            zoom: this.zoom,
+            tiles: Array.from(this.tiles.entries())
                 .filter(([_, tile]) => tile.element.classList.contains('filled'))
                 .map(([key, tile]) => ({
-                    k: key,
+                    key,
                     q: tile.q,
                     r: tile.r,
-                    i: tile.backgroundImage.replace(/url\(['"](.+)['"]\)/, '$1'),
-                    d: tile.details.description
+                    backgroundImage: tile.backgroundImage,
+                    details: tile.details
                 }))
         };
 
-        // Compress the data
-        const compressedData = this.compressBoardData(boardData);
-        
-        // Check if the URL would be too long
-        const maxUrlLength = 2000; // Most browsers support at least 2000 characters
-        const baseUrl = `${window.location.origin}/view.html?board=`;
-        
-        if (compressedData.length + baseUrl.length > maxUrlLength) {
-            // If too long, save to localStorage and use a reference
-            const boardId = 'board_' + Date.now();
-            localStorage.setItem(boardId, compressedData);
-            const shareUrl = `${baseUrl}${boardId}`;
-            this.copyToClipboard(shareUrl);
-            alert('Board data is large. A reference link has been copied to your clipboard. This link will work as long as you keep this browser open.');
-        } else {
-            const shareUrl = `${baseUrl}${compressedData}`;
-            this.copyToClipboard(shareUrl);
-            alert('Share link copied to clipboard!');
+        // Get the current styles
+        const styles = Array.from(document.styleSheets)
+            .map(sheet => {
+                try {
+                    return Array.from(sheet.cssRules)
+                        .map(rule => rule.cssText)
+                        .join('\n');
+                } catch (e) {
+                    // Skip external stylesheets
+                    return '';
+                }
+            })
+            .join('\n');
+
+        // Create the HTML content
+        const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexagonal Game Board - View</title>
+    <style>
+        ${styles}
+        /* Override styles for view-only mode */
+        .controls { display: none; }
+        .game-board { cursor: default; }
+        .hex { cursor: default; }
+        .hex:hover::before { background-color: inherit !important; }
+    </style>
+</head>
+<body>
+    <div class="game-board" id="gameBoard">
+        <!-- Hexagons will be added here dynamically -->
+    </div>
+    <div id="tileDetails" class="tile-details">
+        <h2>Tile Details</h2>
+        <div id="tileContent"></div>
+    </div>
+    <script>
+        // Include the HexGrid class
+        class HexGrid {
+            constructor() {
+                this.gameBoard = document.getElementById('gameBoard');
+                this.tileDetails = document.getElementById('tileDetails');
+                this.tileContent = document.getElementById('tileContent');
+                this.tiles = new Map();
+                this.contextMenu = null;
+
+                // Size calculations for perfect hexagon tiling
+                this.hexSize = 50;
+                this.hexWidth = this.hexSize * Math.sqrt(3);
+                this.hexHeight = this.hexSize * 2;
+                this.hexSpacing = 5;
+                
+                // Calculate offsets based on hexagon geometry
+                this.xStep = this.hexWidth + this.hexSpacing;
+                this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+                
+                // Grid dimensions
+                this.gridRadius = 10;
+                
+                // Viewport position and zoom
+                this.viewportX = window.innerWidth / 2;
+                this.viewportY = window.innerHeight / 2;
+                this.zoom = 1;
+                this.isDragging = false;
+                this.dragStart = { x: 0, y: 0 };
+                
+                // Edit mode state
+                this.isEditMode = false;
+                
+                // Initialize the grid
+                this.initializeGrid();
+                
+                // Add event listeners
+                this.gameBoard.addEventListener('click', this.handleBoardClick.bind(this));
+                this.setupDragHandlers();
+                this.setupZoomHandlers();
+            }
+
+            initializeGrid() {
+                this.gameBoard.innerHTML = '';
+                this.tiles.clear();
+
+                for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                    for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                        const offsetQ = q + (r % 2) * 0.5;
+                        if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2) {
+                            this.createEmptyHex(offsetQ, r);
+                        }
+                    }
+                }
+            }
+
+            createEmptyHex(q, r) {
+                const key = \`\${q},\${r}\`;
+                const { x, y } = this.gridToPixel(q, r);
+                
+                const hex = document.createElement('div');
+                hex.className = 'hex';
+                hex.style.left = \`\${x}px\`;
+                hex.style.top = \`\${y}px\`;
+
+                const content = document.createElement('div');
+                content.className = 'hex-content';
+                content.style.backgroundImage = 'url("https://via.placeholder.com/100x115")';
+                hex.appendChild(content);
+
+                const tileData = {
+                    element: hex,
+                    q,
+                    r,
+                    backgroundImage: content.style.backgroundImage,
+                    details: {
+                        name: \`Tile \${key}\`,
+                        description: 'Click to view details'
+                    }
+                };
+
+                this.tiles.set(key, tileData);
+                this.gameBoard.appendChild(hex);
+            }
+
+            gridToPixel(q, r) {
+                const x = q * this.xStep;
+                const y = -r * this.yStep;
+                return { 
+                    x: x + this.viewportX, 
+                    y: y + this.viewportY 
+                };
+            }
+
+            updateTilePositions() {
+                this.tiles.forEach((tile, key) => {
+                    const { x, y } = this.gridToPixel(tile.q, tile.r);
+                    tile.element.style.left = \`\${x}px\`;
+                    tile.element.style.top = \`\${y}px\`;
+                });
+            }
+
+            setupDragHandlers() {
+                let isDragging = false;
+                let dragStart = { x: 0, y: 0 };
+
+                this.gameBoard.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0) return;
+
+                    isDragging = false;
+                    dragStart = {
+                        x: e.clientX - this.viewportX,
+                        y: e.clientY - this.viewportY
+                    };
+
+                    const handleMouseMove = (e) => {
+                        const dx = e.clientX - (dragStart.x + this.viewportX);
+                        const dy = e.clientY - (dragStart.y + this.viewportY);
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance > 5) {
+                            isDragging = true;
+                            this.gameBoard.classList.add('dragging');
+                        }
+
+                        if (isDragging) {
+                            this.viewportX = e.clientX - dragStart.x;
+                            this.viewportY = e.clientY - dragStart.y;
+                            this.updateTilePositions();
+                        }
+                    };
+
+                    const handleMouseUp = (e) => {
+                        window.removeEventListener('mousemove', handleMouseMove);
+                        window.removeEventListener('mouseup', handleMouseUp);
+                        
+                        if (isDragging) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                        
+                        isDragging = false;
+                        this.gameBoard.classList.remove('dragging');
+                    };
+
+                    window.addEventListener('mousemove', handleMouseMove);
+                    window.addEventListener('mouseup', handleMouseUp);
+                });
+            }
+
+            setupZoomHandlers() {
+                this.gameBoard.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const zoomFactor = 1.1;
+                    const delta = e.deltaY > 0 ? 1/zoomFactor : zoomFactor;
+                    this.setZoom(this.zoom * delta);
+                });
+            }
+
+            setZoom(newZoom) {
+                this.zoom = Math.max(0.5, Math.min(2, newZoom));
+                
+                const baseSize = 50;
+                this.hexSize = baseSize * this.zoom;
+                this.hexWidth = this.hexSize * Math.sqrt(3);
+                this.hexHeight = this.hexSize * 2;
+                this.xStep = this.hexWidth + this.hexSpacing;
+                this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+
+                this.gameBoard.style.setProperty('--hex-size', \`\${this.hexSize}px\`);
+                this.gameBoard.style.setProperty('--hex-width', \`\${this.hexWidth}px\`);
+                this.gameBoard.style.setProperty('--hex-height', \`\${this.hexHeight}px\`);
+                
+                this.updateTilePositions();
+            }
+
+            handleBoardClick(e) {
+                if (e.target === this.gameBoard) {
+                    this.tileDetails.classList.remove('active');
+                } else if (e.target.closest('.hex')) {
+                    const hex = e.target.closest('.hex');
+                    const key = Array.from(this.tiles.keys()).find(k => this.tiles.get(k).element === hex);
+                    if (key) {
+                        this.showTileDetails(key);
+                    }
+                }
+            }
+
+            showTileDetails(key) {
+                const tile = this.tiles.get(key);
+                if (!tile) return;
+
+                let content = \`
+                    <div class="tile-details-content">
+                        <div class="details-section">
+                            <div class="details-header">
+                                <h3>Details</h3>
+                            </div>
+                            <div class="details-field">
+                                <span class="details-label">Description:</span>
+                                <div class="details-value">
+                                    \${tile.details.description}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="image-section">
+                            <h3>Image</h3>
+                            <div class="image-preview">
+                                <img src="\${tile.backgroundImage.replace(/url\\(['"](.+)['"]\\)/, '$1')}" alt="Tile preview">
+                            </div>
+                        </div>
+                    </div>
+                \`;
+
+                this.tileContent.innerHTML = content;
+                this.tileDetails.classList.add('active');
+            }
+
+            updateEditModeUI() {
+                this.gameBoard.classList.toggle('edit-mode', this.isEditMode);
+            }
+
+            loadBoardData(boardData) {
+                this.initializeGrid();
+                
+                this.viewportX = boardData.viewportX || window.innerWidth / 2;
+                this.viewportY = boardData.viewportY || window.innerHeight / 2;
+                this.zoom = boardData.zoom || 1;
+                
+                boardData.tiles.forEach(tileData => {
+                    const { q, r, backgroundImage, details } = tileData;
+                    const key = \`\${q},\${r}\`;
+                    const tile = this.tiles.get(key);
+                    if (tile) {
+                        tile.element.classList.add('filled');
+                        tile.backgroundImage = backgroundImage;
+                        tile.details = details;
+                        tile.element.querySelector('.hex-content').style.backgroundImage = backgroundImage;
+                    }
+                });
+
+                this.updateTilePositions();
+            }
         }
-    }
 
-    compressBoardData(data) {
-        // Convert to a more compact format
-        const compact = JSON.stringify(data)
-            .replace(/"([^"]+)":/g, '$1:') // Remove quotes from property names
-            .replace(/,/g, ';') // Use semicolons instead of commas
-            .replace(/"/g, "'"); // Use single quotes instead of double quotes
-        
-        // Encode to base64
-        return btoa(compact);
-    }
+        // Override the HexGrid class to disable editing features
+        class ViewOnlyHexGrid extends HexGrid {
+            constructor() {
+                super();
+                // Force view mode
+                this.isEditMode = false;
+                this.updateEditModeUI();
+                
+                // Load the board state
+                this.loadBoardData(${JSON.stringify(boardData)});
+            }
 
-    copyToClipboard(text) {
-        const tempInput = document.createElement('input');
-        tempInput.value = text;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempInput);
+            // Override methods to disable editing
+            toggleTile() { return; }
+            showContextMenu() { return; }
+            startEditing() { return; }
+            saveEdit() { return; }
+            cancelEdit() { return; }
+            changeTileImage() { return; }
+            removeTile() { return; }
+            expandBoard() { return; }
+        }
+
+        // Initialize the view-only grid
+        const hexGrid = new ViewOnlyHexGrid();
+    </script>
+</body>
+</html>`;
+
+        // Create a blob and download link
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'hex-board-view.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 }
 
