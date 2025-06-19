@@ -892,19 +892,361 @@ class HexGrid {
                 }))
         };
 
-        // Get the current styles
-        const styles = Array.from(document.styleSheets)
-            .map(sheet => {
-                try {
-                    return Array.from(sheet.cssRules)
-                        .map(rule => rule.cssText)
-                        .join('\n');
-                } catch (e) {
-                    // Skip external stylesheets
-                    return '';
-                }
-            })
-            .join('\n');
+        // Include the actual CSS content directly
+        const cssContent = `
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    display: flex;
+    min-height: 100vh;
+    background-color: #000;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+}
+
+.controls {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.edit-controls {
+    display: none;
+    gap: 10px;
+}
+
+.edit-controls.active {
+    display: flex;
+}
+
+.toggle-button {
+    padding: 8px 16px;
+    background-color: #333;
+    color: white;
+    border: 2px solid #666;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.toggle-button.edit-mode {
+    background-color: #4CAF50;
+    border-color: #45a049;
+}
+
+.controls button:not(.toggle-button) {
+    padding: 8px 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.controls button:hover {
+    background-color: #45a049;
+}
+
+.game-board {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    background-color: #222;
+    --hex-size: 50px;
+    --hex-width: 86.6px;
+    --hex-height: 100px;
+    transition: margin-right 0.3s ease;
+}
+
+.game-board.edit-mode {
+    background-color: #2a2a2a;
+}
+
+.game-board.dragging {
+    cursor: grabbing;
+}
+
+.hex {
+    position: absolute;
+    width: var(--hex-width);
+    height: var(--hex-height);
+    margin: 0;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.hex::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #666;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0.4;
+    transition: opacity 0.2s, background-color 0.2s;
+}
+
+.hex.filled::before {
+    background-color: #0066ff;
+    opacity: 1;
+}
+
+.hex::after {
+    content: '';
+    position: absolute;
+    width: calc(100% - 8px);
+    height: calc(100% - 8px);
+    top: 4px;
+    left: 4px;
+    background-color: #000;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.hex.filled::after {
+    opacity: 1;
+}
+
+.hex-content {
+    position: absolute;
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+    top: 8px;
+    left: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.hex.filled .hex-content {
+    opacity: 1;
+}
+
+.game-board:not(.edit-mode) .hex:not(.filled) {
+    display: none;
+}
+
+.edit-mode .hex:hover::before {
+    background-color: #888;
+}
+
+.tile-details {
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 350px;
+    height: 100vh;
+    background: #1a1a1a;
+    color: #fff;
+    padding: 20px;
+    transform: translateX(100%);
+    transition: transform 0.3s ease, width 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.tile-details.expanded {
+    width: 1000px;
+}
+
+.tile-details.active {
+    transform: translateX(0);
+}
+
+.tile-details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.tile-details-header h2 {
+    margin: 0;
+    font-size: 1.5em;
+    color: #fff;
+}
+
+.toggle-sidebar {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.tile-details.expanded .toggle-sidebar {
+    transform: rotate(180deg);
+}
+
+.toggle-sidebar:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.game-board {
+    transition: margin-right 0.3s ease;
+}
+
+.tile-details.active ~ .game-board {
+    margin-right: 350px;
+}
+
+.tile-details.active.expanded ~ .game-board {
+    margin-right: 600px;
+}
+
+.tile-details-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 100%;
+}
+
+.details-section {
+    background: #2a2a2a;
+    padding: 15px;
+    border-radius: 5px;
+    flex: 1;
+}
+
+.details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.details-header h3 {
+    margin: 0;
+    color: #ccc;
+    font-size: 1.1em;
+}
+
+.details-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.edit-link {
+    background: none;
+    border: none;
+    color: #4CAF50;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.reset-link {
+    background: none;
+    border: none;
+    color: #f44336;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.edit-link:hover {
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.reset-link:hover {
+    background: rgba(244, 67, 54, 0.1);
+}
+
+.details-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.details-label {
+    color: #888;
+    font-size: 0.9em;
+}
+
+.details-value {
+    padding: 8px;
+    background: #333;
+    border-radius: 4px;
+    min-height: 20px;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.details-value ul, .details-value ol {
+    list-style-type: disc;
+    padding-left: 2em;
+    margin: 0.5em 0;
+}
+
+.details-value li {
+    margin: 0.25em 0;
+}
+
+.details-value a {
+    color: #4CAF50;
+    text-decoration: none;
+}
+
+.details-value a:hover {
+    text-decoration: underline;
+}
+
+.image-section {
+    margin-top: auto;
+    padding: 15px;
+    background: #2a2a2a;
+    border-radius: 5px;
+}
+
+.image-section h3 {
+    color: #ccc;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.image-preview {
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.image-preview img {
+    max-width: 100%;
+    max-height: 150px;
+    border-radius: 4px;
+}
+
+/* Override styles for view-only mode */
+.controls { display: none; }
+.game-board { cursor: default; }
+.hex { cursor: pointer; }
+.hex:hover::before { background-color: inherit !important; }
+`;
 
         // Create the HTML content
         const htmlContent = `<!DOCTYPE html>
@@ -914,12 +1256,7 @@ class HexGrid {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hexagonal Game Board - View</title>
     <style>
-        ${styles}
-        /* Override styles for view-only mode */
-        .controls { display: none; }
-        .game-board { cursor: default; }
-        .hex { cursor: default; }
-        .hex:hover::before { background-color: inherit !important; }
+        ${cssContent}
     </style>
 </head>
 <body>
@@ -927,7 +1264,10 @@ class HexGrid {
         <!-- Hexagons will be added here dynamically -->
     </div>
     <div id="tileDetails" class="tile-details">
-        <h2>Tile Details</h2>
+        <div class="tile-details-header">
+            <h2>Tile Details</h2>
+            <button id="toggleSidebar" class="toggle-sidebar">◀</button>
+        </div>
         <div id="tileContent"></div>
     </div>
     <script>
@@ -1125,18 +1465,13 @@ class HexGrid {
                 let content = \`
                     <div class="tile-details-content">
                         <div class="details-section">
-                            <div class="details-header">
-                                <h3>Details</h3>
-                            </div>
                             <div class="details-field">
-                                <span class="details-label">Description:</span>
                                 <div class="details-value">
                                     \${tile.details.description}
                                 </div>
                             </div>
                         </div>
                         <div class="image-section">
-                            <h3>Image</h3>
                             <div class="image-preview">
                                 <img src="\${tile.backgroundImage.replace(/url\\(['"](.+)['"]\\)/, '$1')}" alt="Tile preview">
                             </div>
@@ -1146,6 +1481,12 @@ class HexGrid {
 
                 this.tileContent.innerHTML = content;
                 this.tileDetails.classList.add('active');
+
+                // Update the sidebar header with the tile title (matching view mode behavior)
+                const headerTitle = this.tileDetails.querySelector('.tile-details-header h2');
+                if (headerTitle) {
+                    headerTitle.textContent = tile.details.title || \`Tile \${key}\`;
+                }
             }
 
             updateEditModeUI() {
@@ -1183,8 +1524,15 @@ class HexGrid {
                 this.isEditMode = false;
                 this.updateEditModeUI();
                 
+                // Add sidebar toggle listener
+                document.getElementById('toggleSidebar').addEventListener('click', () => this.toggleSidebar());
+                
                 // Load the board state
                 this.loadBoardData(${JSON.stringify(boardData)});
+            }
+            
+            toggleSidebar() {
+                this.tileDetails.classList.toggle('expanded');
             }
 
             // Override methods to disable editing
