@@ -177,78 +177,7 @@ class HexGrid {
         const tile = this.tiles.get(key);
         if (!tile) return;
 
-        const isFilled = tile.element.classList.contains('filled');
-        if (isFilled) {
-            // Check if removing this tile would disconnect the board
-            if (this.wouldDisconnectBoard(q, r)) {
-                alert("Cannot remove this tile as it would disconnect the board");
-                return;
-            }
-        }
         tile.element.classList.toggle('filled');
-    }
-
-    // Update wouldDisconnectBoard to only consider filled tiles
-    wouldDisconnectBoard(q, r) {
-        const key = `${q},${r}`;
-        const tile = this.tiles.get(key);
-        if (!tile || !tile.element.classList.contains('filled')) return false;
-
-        // Count filled tiles
-        const filledTiles = Array.from(this.tiles.values())
-            .filter(t => t.element.classList.contains('filled'));
-        
-        if (filledTiles.length <= 2) return false;
-
-        const directions = [
-            { dq: 0.5, dr: 1 },   // Northeast
-            { dq: 1, dr: 0 },     // East
-            { dq: 0.5, dr: -1 },  // Southeast
-            { dq: -0.5, dr: -1 }, // Southwest
-            { dq: -1, dr: 0 },    // West
-            { dq: -0.5, dr: 1 }   // Northwest
-        ];
-
-        // Get filled neighbors
-        const neighbors = directions
-            .map(({ dq, dr }) => `${q + dq},${r + dr}`)
-            .filter(k => {
-                const t = this.tiles.get(k);
-                return t && t.element.classList.contains('filled');
-            });
-
-        if (neighbors.length <= 1) return false;
-
-        // Temporarily mark this tile as not filled
-        tile.element.classList.remove('filled');
-
-        // Do a flood fill from the first neighbor
-        const visited = new Set();
-        const stack = [neighbors[0]];
-
-        while (stack.length > 0) {
-            const currentKey = stack.pop();
-            if (visited.has(currentKey)) continue;
-            visited.add(currentKey);
-
-            const [currentQ, currentR] = currentKey.split(',').map(Number);
-            
-            directions.forEach(({ dq, dr }) => {
-                const neighborKey = `${currentQ + dq},${currentR + dr}`;
-                const neighborTile = this.tiles.get(neighborKey);
-                if (neighborTile && 
-                    neighborTile.element.classList.contains('filled') && 
-                    !visited.has(neighborKey)) {
-                    stack.push(neighborKey);
-                }
-            });
-        }
-
-        // Restore the tile's filled state
-        tile.element.classList.add('filled');
-
-        // Check if all filled tiles were reached
-        return visited.size < filledTiles.length - 1;
     }
 
     // Update save/load to handle filled state
@@ -799,18 +728,6 @@ class HexGrid {
         const key = `${q},${r}`;
         const tile = this.tiles.get(key);
         if (!tile) return;
-
-        // Don't allow removing the last tile
-        if (this.tiles.size <= 1) {
-            alert("Cannot remove the last tile on the board");
-            return;
-        }
-
-        // Check if removing this tile would disconnect the board
-        if (this.wouldDisconnectBoard(q, r)) {
-            alert("Cannot remove this tile as it would disconnect the board");
-            return;
-        }
 
         // Remove the tile element from the DOM
         tile.element.remove();
