@@ -59,8 +59,8 @@ class BaseGrid {
         if (filledTiles.length > 0) {
             // Show warning dialog
             const newGridType = this.gridType === 'hex' ? 'square' : 'hex';
-            const newGridName = newGridType === 'hex' ? 'Hexagonal' : 'Square';
-            const currentGridName = this.gridType === 'hex' ? 'Hexagonal' : 'Square';
+            const newGridName = newGridType === 'hex' ? 'hexagonal' : 'square';
+            const currentGridName = this.gridType === 'hex' ? 'hexagonal' : 'square';
             
             const confirmed = confirm(
                 `Switching from ${currentGridName} to ${newGridName} grid will clear all current tiles and reset the board.\n\n` +
@@ -1491,7 +1491,7 @@ body {
 </head>
 <body>
     <div class="game-board" id="gameBoard">
-        <!-- Hexagons will be added here dynamically -->
+        <!-- Game tiles will be added here dynamically -->
     </div>
     <div id="tileDetails" class="tile-details">
         <div class="tile-details-header">
@@ -1915,5 +1915,5 @@ body {
     }
 }
 
-// Initialize the hex grid (now supports both hex and square grids)
+// Initialize the game board (supports both hex and square grids)
 const hexGrid = new HexGrid(); 
