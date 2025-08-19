@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexagonal Game Board - View</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Override some styles for view-only mode */
+        .controls {
+            display: none;
+        }
+        .game-board {
+            cursor: default;
+        }
+        .hex {
+            cursor: default;
+        }
+        .hex:hover::before {
+            background-color: inherit !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-board" id="gameBoard">
+        <!-- Hexagons will be added here dynamically -->
+    </div>
+    <div id="tileDetails" class="tile-details">
+        <h2>Tile Details</h2>
+        <div id="tileContent"></div>
+    </div>
+    <script src="script.js"></script>
+    <script>
+        // Override the HexGrid class to disable editing features
+        class ViewOnlyHexGrid extends HexGrid {
+            constructor() {
+                super();
+                // Force view mode
+                this.isEditMode = false;
+                this.updateEditModeUI();
+                
+                // Load the board state from URL parameters
+                this.loadBoardFromUrl();
+            }
+
+            loadBoardFromUrl() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const boardData = urlParams.get('board');
+                
+                if (boardData) {
+                    try {
+                        let decodedData;
+                        // Check if this is a localStorage reference
+                        if (boardData.startsWith('board_')) {
+                            const storedData = localStorage.getItem(boardData);
+                            if (!storedData) {
+                                throw new Error('Board data not found in localStorage');
+                            }
+                            decodedData = this.decompressBoardData(storedData);
+                        } else {
+                            decodedData = this.decompressBoardData(boardData);
+                        }
+                        this.loadBoardData(decodedData);
+                    } catch (error) {
+                        console.error('Error loading board data:', error);
+                        alert('Error loading board data. The link may be invalid or expired.');
+                    }
+                }
+            }
+
+            decompressBoardData(data) {
+                // Decode from base64
+                const decoded = atob(data);
+                // Convert back to standard JSON format
+                const standard = decoded
+                    .replace(/([a-zA-Z0-9_]+):/g, '"$1":') // Add quotes back to property names
+                    .replace(/;/g, ',') // Convert semicolons back to commas
+                    .replace(/'/g, '"'); // Convert single quotes back to double quotes
+                return JSON.parse(standard);
+            }
+
+            loadBoardData(boardData) {
+                // Initialize empty grid first
+                this.initializeGrid();
+                
+                this.viewportX = boardData.x || window.innerWidth / 2;
+                this.viewportY = boardData.y || window.innerHeight / 2;
+                this.zoom = boardData.z || 1;
+                
+                // Fill and update tiles
+                boardData.t.forEach(tileData => {
+                    const { q, r, i, d } = tileData;
+                    const key = `${q},${r}`;
+                    const tile = this.tiles.get(key);
+                    if (tile) {
+                        tile.element.classList.add('filled');
+                        tile.backgroundImage = `url("${i}")`;
+                        tile.details = { description: d };
+                        tile.element.querySelector('.hex-content').style.backgroundImage = tile.backgroundImage;
+                    }
+                });
+
+                this.updateTilePositions();
+            }
+
+            // Override methods to disable editing
+            toggleTile() { return; }
+            showContextMenu() { return; }
+            startEditing() { return; }
+            saveEdit() { return; }
+            cancelEdit() { return; }
+            changeTileImage() { return; }
+            removeTile() { return; }
+            expandBoard() { return; }
+        }
+
+        // Initialize the view-only grid
+        const hexGrid = new ViewOnlyHexGrid();
+    </script>
+</body>
+</html> 

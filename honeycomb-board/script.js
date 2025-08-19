@@ -47,6 +47,10 @@ class HexGrid {
             document.getElementById('boardFile').click();
         });
         document.getElementById('boardFile').addEventListener('change', (e) => this.loadBoard(e));
+        document.getElementById('shareBoard').addEventListener('click', () => this.shareBoard());
+
+        // Add sidebar toggle listener
+        document.getElementById('toggleSidebar').addEventListener('click', () => this.toggleSidebar());
 
         // Create edge arrows
         this.createEdgeArrows();
@@ -173,78 +177,7 @@ class HexGrid {
         const tile = this.tiles.get(key);
         if (!tile) return;
 
-        const isFilled = tile.element.classList.contains('filled');
-        if (isFilled) {
-            // Check if removing this tile would disconnect the board
-            if (this.wouldDisconnectBoard(q, r)) {
-                alert("Cannot remove this tile as it would disconnect the board");
-                return;
-            }
-        }
         tile.element.classList.toggle('filled');
-    }
-
-    // Update wouldDisconnectBoard to only consider filled tiles
-    wouldDisconnectBoard(q, r) {
-        const key = `${q},${r}`;
-        const tile = this.tiles.get(key);
-        if (!tile || !tile.element.classList.contains('filled')) return false;
-
-        // Count filled tiles
-        const filledTiles = Array.from(this.tiles.values())
-            .filter(t => t.element.classList.contains('filled'));
-        
-        if (filledTiles.length <= 2) return false;
-
-        const directions = [
-            { dq: 0.5, dr: 1 },   // Northeast
-            { dq: 1, dr: 0 },     // East
-            { dq: 0.5, dr: -1 },  // Southeast
-            { dq: -0.5, dr: -1 }, // Southwest
-            { dq: -1, dr: 0 },    // West
-            { dq: -0.5, dr: 1 }   // Northwest
-        ];
-
-        // Get filled neighbors
-        const neighbors = directions
-            .map(({ dq, dr }) => `${q + dq},${r + dr}`)
-            .filter(k => {
-                const t = this.tiles.get(k);
-                return t && t.element.classList.contains('filled');
-            });
-
-        if (neighbors.length <= 1) return false;
-
-        // Temporarily mark this tile as not filled
-        tile.element.classList.remove('filled');
-
-        // Do a flood fill from the first neighbor
-        const visited = new Set();
-        const stack = [neighbors[0]];
-
-        while (stack.length > 0) {
-            const currentKey = stack.pop();
-            if (visited.has(currentKey)) continue;
-            visited.add(currentKey);
-
-            const [currentQ, currentR] = currentKey.split(',').map(Number);
-            
-            directions.forEach(({ dq, dr }) => {
-                const neighborKey = `${currentQ + dq},${currentR + dr}`;
-                const neighborTile = this.tiles.get(neighborKey);
-                if (neighborTile && 
-                    neighborTile.element.classList.contains('filled') && 
-                    !visited.has(neighborKey)) {
-                    stack.push(neighborKey);
-                }
-            });
-        }
-
-        // Restore the tile's filled state
-        tile.element.classList.add('filled');
-
-        // Check if all filled tiles were reached
-        return visited.size < filledTiles.length - 1;
     }
 
     // Update save/load to handle filled state
@@ -473,17 +406,25 @@ class HexGrid {
         let content = `
             <div class="tile-details-content">
                 <div class="details-section">
-                    <div class="details-header">
-                        <h3>Details</h3>
-                        ${this.isEditMode ? `
-                            <div class="details-actions">
-                                <button class="edit-link" onclick="hexGrid.startEditing('${key}', 'description')">Edit</button>
+                    ${this.isEditMode ? `
+                        <div class="details-header">
+                            <h3>Details</h3>
+                            <div class="details-actions" id="detailsActions">
+                                <button class="edit-link" onclick="hexGrid.startEditing('${key}')">Edit</button>
                                 <button class="reset-link" onclick="hexGrid.resetTile('${key}')">Reset</button>
                             </div>
-                        ` : ''}
-                    </div>
+                        </div>
+                    ` : ''}
+                    ${this.isEditMode ? `
+                        <div class="details-field">
+                            <span class="details-label">Title:</span>
+                            <div class="details-value" id="tileTitle">
+                                ${tile.details.title || `Tile ${key}`}
+                            </div>
+                        </div>
+                    ` : ''}
                     <div class="details-field">
-                        <span class="details-label">Description:</span>
+                        ${this.isEditMode ? `<span class="details-label">Description:</span>` : ''}
                         <div class="details-value" id="tileDescription">
                             ${tile.details.description}
                         </div>
@@ -500,7 +441,7 @@ class HexGrid {
                     </div>
                 ` : ''}
                 <div class="image-section">
-                    <h3>Image</h3>
+                    ${this.isEditMode ? `<h3>Image</h3>` : ''}
                     <div class="image-preview">
                         <img src="${tile.backgroundImage.replace(/url\(['"](.+)['"]\)/, '$1')}" alt="Tile preview">
                     </div>
@@ -511,6 +452,14 @@ class HexGrid {
 
         this.tileContent.innerHTML = content;
         this.tileDetails.classList.add('active');
+
+        // Update the sidebar header with the tile title in view mode
+        if (!this.isEditMode) {
+            const headerTitle = this.tileDetails.querySelector('.tile-details-header h2');
+            if (headerTitle) {
+                headerTitle.textContent = tile.details.title || `Tile ${key}`;
+            }
+        }
     }
 
     async searchOSRSItem(key) {
@@ -574,6 +523,7 @@ class HexGrid {
         // Reset to default values
         tile.backgroundImage = 'url("https://via.placeholder.com/100x115")';
         tile.element.querySelector('.hex-content').style.backgroundImage = tile.backgroundImage;
+        tile.details.title = `Tile ${key}`;
         tile.details.description = 'Click to edit details';
 
         // Refresh the tile details view
@@ -594,38 +544,153 @@ class HexGrid {
     }
 
     // Edit tile details
-    startEditing(key, field) {
+    startEditing(key) {
+        this.currentEditingKey = key;
         const tile = this.tiles.get(key);
         if (!tile) return;
 
-        const container = document.getElementById('tileDescription');
-        const currentValue = tile.details[field];
-        
-        container.innerHTML = `
+        // Hide the action buttons
+        const detailsActions = document.getElementById('detailsActions');
+        if (detailsActions) {
+            detailsActions.style.display = 'none';
+        }
+
+        // Set up title editing
+        const titleContainer = document.getElementById('tileTitle');
+        const titleValue = tile.details.title || `Tile ${key}`;
+        titleContainer.innerHTML = `
             <div class="edit-field">
-                <textarea class="edit-textarea">${currentValue}</textarea>
-                <div class="edit-actions">
-                    <button onclick="hexGrid.saveEdit('${key}', '${field}')">Save</button>
-                    <button onclick="hexGrid.cancelEdit('${key}', '${field}')">Cancel</button>
-                </div>
+                <input type="text" class="edit-textarea" value="${titleValue}">
             </div>
         `;
+
+        // Set up description editing
+        const descContainer = document.getElementById('tileDescription');
+        const descValue = tile.details.description || '';
+        descContainer.innerHTML = `
+            <div class="edit-field">
+                <div id="editor"></div>
+            </div>
+        `;
+
+        // Add save/cancel buttons at the bottom of the details section
+        const detailsSection = document.querySelector('.details-section');
+        const actionButtons = document.createElement('div');
+        actionButtons.className = 'edit-actions';
+        actionButtons.innerHTML = `
+            <button onclick="hexGrid.saveEdit('${key}')">Save</button>
+            <button onclick="hexGrid.cancelEdit('${key}')">Cancel</button>
+        `;
+        detailsSection.appendChild(actionButtons);
+
+        // Initialize TinyMCE
+        tinymce.init({
+            target: document.getElementById('editor'),
+            height: 300,
+            menubar: false,
+            plugins: [
+                'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                'insertdatetime', 'media', 'table', 'help', 'wordcount', 'textcolor'
+            ],
+            toolbar: 'undo redo | blocks | ' +
+                'bold italic | forecolor backcolor | link | alignleft aligncenter ' +
+                'alignright alignjustify | bullist numlist outdent indent | ' +
+                'removeformat | help',
+            content_style: `
+                body { 
+                    font-family: -apple-system, BlinkMacSystemFont, San Francisco, Segoe UI, Roboto, Helvetica Neue, sans-serif; 
+                    font-size: 14px; 
+                    color: #fff; 
+                    margin: 0;
+                    padding: 8px;
+                }
+                ul, ol {
+                    margin: 0;
+                    padding-left: 2em;
+                }
+                li {
+                    margin: 0.25em 0;
+                }
+                p {
+                    margin: 0.5em 0;
+                }
+            `,
+            formats: {
+                indent: { selector: 'p,h1,h2,h3,h4,h5,h6,td,th,div,ul,ol,li', styles: { marginLeft: '2em' } },
+                outdent: { selector: 'p,h1,h2,h3,h4,h5,h6,td,th,div,ul,ol,li', styles: { marginLeft: '0' } }
+            },
+            lists_indent_on_tab: true,
+            setup: (editor) => {
+                editor.on('init', () => {
+                    editor.setContent(descValue);
+                });
+            },
+            promotion: false,
+            branding: false,
+            referrer_policy: 'origin'
+        });
     }
 
-    saveEdit(key, field) {
+    saveEdit(key) {
         const tile = this.tiles.get(key);
         if (!tile) return;
 
-        const textarea = document.querySelector('.edit-textarea');
-        const newValue = textarea.value.trim();
-        
-        if (newValue) {
-            tile.details[field] = newValue;
-            this.showTileDetails(key);
+        // Get title value
+        const titleInput = document.querySelector('#tileTitle .edit-textarea');
+        const titleValue = titleInput.value;
+
+        // Get description value
+        const editor = tinymce.get('editor');
+        const descValue = editor ? editor.getContent() : '';
+
+        // Update tile details
+        if (titleValue) {
+            tile.details.title = titleValue;
         }
+        if (descValue) {
+            tile.details.description = descValue;
+        }
+
+        // Clean up
+        if (editor) {
+            editor.remove();
+        }
+
+        // Show the action buttons again
+        const detailsActions = document.getElementById('detailsActions');
+        if (detailsActions) {
+            detailsActions.style.display = 'flex';
+        }
+
+        // Remove the save/cancel buttons
+        const actionButtons = document.querySelector('.edit-actions');
+        if (actionButtons) {
+            actionButtons.remove();
+        }
+
+        this.showTileDetails(key);
     }
 
-    cancelEdit(key, field) {
+    cancelEdit(key) {
+        // Clean up TinyMCE
+        const editor = tinymce.get('editor');
+        if (editor) {
+            editor.remove();
+        }
+
+        // Show the action buttons again
+        const detailsActions = document.getElementById('detailsActions');
+        if (detailsActions) {
+            detailsActions.style.display = 'flex';
+        }
+
+        // Remove the save/cancel buttons
+        const actionButtons = document.querySelector('.edit-actions');
+        if (actionButtons) {
+            actionButtons.remove();
+        }
+
         this.showTileDetails(key);
     }
 
@@ -663,18 +728,6 @@ class HexGrid {
         const key = `${q},${r}`;
         const tile = this.tiles.get(key);
         if (!tile) return;
-
-        // Don't allow removing the last tile
-        if (this.tiles.size <= 1) {
-            alert("Cannot remove the last tile on the board");
-            return;
-        }
-
-        // Check if removing this tile would disconnect the board
-        if (this.wouldDisconnectBoard(q, r)) {
-            alert("Cannot remove this tile as it would disconnect the board");
-            return;
-        }
 
         // Remove the tile element from the DOM
         tile.element.remove();
@@ -738,6 +791,704 @@ class HexGrid {
         }
 
         this.updateTilePositions();
+    }
+
+    shareBoard() {
+        const boardData = {
+            viewportX: this.viewportX,
+            viewportY: this.viewportY,
+            zoom: this.zoom,
+            tiles: Array.from(this.tiles.entries())
+                .filter(([_, tile]) => tile.element.classList.contains('filled'))
+                .map(([key, tile]) => ({
+                    key,
+                    q: tile.q,
+                    r: tile.r,
+                    backgroundImage: tile.backgroundImage,
+                    details: tile.details
+                }))
+        };
+
+        // Include the actual CSS content directly
+        const cssContent = `
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    display: flex;
+    min-height: 100vh;
+    background-color: #000;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+}
+
+.controls {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.edit-controls {
+    display: none;
+    gap: 10px;
+}
+
+.edit-controls.active {
+    display: flex;
+}
+
+.toggle-button {
+    padding: 8px 16px;
+    background-color: #333;
+    color: white;
+    border: 2px solid #666;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.toggle-button.edit-mode {
+    background-color: #4CAF50;
+    border-color: #45a049;
+}
+
+.controls button:not(.toggle-button) {
+    padding: 8px 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.controls button:hover {
+    background-color: #45a049;
+}
+
+.game-board {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    background-color: #222;
+    --hex-size: 50px;
+    --hex-width: 86.6px;
+    --hex-height: 100px;
+    transition: margin-right 0.3s ease;
+}
+
+.game-board.edit-mode {
+    background-color: #2a2a2a;
+}
+
+.game-board.dragging {
+    cursor: grabbing;
+}
+
+.hex {
+    position: absolute;
+    width: var(--hex-width);
+    height: var(--hex-height);
+    margin: 0;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.hex::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #666;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0.4;
+    transition: opacity 0.2s, background-color 0.2s;
+}
+
+.hex.filled::before {
+    background-color: #0066ff;
+    opacity: 1;
+}
+
+.hex::after {
+    content: '';
+    position: absolute;
+    width: calc(100% - 8px);
+    height: calc(100% - 8px);
+    top: 4px;
+    left: 4px;
+    background-color: #000;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.hex.filled::after {
+    opacity: 1;
+}
+
+.hex-content {
+    position: absolute;
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+    top: 8px;
+    left: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.hex.filled .hex-content {
+    opacity: 1;
+}
+
+.game-board:not(.edit-mode) .hex:not(.filled) {
+    display: none;
+}
+
+.edit-mode .hex:hover::before {
+    background-color: #888;
+}
+
+.tile-details {
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 350px;
+    height: 100vh;
+    background: #1a1a1a;
+    color: #fff;
+    padding: 20px;
+    transform: translateX(100%);
+    transition: transform 0.3s ease, width 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.tile-details.expanded {
+    width: 1000px;
+}
+
+.tile-details.active {
+    transform: translateX(0);
+}
+
+.tile-details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.tile-details-header h2 {
+    margin: 0;
+    font-size: 1.5em;
+    color: #fff;
+}
+
+.toggle-sidebar {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.tile-details.expanded .toggle-sidebar {
+    transform: rotate(180deg);
+}
+
+.toggle-sidebar:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.game-board {
+    transition: margin-right 0.3s ease;
+}
+
+.tile-details.active ~ .game-board {
+    margin-right: 350px;
+}
+
+.tile-details.active.expanded ~ .game-board {
+    margin-right: 600px;
+}
+
+.tile-details-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 100%;
+}
+
+.details-section {
+    background: #2a2a2a;
+    padding: 15px;
+    border-radius: 5px;
+    flex: 1;
+}
+
+.details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.details-header h3 {
+    margin: 0;
+    color: #ccc;
+    font-size: 1.1em;
+}
+
+.details-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.edit-link {
+    background: none;
+    border: none;
+    color: #4CAF50;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.reset-link {
+    background: none;
+    border: none;
+    color: #f44336;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.edit-link:hover {
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.reset-link:hover {
+    background: rgba(244, 67, 54, 0.1);
+}
+
+.details-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.details-label {
+    color: #888;
+    font-size: 0.9em;
+}
+
+.details-value {
+    padding: 8px;
+    background: #333;
+    border-radius: 4px;
+    min-height: 20px;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.details-value ul, .details-value ol {
+    list-style-type: disc;
+    padding-left: 2em;
+    margin: 0.5em 0;
+}
+
+.details-value li {
+    margin: 0.25em 0;
+}
+
+.details-value a {
+    color: #4CAF50;
+    text-decoration: none;
+}
+
+.details-value a:hover {
+    text-decoration: underline;
+}
+
+.image-section {
+    margin-top: auto;
+    padding: 15px;
+    background: #2a2a2a;
+    border-radius: 5px;
+}
+
+.image-section h3 {
+    color: #ccc;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.image-preview {
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.image-preview img {
+    max-width: 100%;
+    max-height: 150px;
+    border-radius: 4px;
+}
+
+/* Override styles for view-only mode */
+.controls { display: none; }
+.game-board { cursor: default; }
+.hex { cursor: pointer; }
+.hex:hover::before { background-color: inherit !important; }
+`;
+
+        // Create the HTML content
+        const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexagonal Game Board - View</title>
+    <style>
+        ${cssContent}
+    </style>
+</head>
+<body>
+    <div class="game-board" id="gameBoard">
+        <!-- Hexagons will be added here dynamically -->
+    </div>
+    <div id="tileDetails" class="tile-details">
+        <div class="tile-details-header">
+            <h2>Tile Details</h2>
+            <button id="toggleSidebar" class="toggle-sidebar">◀</button>
+        </div>
+        <div id="tileContent"></div>
+    </div>
+    <script>
+        // Include the HexGrid class
+        class HexGrid {
+            constructor() {
+                this.gameBoard = document.getElementById('gameBoard');
+                this.tileDetails = document.getElementById('tileDetails');
+                this.tileContent = document.getElementById('tileContent');
+                this.tiles = new Map();
+                this.contextMenu = null;
+
+                // Size calculations for perfect hexagon tiling
+                this.hexSize = 50;
+                this.hexWidth = this.hexSize * Math.sqrt(3);
+                this.hexHeight = this.hexSize * 2;
+                this.hexSpacing = 5;
+                
+                // Calculate offsets based on hexagon geometry
+                this.xStep = this.hexWidth + this.hexSpacing;
+                this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+                
+                // Grid dimensions
+                this.gridRadius = 10;
+                
+                // Viewport position and zoom
+                this.viewportX = window.innerWidth / 2;
+                this.viewportY = window.innerHeight / 2;
+                this.zoom = 1;
+                this.isDragging = false;
+                this.dragStart = { x: 0, y: 0 };
+                
+                // Edit mode state
+                this.isEditMode = false;
+                
+                // Initialize the grid
+                this.initializeGrid();
+                
+                // Add event listeners
+                this.gameBoard.addEventListener('click', this.handleBoardClick.bind(this));
+                this.setupDragHandlers();
+                this.setupZoomHandlers();
+            }
+
+            initializeGrid() {
+                this.gameBoard.innerHTML = '';
+                this.tiles.clear();
+
+                for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                    for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                        const offsetQ = q + (r % 2) * 0.5;
+                        if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2) {
+                            this.createEmptyHex(offsetQ, r);
+                        }
+                    }
+                }
+            }
+
+            createEmptyHex(q, r) {
+                const key = \`\${q},\${r}\`;
+                const { x, y } = this.gridToPixel(q, r);
+                
+                const hex = document.createElement('div');
+                hex.className = 'hex';
+                hex.style.left = \`\${x}px\`;
+                hex.style.top = \`\${y}px\`;
+
+                const content = document.createElement('div');
+                content.className = 'hex-content';
+                content.style.backgroundImage = 'url("https://via.placeholder.com/100x115")';
+                hex.appendChild(content);
+
+                const tileData = {
+                    element: hex,
+                    q,
+                    r,
+                    backgroundImage: content.style.backgroundImage,
+                    details: {
+                        name: \`Tile \${key}\`,
+                        description: 'Click to view details'
+                    }
+                };
+
+                this.tiles.set(key, tileData);
+                this.gameBoard.appendChild(hex);
+            }
+
+            gridToPixel(q, r) {
+                const x = q * this.xStep;
+                const y = -r * this.yStep;
+                return { 
+                    x: x + this.viewportX, 
+                    y: y + this.viewportY 
+                };
+            }
+
+            updateTilePositions() {
+                this.tiles.forEach((tile, key) => {
+                    const { x, y } = this.gridToPixel(tile.q, tile.r);
+                    tile.element.style.left = \`\${x}px\`;
+                    tile.element.style.top = \`\${y}px\`;
+                });
+            }
+
+            setupDragHandlers() {
+                let isDragging = false;
+                let dragStart = { x: 0, y: 0 };
+
+                this.gameBoard.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0) return;
+
+                    isDragging = false;
+                    dragStart = {
+                        x: e.clientX - this.viewportX,
+                        y: e.clientY - this.viewportY
+                    };
+
+                    const handleMouseMove = (e) => {
+                        const dx = e.clientX - (dragStart.x + this.viewportX);
+                        const dy = e.clientY - (dragStart.y + this.viewportY);
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance > 5) {
+                            isDragging = true;
+                            this.gameBoard.classList.add('dragging');
+                        }
+
+                        if (isDragging) {
+                            this.viewportX = e.clientX - dragStart.x;
+                            this.viewportY = e.clientY - dragStart.y;
+                            this.updateTilePositions();
+                        }
+                    };
+
+                    const handleMouseUp = (e) => {
+                        window.removeEventListener('mousemove', handleMouseMove);
+                        window.removeEventListener('mouseup', handleMouseUp);
+                        
+                        if (isDragging) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                        
+                        isDragging = false;
+                        this.gameBoard.classList.remove('dragging');
+                    };
+
+                    window.addEventListener('mousemove', handleMouseMove);
+                    window.addEventListener('mouseup', handleMouseUp);
+                });
+            }
+
+            setupZoomHandlers() {
+                this.gameBoard.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const zoomFactor = 1.1;
+                    const delta = e.deltaY > 0 ? 1/zoomFactor : zoomFactor;
+                    this.setZoom(this.zoom * delta);
+                });
+            }
+
+            setZoom(newZoom) {
+                this.zoom = Math.max(0.5, Math.min(2, newZoom));
+                
+                const baseSize = 50;
+                this.hexSize = baseSize * this.zoom;
+                this.hexWidth = this.hexSize * Math.sqrt(3);
+                this.hexHeight = this.hexSize * 2;
+                this.xStep = this.hexWidth + this.hexSpacing;
+                this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+
+                this.gameBoard.style.setProperty('--hex-size', \`\${this.hexSize}px\`);
+                this.gameBoard.style.setProperty('--hex-width', \`\${this.hexWidth}px\`);
+                this.gameBoard.style.setProperty('--hex-height', \`\${this.hexHeight}px\`);
+                
+                this.updateTilePositions();
+            }
+
+            handleBoardClick(e) {
+                if (e.target === this.gameBoard) {
+                    this.tileDetails.classList.remove('active');
+                } else if (e.target.closest('.hex')) {
+                    const hex = e.target.closest('.hex');
+                    const key = Array.from(this.tiles.keys()).find(k => this.tiles.get(k).element === hex);
+                    if (key) {
+                        this.showTileDetails(key);
+                    }
+                }
+            }
+
+            showTileDetails(key) {
+                const tile = this.tiles.get(key);
+                if (!tile) return;
+
+                let content = \`
+                    <div class="tile-details-content">
+                        <div class="details-section">
+                            <div class="details-field">
+                                <div class="details-value">
+                                    \${tile.details.description}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="image-section">
+                            <div class="image-preview">
+                                <img src="\${tile.backgroundImage.replace(/url\\(['"](.+)['"]\\)/, '$1')}" alt="Tile preview">
+                            </div>
+                        </div>
+                    </div>
+                \`;
+
+                this.tileContent.innerHTML = content;
+                this.tileDetails.classList.add('active');
+
+                // Update the sidebar header with the tile title (matching view mode behavior)
+                const headerTitle = this.tileDetails.querySelector('.tile-details-header h2');
+                if (headerTitle) {
+                    headerTitle.textContent = tile.details.title || \`Tile \${key}\`;
+                }
+            }
+
+            updateEditModeUI() {
+                this.gameBoard.classList.toggle('edit-mode', this.isEditMode);
+            }
+
+            loadBoardData(boardData) {
+                this.initializeGrid();
+                
+                this.viewportX = boardData.viewportX || window.innerWidth / 2;
+                this.viewportY = boardData.viewportY || window.innerHeight / 2;
+                this.zoom = boardData.zoom || 1;
+                
+                boardData.tiles.forEach(tileData => {
+                    const { q, r, backgroundImage, details } = tileData;
+                    const key = \`\${q},\${r}\`;
+                    const tile = this.tiles.get(key);
+                    if (tile) {
+                        tile.element.classList.add('filled');
+                        tile.backgroundImage = backgroundImage;
+                        tile.details = details;
+                        tile.element.querySelector('.hex-content').style.backgroundImage = backgroundImage;
+                    }
+                });
+
+                this.updateTilePositions();
+            }
+        }
+
+        // Override the HexGrid class to disable editing features
+        class ViewOnlyHexGrid extends HexGrid {
+            constructor() {
+                super();
+                // Force view mode
+                this.isEditMode = false;
+                this.updateEditModeUI();
+                
+                // Add sidebar toggle listener
+                document.getElementById('toggleSidebar').addEventListener('click', () => this.toggleSidebar());
+                
+                // Load the board state
+                this.loadBoardData(${JSON.stringify(boardData)});
+            }
+            
+            toggleSidebar() {
+                this.tileDetails.classList.toggle('expanded');
+            }
+
+            // Override methods to disable editing
+            toggleTile() { return; }
+            showContextMenu() { return; }
+            startEditing() { return; }
+            saveEdit() { return; }
+            cancelEdit() { return; }
+            changeTileImage() { return; }
+            removeTile() { return; }
+            expandBoard() { return; }
+        }
+
+        // Initialize the view-only grid
+        const hexGrid = new ViewOnlyHexGrid();
+    </script>
+</body>
+</html>`;
+
+        // Create a blob and download link
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'hex-board-view.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    toggleSidebar() {
+        this.tileDetails.classList.toggle('expanded');
+        // If there's an active editor, reinitialize it to adjust to new width
+        const editor = tinymce.get('editor');
+        if (editor) {
+            editor.remove();
+            this.startEditing(this.currentEditingKey);
+        }
     }
 }
 

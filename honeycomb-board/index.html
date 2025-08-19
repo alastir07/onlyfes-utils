@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hexagonal Game Board</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/tinymce@6.8.3/tinymce.min.js"></script>
 </head>
 <body>
     <div class="controls">
@@ -12,6 +13,7 @@
         <div id="editControls" class="edit-controls">
             <button id="saveBoard">Save Board</button>
             <button id="loadBoard">Load Board</button>
+            <button id="shareBoard">Share Board</button>
             <input type="file" id="boardFile" accept=".json" style="display: none;">
         </div>
     </div>
@@ -19,7 +21,10 @@
         <!-- Hexagons will be added here dynamically -->
     </div>
     <div id="tileDetails" class="tile-details">
-        <h2>Tile Details</h2>
+        <div class="tile-details-header">
+            <h2>Tile Details</h2>
+            <button id="toggleSidebar" class="toggle-sidebar">◀</button>
+        </div>
         <div id="tileContent"></div>
     </div>
     <script src="script.js"></script>
