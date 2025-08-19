@@ -80,23 +80,35 @@
             }
 
             loadBoardData(boardData) {
+                // Set grid type if available
+                if (boardData.gridType) {
+                    this.gridType = boardData.gridType;
+                }
+                
                 // Initialize empty grid first
                 this.initializeGrid();
                 
-                this.viewportX = boardData.x || window.innerWidth / 2;
-                this.viewportY = boardData.y || window.innerHeight / 2;
-                this.zoom = boardData.z || 1;
+                this.viewportX = boardData.x || boardData.viewportX || window.innerWidth / 2;
+                this.viewportY = boardData.y || boardData.viewportY || window.innerHeight / 2;
+                this.zoom = boardData.z || boardData.zoom || 1;
+                
+                // Handle both compressed and uncompressed tile data formats
+                const tiles = boardData.t || boardData.tiles || [];
                 
                 // Fill and update tiles
-                boardData.t.forEach(tileData => {
-                    const { q, r, i, d } = tileData;
+                tiles.forEach(tileData => {
+                    const { q, r, i, d, backgroundImage, details } = tileData;
                     const key = `${q},${r}`;
                     const tile = this.tiles.get(key);
                     if (tile) {
                         tile.element.classList.add('filled');
-                        tile.backgroundImage = `url("${i}")`;
-                        tile.details = { description: d };
-                        tile.element.querySelector('.hex-content').style.backgroundImage = tile.backgroundImage;
+                        tile.backgroundImage = backgroundImage || `url("${i}")`;
+                        tile.details = details || { description: d };
+                        const contentSelector = this.gridType === 'hex' ? '.hex-content' : '.square-content';
+                        const content = tile.element.querySelector(contentSelector);
+                        if (content) {
+                            content.style.backgroundImage = tile.backgroundImage;
+                        }
                     }
                 });
 

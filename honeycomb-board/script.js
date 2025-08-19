@@ -1,25 +1,17 @@
-class HexGrid {
+// Base Grid class with common functionality
+class BaseGrid {
     constructor() {
         this.gameBoard = document.getElementById('gameBoard');
         this.tileDetails = document.getElementById('tileDetails');
         this.tileContent = document.getElementById('tileContent');
         this.editControls = document.getElementById('editControls');
         this.editModeToggle = document.getElementById('editModeToggle');
+        this.gridTypeToggle = document.getElementById('gridTypeToggle');
         this.tiles = new Map();
         this.contextMenu = null;
-
-        // Size calculations for perfect hexagon tiling
-        this.hexSize = 50; // Distance from center to corner
-        this.hexWidth = this.hexSize * Math.sqrt(3); // Width of hexagon
-        this.hexHeight = this.hexSize * 2; // Height of hexagon
-        this.hexSpacing = 5; // Gap between adjacent tiles
-        
-        // Calculate offsets based on hexagon geometry
-        this.xStep = this.hexWidth + this.hexSpacing;
-        this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
         
         // Grid dimensions
-        this.gridRadius = 10; // Increased from 5 to 10 for larger initial board
+        this.gridRadius = 10;
         
         // Viewport position and zoom
         this.viewportX = window.innerWidth / 2;
@@ -31,9 +23,11 @@ class HexGrid {
         // Edit mode state
         this.isEditMode = false;
         
-        // Initialize the grid
-        this.initializeGrid();
-        
+        // Grid type
+        this.gridType = 'hex'; // 'hex' or 'square'
+    }
+
+    setupCommonEventListeners() {
         // Add event listeners
         this.gameBoard.addEventListener('click', this.handleBoardClick.bind(this));
         this.setupDragHandlers();
@@ -52,6 +46,112 @@ class HexGrid {
         // Add sidebar toggle listener
         document.getElementById('toggleSidebar').addEventListener('click', () => this.toggleSidebar());
 
+        // Add grid type toggle listener
+        this.gridTypeToggle.addEventListener('click', () => this.toggleGridType());
+    }
+
+    toggleGridType() {
+        // Check if there are any filled tiles
+        const filledTiles = Array.from(this.tiles.values()).filter(tile => 
+            tile.element.classList.contains('filled')
+        );
+        
+        if (filledTiles.length > 0) {
+            // Show warning dialog
+            const newGridType = this.gridType === 'hex' ? 'square' : 'hex';
+            const newGridName = newGridType === 'hex' ? 'Hexagonal' : 'Square';
+            const currentGridName = this.gridType === 'hex' ? 'Hexagonal' : 'Square';
+            
+            const confirmed = confirm(
+                `Switching from ${currentGridName} to ${newGridName} grid will clear all current tiles and reset the board.\n\n` +
+                `This action cannot be undone. Do you want to continue?`
+            );
+            
+            if (!confirmed) {
+                return; // User cancelled, don't switch
+            }
+        }
+        
+        // Switch grid type
+        this.gridType = this.gridType === 'hex' ? 'square' : 'hex';
+        
+        // Update button text
+        this.gridTypeToggle.textContent = this.gridType === 'hex' ? '⬡ Hexes' : '⬛ Squares';
+        
+        // Update grid size calculations based on type
+        if (this.gridType === 'square') {
+            this.squareSize = 80;
+            this.squareSpacing = 5;
+            this.xStep = this.squareSize + this.squareSpacing;
+            this.yStep = this.squareSize + this.squareSpacing;
+        } else {
+            this.hexSize = 50;
+            this.hexWidth = this.hexSize * Math.sqrt(3);
+            this.hexHeight = this.hexSize * 2;
+            this.hexSpacing = 5;
+            this.xStep = this.hexWidth + this.hexSpacing;
+            this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+        }
+        
+        // Clear current grid and reset to blank state
+        this.gameBoard.innerHTML = '';
+        this.tiles.clear();
+        
+        // Hide tile details panel
+        this.tileDetails.classList.remove('active');
+        
+        // Reinitialize with new grid type (blank)
+        this.initializeGrid();
+        
+        // Update positions
+        this.updateTilePositions();
+    }
+
+    getBoardData() {
+        return {
+            viewportX: this.viewportX,
+            viewportY: this.viewportY,
+            zoom: this.zoom,
+            isEditMode: this.isEditMode,
+            gridType: this.gridType,
+            tiles: Array.from(this.tiles.entries())
+                .filter(([_, tile]) => tile.element.classList.contains('filled'))
+                .map(([key, tile]) => ({
+                    key,
+                    q: tile.q,
+                    r: tile.r,
+                    backgroundImage: tile.backgroundImage,
+                    details: tile.details
+                }))
+        };
+    }
+}
+
+class HexGrid extends BaseGrid {
+    constructor() {
+        super();
+        this.gridType = 'hex';
+
+        // Size calculations for perfect hexagon tiling
+        this.hexSize = 50; // Distance from center to corner
+        this.hexWidth = this.hexSize * Math.sqrt(3); // Width of hexagon
+        this.hexHeight = this.hexSize * 2; // Height of hexagon
+        this.hexSpacing = 5; // Gap between adjacent tiles
+        
+        // Size calculations for square grid
+        this.squareSize = 80; // Size of each square
+        this.squareSpacing = 5; // Gap between squares
+        
+        // Calculate offsets based on hexagon geometry (default)
+        this.xStep = this.hexWidth + this.hexSpacing;
+        this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+        
+        // Initialize the grid
+        this.initializeGrid();
+        
+        // Setup event listeners
+        this.setupCommonEventListeners();
+
         // Create edge arrows
         this.createEdgeArrows();
     }
@@ -61,14 +161,23 @@ class HexGrid {
         this.gameBoard.innerHTML = '';
         this.tiles.clear();
 
-        // Create a hexagonal grid with offset rows
-        for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
-            for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
-                // Offset alternate rows
-                const offsetQ = q + (r % 2) * 0.5;
-                // Check if this hex is within the circular radius
-                if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2) {
-                    this.createEmptyHex(offsetQ, r);
+        if (this.gridType === 'square') {
+            // Create a square grid
+            for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                    this.createEmptySquare(q, r);
+                }
+            }
+        } else {
+            // Create a hexagonal grid with offset rows
+            for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                    // Offset alternate rows
+                    const offsetQ = q + (r % 2) * 0.5;
+                    // Check if this hex is within the circular radius
+                    if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2) {
+                        this.createEmptyHex(offsetQ, r);
+                    }
                 }
             }
         }
@@ -124,6 +233,49 @@ class HexGrid {
 
         this.tiles.set(key, tileData);
         this.gameBoard.appendChild(hex);
+    }
+
+    createEmptySquare(q, r) {
+        const key = `${q},${r}`;
+        const { x, y } = this.gridToPixel(q, r);
+        
+        const square = document.createElement('div');
+        square.className = 'square';
+        square.style.left = `${x}px`;
+        square.style.top = `${y}px`;
+
+        const content = document.createElement('div');
+        content.className = 'square-content';
+        content.style.backgroundImage = 'url("https://via.placeholder.com/80x80")';
+        square.appendChild(content);
+
+        const tileData = {
+            element: square,
+            q,
+            r,
+            backgroundImage: content.style.backgroundImage,
+            details: {
+                name: `Tile ${key}`,
+                description: 'Click to edit details'
+            }
+        };
+
+        square.addEventListener('click', (e) => {
+            // Only toggle if we're in edit mode and this wasn't a drag
+            if (this.isEditMode && !this.gameBoard.classList.contains('dragging')) {
+                this.toggleTile(q, r);
+            }
+        });
+
+        square.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (this.isEditMode && square.classList.contains('filled')) {
+                this.showContextMenu(e, key);
+            }
+        });
+
+        this.tiles.set(key, tileData);
+        this.gameBoard.appendChild(square);
     }
 
     showContextMenu(e, key) {
@@ -182,27 +334,13 @@ class HexGrid {
 
     // Update save/load to handle filled state
     saveBoard() {
-        const boardData = {
-            viewportX: this.viewportX,
-            viewportY: this.viewportY,
-            zoom: this.zoom,
-            isEditMode: this.isEditMode,
-            tiles: Array.from(this.tiles.entries())
-                .filter(([_, tile]) => tile.element.classList.contains('filled'))
-                .map(([key, tile]) => ({
-                    key,
-                    q: tile.q,
-                    r: tile.r,
-                    backgroundImage: tile.backgroundImage,
-                    details: tile.details
-                })),
-        };
+        const boardData = this.getBoardData();
 
         const blob = new Blob([JSON.stringify(boardData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'hex-board.json';
+        a.download = `${this.gridType}-board.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -217,6 +355,39 @@ class HexGrid {
         reader.onload = (e) => {
             try {
                 const boardData = JSON.parse(e.target.result);
+                
+                // Detect grid type if not explicitly specified
+                if (!boardData.gridType && boardData.tiles && boardData.tiles.length > 0) {
+                    // Try to detect grid type based on coordinate patterns
+                    boardData.gridType = this.detectGridType(boardData.tiles);
+                }
+                
+                // Switch grid type if needed
+                if (boardData.gridType && boardData.gridType !== this.gridType) {
+                    const oldGridType = this.gridType;
+                    this.gridType = boardData.gridType;
+                    this.gridTypeToggle.textContent = this.gridType === 'hex' ? '⬡ Hexes' : '⬛ Squares';
+                    
+                    // Update grid size calculations based on detected type
+                    if (this.gridType === 'square') {
+                        this.squareSize = 80;
+                        this.squareSpacing = 5;
+                        this.xStep = this.squareSize + this.squareSpacing;
+                        this.yStep = this.squareSize + this.squareSpacing;
+                    } else {
+                        this.hexSize = 50;
+                        this.hexWidth = this.hexSize * Math.sqrt(3);
+                        this.hexHeight = this.hexSize * 2;
+                        this.hexSpacing = 5;
+                        this.xStep = this.hexWidth + this.hexSpacing;
+                        this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+                    }
+                    
+                    // Show user-friendly notification
+                    const gridTypeName = this.gridType === 'hex' ? 'hexagonal' : 'square';
+                    const oldGridTypeName = oldGridType === 'hex' ? 'hexagonal' : 'square';
+                    console.log(`Automatically switched from ${oldGridTypeName} to ${gridTypeName} grid based on loaded board data.`);
+                }
                 
                 // Initialize empty grid first
                 this.initializeGrid();
@@ -239,7 +410,11 @@ class HexGrid {
                         tile.element.classList.add('filled');
                         tile.backgroundImage = backgroundImage;
                         tile.details = details;
-                        tile.element.querySelector('.hex-content').style.backgroundImage = backgroundImage;
+                        const contentSelector = this.gridType === 'hex' ? '.hex-content' : '.square-content';
+                        const content = tile.element.querySelector(contentSelector);
+                        if (content) {
+                            content.style.backgroundImage = backgroundImage;
+                        }
                     }
                 });
 
@@ -249,6 +424,59 @@ class HexGrid {
             }
         };
         reader.readAsText(file);
+    }
+
+    detectGridType(tiles) {
+        // Analyze tile coordinates to determine if it's a hex or square grid
+        // Hex grids typically have fractional q coordinates due to offset rows
+        // Square grids have integer coordinates in a regular pattern
+        
+        const coordinates = tiles.map(tile => ({ q: tile.q, r: tile.r }));
+        
+        // Check for fractional coordinates (typical of hex grids with offset rows)
+        const hasFractionalCoords = coordinates.some(coord => 
+            coord.q % 1 !== 0 || coord.r % 1 !== 0
+        );
+        
+        if (hasFractionalCoords) {
+            return 'hex';
+        }
+        
+        // Check coordinate distribution patterns
+        // Square grids tend to have more regular, rectangular patterns
+        // Hex grids tend to have more circular/hexagonal patterns
+        
+        if (coordinates.length >= 3) {
+            // Look for typical hex offset patterns (like 0.5 offsets)
+            const hasHexOffsets = coordinates.some(coord => 
+                Math.abs(coord.q - Math.round(coord.q)) === 0.5
+            );
+            
+            if (hasHexOffsets) {
+                return 'hex';
+            }
+            
+            // If all coordinates are integers, check for square-like patterns
+            const allIntegers = coordinates.every(coord => 
+                coord.q % 1 === 0 && coord.r % 1 === 0
+            );
+            
+            if (allIntegers) {
+                // Check if coordinates form more of a square pattern
+                const qValues = coordinates.map(c => c.q);
+                const rValues = coordinates.map(c => c.r);
+                const qRange = Math.max(...qValues) - Math.min(...qValues);
+                const rRange = Math.max(...rValues) - Math.min(...rValues);
+                
+                // If the ranges are similar, it's likely a square grid
+                if (qRange > 0 && rRange > 0 && Math.abs(qRange - rRange) <= 2) {
+                    return 'square';
+                }
+            }
+        }
+        
+        // Default to hex if we can't determine
+        return 'hex';
     }
 
     setupEditModeHandlers() {
@@ -363,30 +591,50 @@ class HexGrid {
         // Clamp zoom between 0.5 and 2
         this.zoom = Math.max(0.5, Math.min(2, newZoom));
         
-        // Update hex sizes while keeping spacing consistent
-        const baseSize = 50;
-        this.hexSize = baseSize * this.zoom;
-        this.hexWidth = this.hexSize * Math.sqrt(3);
-        this.hexHeight = this.hexSize * 2;
-        this.xStep = this.hexWidth + this.hexSpacing;
-        this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+        if (this.gridType === 'square') {
+            // Update square sizes while keeping spacing consistent
+            const baseSize = 80;
+            this.squareSize = baseSize * this.zoom;
+            this.xStep = this.squareSize + this.squareSpacing;
+            this.yStep = this.squareSize + this.squareSpacing;
 
-        // Update CSS variables for hex sizing
-        this.gameBoard.style.setProperty('--hex-size', `${this.hexSize}px`);
-        this.gameBoard.style.setProperty('--hex-width', `${this.hexWidth}px`);
-        this.gameBoard.style.setProperty('--hex-height', `${this.hexHeight}px`);
+            // Update CSS variables for square sizing
+            this.gameBoard.style.setProperty('--square-size', `${this.squareSize}px`);
+        } else {
+            // Update hex sizes while keeping spacing consistent
+            const baseSize = 50;
+            this.hexSize = baseSize * this.zoom;
+            this.hexWidth = this.hexSize * Math.sqrt(3);
+            this.hexHeight = this.hexSize * 2;
+            this.xStep = this.hexWidth + this.hexSpacing;
+            this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+
+            // Update CSS variables for hex sizing
+            this.gameBoard.style.setProperty('--hex-size', `${this.hexSize}px`);
+            this.gameBoard.style.setProperty('--hex-width', `${this.hexWidth}px`);
+            this.gameBoard.style.setProperty('--hex-height', `${this.hexHeight}px`);
+        }
         
         this.updateTilePositions();
     }
 
     // Convert grid coordinates to pixel coordinates
     gridToPixel(q, r) {
-        const x = q * this.xStep;
-        const y = -r * this.yStep;
-        return { 
-            x: x + this.viewportX, 
-            y: y + this.viewportY 
-        };
+        if (this.gridType === 'square') {
+            const x = q * this.xStep;
+            const y = r * this.yStep;
+            return { 
+                x: x + this.viewportX, 
+                y: y + this.viewportY 
+            };
+        } else {
+            const x = q * this.xStep;
+            const y = -r * this.yStep;
+            return { 
+                x: x + this.viewportX, 
+                y: y + this.viewportY 
+            };
+        }
     }
 
     // Update all tile positions based on viewport
@@ -492,7 +740,11 @@ class HexGrid {
                         const tile = this.tiles.get(key);
                         if (tile) {
                             tile.backgroundImage = `url("${imageUrl}")`;
-                            tile.element.querySelector('.hex-content').style.backgroundImage = tile.backgroundImage;
+                            const contentSelector = this.gridType === 'hex' ? '.hex-content' : '.square-content';
+                            const content = tile.element.querySelector(contentSelector);
+                            if (content) {
+                                content.style.backgroundImage = tile.backgroundImage;
+                            }
                             tile.details.description = `<a href="${wikiUrl}" target="_blank">${results[0].title}</a>`;
                             this.showTileDetails(key);
                         }
@@ -534,11 +786,14 @@ class HexGrid {
     handleBoardClick(e) {
         if (e.target === this.gameBoard) {
             this.tileDetails.classList.remove('active');
-        } else if (e.target.closest('.hex')) {
-            const hex = e.target.closest('.hex');
-            const key = Array.from(this.tiles.keys()).find(k => this.tiles.get(k).element === hex);
-            if (key) {
-                this.showTileDetails(key);
+        } else {
+            // Check for both hex and square tiles
+            const tile = e.target.closest('.hex') || e.target.closest('.square');
+            if (tile) {
+                const key = Array.from(this.tiles.keys()).find(k => this.tiles.get(k).element === tile);
+                if (key) {
+                    this.showTileDetails(key);
+                }
             }
         }
     }
@@ -717,7 +972,11 @@ class HexGrid {
             const imageUrl = input.value.trim();
             if (imageUrl) {
                 tile.backgroundImage = `url("${imageUrl}")`;
-                tile.element.querySelector('.hex-content').style.backgroundImage = tile.backgroundImage;
+                const contentSelector = this.gridType === 'hex' ? '.hex-content' : '.square-content';
+                const content = tile.element.querySelector(contentSelector);
+                if (content) {
+                    content.style.backgroundImage = tile.backgroundImage;
+                }
                 this.showTileDetails(key);
             }
         };
@@ -759,16 +1018,30 @@ class HexGrid {
         const oldRadius = this.gridRadius;
         this.gridRadius += expansionSize;
 
-        // Create new hexes in the expanded area
-        for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
-            for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
-                const offsetQ = q + (r % 2) * 0.5;
-                const key = `${offsetQ},${r}`;
-                
-                // Only create hexes in the new area
-                if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2 &&
-                    Math.abs(offsetQ) + Math.abs(r) > oldRadius * 2) {
-                    this.createEmptyHex(offsetQ, r);
+        if (this.gridType === 'square') {
+            // Create new squares in the expanded area
+            for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                    const key = `${q},${r}`;
+                    
+                    // Only create squares in the new area
+                    if ((Math.abs(q) > oldRadius || Math.abs(r) > oldRadius) && !this.tiles.has(key)) {
+                        this.createEmptySquare(q, r);
+                    }
+                }
+            }
+        } else {
+            // Create new hexes in the expanded area
+            for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                    const offsetQ = q + (r % 2) * 0.5;
+                    const key = `${offsetQ},${r}`;
+                    
+                    // Only create hexes in the new area
+                    if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2 &&
+                        Math.abs(offsetQ) + Math.abs(r) > oldRadius * 2) {
+                        this.createEmptyHex(offsetQ, r);
+                    }
                 }
             }
         }
@@ -794,20 +1067,7 @@ class HexGrid {
     }
 
     shareBoard() {
-        const boardData = {
-            viewportX: this.viewportX,
-            viewportY: this.viewportY,
-            zoom: this.zoom,
-            tiles: Array.from(this.tiles.entries())
-                .filter(([_, tile]) => tile.element.classList.contains('filled'))
-                .map(([key, tile]) => ({
-                    key,
-                    q: tile.q,
-                    r: tile.r,
-                    backgroundImage: tile.backgroundImage,
-                    details: tile.details
-                }))
-        };
+        const boardData = this.getBoardData();
 
         // Include the actual CSS content directly
         const cssContent = `
@@ -964,6 +1224,55 @@ body {
 
 .edit-mode .hex:hover::before {
     background-color: #888;
+}
+
+/* Square Grid Styles */
+.square {
+    position: absolute;
+    width: var(--square-size, 80px);
+    height: var(--square-size, 80px);
+    margin: 0;
+    cursor: pointer;
+    transition: transform 0.2s;
+    border: 1px solid #666;
+    background-color: rgba(102, 102, 102, 0.4);
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.square.filled {
+    border-color: #0066ff;
+    background-color: #0066ff;
+}
+
+.square-content {
+    position: absolute;
+    width: calc(100% - 4px);
+    height: calc(100% - 4px);
+    top: 2px;
+    left: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: #000;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.square.filled .square-content {
+    opacity: 1;
+}
+
+.game-board:not(.edit-mode) .square:not(.filled) {
+    display: none;
+}
+
+.edit-mode .square:hover {
+    background-color: #888;
+    border-color: #888;
 }
 
 .tile-details {
@@ -1159,10 +1468,14 @@ body {
 }
 
 /* Override styles for view-only mode */
-.controls { display: none; }
+.controls { display: none !important; }
+.edit-controls { display: none !important; }
+.toggle-button { display: none !important; }
 .game-board { cursor: default; }
 .hex { cursor: pointer; }
 .hex:hover::before { background-color: inherit !important; }
+.square { cursor: pointer; }
+.square:hover { background-color: inherit !important; border-color: inherit !important; }
 `;
 
         // Create the HTML content
@@ -1171,7 +1484,7 @@ body {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hexagonal Game Board - View</title>
+    <title>${boardData.gridType === 'square' ? 'Square' : 'Hexagonal'} Game Board - View</title>
     <style>
         ${cssContent}
     </style>
@@ -1233,14 +1546,53 @@ body {
                 this.gameBoard.innerHTML = '';
                 this.tiles.clear();
 
-                for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
-                    for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
-                        const offsetQ = q + (r % 2) * 0.5;
-                        if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2) {
-                            this.createEmptyHex(offsetQ, r);
+                if (this.gridType === 'square') {
+                    // Create a square grid
+                    for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                        for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                            this.createEmptySquare(q, r);
+                        }
+                    }
+                } else {
+                    // Create a hexagonal grid with offset rows
+                    for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                        for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                            const offsetQ = q + (r % 2) * 0.5;
+                            if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2) {
+                                this.createEmptyHex(offsetQ, r);
+                            }
                         }
                     }
                 }
+            }
+
+            createEmptySquare(q, r) {
+                const key = \`\${q},\${r}\`;
+                const { x, y } = this.gridToPixel(q, r);
+                
+                const square = document.createElement('div');
+                square.className = 'square';
+                square.style.left = \`\${x}px\`;
+                square.style.top = \`\${y}px\`;
+
+                const content = document.createElement('div');
+                content.className = 'square-content';
+                content.style.backgroundImage = 'url("https://via.placeholder.com/80x80")';
+                square.appendChild(content);
+
+                const tileData = {
+                    element: square,
+                    q,
+                    r,
+                    backgroundImage: content.style.backgroundImage,
+                    details: {
+                        name: \`Tile \${key}\`,
+                        description: 'Click to view details'
+                    }
+                };
+
+                this.tiles.set(key, tileData);
+                this.gameBoard.appendChild(square);
             }
 
             createEmptyHex(q, r) {
@@ -1273,12 +1625,21 @@ body {
             }
 
             gridToPixel(q, r) {
-                const x = q * this.xStep;
-                const y = -r * this.yStep;
-                return { 
-                    x: x + this.viewportX, 
-                    y: y + this.viewportY 
-                };
+                if (this.gridType === 'square') {
+                    const x = q * this.xStep;
+                    const y = r * this.yStep;
+                    return { 
+                        x: x + this.viewportX, 
+                        y: y + this.viewportY 
+                    };
+                } else {
+                    const x = q * this.xStep;
+                    const y = -r * this.yStep;
+                    return { 
+                        x: x + this.viewportX, 
+                        y: y + this.viewportY 
+                    };
+                }
             }
 
             updateTilePositions() {
@@ -1349,16 +1710,29 @@ body {
             setZoom(newZoom) {
                 this.zoom = Math.max(0.5, Math.min(2, newZoom));
                 
-                const baseSize = 50;
-                this.hexSize = baseSize * this.zoom;
-                this.hexWidth = this.hexSize * Math.sqrt(3);
-                this.hexHeight = this.hexSize * 2;
-                this.xStep = this.hexWidth + this.hexSpacing;
-                this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+                if (this.gridType === 'square') {
+                    // Update square sizes while keeping spacing consistent
+                    const baseSize = 80;
+                    this.squareSize = baseSize * this.zoom;
+                    this.xStep = this.squareSize + this.squareSpacing;
+                    this.yStep = this.squareSize + this.squareSpacing;
 
-                this.gameBoard.style.setProperty('--hex-size', \`\${this.hexSize}px\`);
-                this.gameBoard.style.setProperty('--hex-width', \`\${this.hexWidth}px\`);
-                this.gameBoard.style.setProperty('--hex-height', \`\${this.hexHeight}px\`);
+                    // Update CSS variables for square sizing
+                    this.gameBoard.style.setProperty('--square-size', \`\${this.squareSize}px\`);
+                } else {
+                    // Update hex sizes while keeping spacing consistent
+                    const baseSize = 50;
+                    this.hexSize = baseSize * this.zoom;
+                    this.hexWidth = this.hexSize * Math.sqrt(3);
+                    this.hexHeight = this.hexSize * 2;
+                    this.xStep = this.hexWidth + this.hexSpacing;
+                    this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+
+                    // Update CSS variables for hex sizing
+                    this.gameBoard.style.setProperty('--hex-size', \`\${this.hexSize}px\`);
+                    this.gameBoard.style.setProperty('--hex-width', \`\${this.hexWidth}px\`);
+                    this.gameBoard.style.setProperty('--hex-height', \`\${this.hexHeight}px\`);
+                }
                 
                 this.updateTilePositions();
             }
@@ -1366,11 +1740,14 @@ body {
             handleBoardClick(e) {
                 if (e.target === this.gameBoard) {
                     this.tileDetails.classList.remove('active');
-                } else if (e.target.closest('.hex')) {
-                    const hex = e.target.closest('.hex');
-                    const key = Array.from(this.tiles.keys()).find(k => this.tiles.get(k).element === hex);
-                    if (key) {
-                        this.showTileDetails(key);
+                } else {
+                    // Check for both hex and square tiles
+                    const tile = e.target.closest('.hex') || e.target.closest('.square');
+                    if (tile) {
+                        const key = Array.from(this.tiles.keys()).find(k => this.tiles.get(k).element === tile);
+                        if (key) {
+                            this.showTileDetails(key);
+                        }
                     }
                 }
             }
@@ -1447,6 +1824,52 @@ body {
                 // Load the board state
                 this.loadBoardData(${JSON.stringify(boardData)});
             }
+
+            loadBoardData(boardData) {
+                // Set grid type first
+                this.gridType = boardData.gridType || 'hex';
+                
+                // Update grid size calculations based on type
+                if (this.gridType === 'square') {
+                    this.squareSize = 80;
+                    this.squareSpacing = 5;
+                    this.xStep = this.squareSize + this.squareSpacing;
+                    this.yStep = this.squareSize + this.squareSpacing;
+                } else {
+                    this.hexSize = 50;
+                    this.hexWidth = this.hexSize * Math.sqrt(3);
+                    this.hexHeight = this.hexSize * 2;
+                    this.hexSpacing = 5;
+                    this.xStep = this.hexWidth + this.hexSpacing;
+                    this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+                }
+                
+                // Initialize empty grid first
+                this.initializeGrid();
+                
+                this.viewportX = boardData.viewportX || window.innerWidth / 2;
+                this.viewportY = boardData.viewportY || window.innerHeight / 2;
+                this.zoom = boardData.zoom || 1;
+                
+                // Fill and update tiles
+                boardData.tiles.forEach(tileData => {
+                    const { q, r, backgroundImage, details } = tileData;
+                    const key = \`\${q},\${r}\`;
+                    const tile = this.tiles.get(key);
+                    if (tile) {
+                        tile.element.classList.add('filled');
+                        tile.backgroundImage = backgroundImage;
+                        tile.details = details;
+                        const contentSelector = this.gridType === 'hex' ? '.hex-content' : '.square-content';
+                        const content = tile.element.querySelector(contentSelector);
+                        if (content) {
+                            content.style.backgroundImage = backgroundImage;
+                        }
+                    }
+                });
+
+                this.updateTilePositions();
+            }
             
             toggleSidebar() {
                 this.tileDetails.classList.toggle('expanded');
@@ -1474,7 +1897,7 @@ body {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'hex-board-view.html';
+        a.download = `${boardData.gridType}-board-view.html`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1492,5 +1915,5 @@ body {
     }
 }
 
-// Initialize the hex grid
+// Initialize the hex grid (now supports both hex and square grids)
 const hexGrid = new HexGrid(); 
