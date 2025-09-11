@@ -1069,7 +1069,7 @@ class HexGrid extends BaseGrid {
     shareBoard() {
         const boardData = this.getBoardData();
 
-        // Include the actual CSS content directly
+        // Include the actual CSS content directly with mobile enhancements
         const cssContent = `
 * {
     margin: 0;
@@ -1083,6 +1083,13 @@ body {
     background-color: #000;
     font-family: Arial, sans-serif;
     overflow: hidden;
+    /* Enable touch scrolling on mobile */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent text selection on mobile */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
 .controls {
@@ -1144,6 +1151,10 @@ body {
     --hex-width: 86.6px;
     --hex-height: 100px;
     transition: margin-right 0.3s ease;
+    /* Enable touch interactions */
+    touch-action: pan-x pan-y;
+    /* Prevent bounce scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
 }
 
 .game-board.edit-mode {
@@ -1342,6 +1353,124 @@ body {
     margin-right: 600px;
 }
 
+/* Mobile-specific styles - only for touch devices */
+@media (max-width: 768px) and (pointer: coarse), (max-width: 768px) and (hover: none) {
+    body {
+        overflow: auto;
+    }
+    
+    .game-board {
+        width: 100vw !important;
+        height: 100vh !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        margin-right: 0 !important;
+        /* Allow pinch-to-zoom on mobile */
+        touch-action: manipulation;
+    }
+    
+    .tile-details {
+        width: 100vw;
+        height: 60vh;
+        top: auto;
+        bottom: 0;
+        transform: translateY(100%);
+        border-radius: 20px 20px 0 0;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+    }
+    
+    .tile-details.active {
+        transform: translateY(0);
+    }
+    
+    .tile-details.expanded {
+        width: 100vw;
+        height: 80vh;
+    }
+    
+    .toggle-sidebar {
+        transform: rotate(90deg);
+    }
+    
+    .tile-details.active .toggle-sidebar {
+        transform: rotate(-90deg);
+    }
+    
+    /* Mobile zoom controls */
+    .mobile-controls {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 1000;
+    }
+    
+    .zoom-button {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: rgba(51, 51, 51, 0.9);
+        color: white;
+        border: 2px solid #666;
+        font-size: 24px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(10px);
+    }
+    
+    .zoom-button:active {
+        background: rgba(76, 175, 80, 0.9);
+        transform: scale(0.95);
+    }
+    
+    .reset-view-button {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: rgba(51, 51, 51, 0.9);
+        color: white;
+        border: 2px solid #666;
+        font-size: 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(10px);
+    }
+    
+    .reset-view-button:active {
+        background: rgba(76, 175, 80, 0.9);
+        transform: scale(0.95);
+    }
+}
+
+/* Tablet styles */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .tile-details {
+        width: 400px;
+    }
+    
+    .tile-details.expanded {
+        width: 600px;
+    }
+    
+    .tile-details.active ~ .game-board {
+        margin-right: 400px;
+    }
+    
+    .tile-details.active.expanded ~ .game-board {
+        margin-right: 600px;
+    }
+}
+
 .tile-details-content {
     display: flex;
     flex-direction: column;
@@ -1471,11 +1600,6 @@ body {
 .controls { display: none !important; }
 .edit-controls { display: none !important; }
 .toggle-button { display: none !important; }
-.game-board { cursor: default; }
-.hex { cursor: pointer; }
-.hex:hover::before { background-color: inherit !important; }
-.square { cursor: pointer; }
-.square:hover { background-color: inherit !important; border-color: inherit !important; }
 `;
 
         // Create the HTML content
@@ -1483,7 +1607,7 @@ body {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=3.0, minimum-scale=0.5">
     <title>${boardData.gridType === 'square' ? 'Square' : 'Hexagonal'} Game Board - View</title>
     <style>
         ${cssContent}
@@ -1499,6 +1623,11 @@ body {
             <button id="toggleSidebar" class="toggle-sidebar">◀</button>
         </div>
         <div id="tileContent"></div>
+    </div>
+    <div class="mobile-controls">
+        <button class="zoom-button" id="zoomIn">+</button>
+        <button class="zoom-button" id="zoomOut">−</button>
+        <button class="reset-view-button" id="resetView">⌂</button>
     </div>
     <script>
         // Include the HexGrid class
@@ -1821,8 +1950,109 @@ body {
                 // Add sidebar toggle listener
                 document.getElementById('toggleSidebar').addEventListener('click', () => this.toggleSidebar());
                 
+                // Add mobile controls
+                this.setupMobileControls();
+                
+                // Add touch support
+                this.setupTouchHandlers();
+                
                 // Load the board state
                 this.loadBoardData(${JSON.stringify(boardData)});
+            }
+            
+            setupMobileControls() {
+                // Only set up mobile controls if they exist (for shareable boards)
+                const zoomInBtn = document.getElementById('zoomIn');
+                const zoomOutBtn = document.getElementById('zoomOut');
+                const resetViewBtn = document.getElementById('resetView');
+                
+                if (zoomInBtn) {
+                    zoomInBtn.addEventListener('click', () => {
+                        this.setZoom(this.zoom * 1.2);
+                    });
+                }
+                
+                if (zoomOutBtn) {
+                    zoomOutBtn.addEventListener('click', () => {
+                        this.setZoom(this.zoom / 1.2);
+                    });
+                }
+                
+                if (resetViewBtn) {
+                    resetViewBtn.addEventListener('click', () => {
+                        this.resetView();
+                    });
+                }
+            }
+            
+            setupTouchHandlers() {
+                let lastTouchDistance = 0;
+                let lastTouchCenter = { x: 0, y: 0 };
+                let initialPinchZoom = 1;
+                
+                this.gameBoard.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 2) {
+                        // Pinch-to-zoom start
+                        const touch1 = e.touches[0];
+                        const touch2 = e.touches[1];
+                        lastTouchDistance = Math.hypot(
+                            touch2.clientX - touch1.clientX,
+                            touch2.clientY - touch1.clientY
+                        );
+                        lastTouchCenter = {
+                            x: (touch1.clientX + touch2.clientX) / 2,
+                            y: (touch1.clientY + touch2.clientY) / 2
+                        };
+                        initialPinchZoom = this.zoom;
+                        e.preventDefault();
+                    } else if (e.touches.length === 1) {
+                        // Single touch for panning
+                        this.isDragging = true;
+                        this.dragStart = {
+                            x: e.touches[0].clientX - this.viewportX,
+                            y: e.touches[0].clientY - this.viewportY
+                        };
+                        this.gameBoard.classList.add('dragging');
+                    }
+                });
+                
+                this.gameBoard.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 2) {
+                        // Pinch-to-zoom
+                        const touch1 = e.touches[0];
+                        const touch2 = e.touches[1];
+                        const currentDistance = Math.hypot(
+                            touch2.clientX - touch1.clientX,
+                            touch2.clientY - touch1.clientY
+                        );
+                        
+                        if (lastTouchDistance > 0) {
+                            const scale = currentDistance / lastTouchDistance;
+                            this.setZoom(initialPinchZoom * scale);
+                        }
+                        e.preventDefault();
+                    } else if (e.touches.length === 1 && this.isDragging) {
+                        // Single touch panning
+                        this.viewportX = e.touches[0].clientX - this.dragStart.x;
+                        this.viewportY = e.touches[0].clientY - this.dragStart.y;
+                        this.updateTilePositions();
+                        e.preventDefault();
+                    }
+                });
+                
+                this.gameBoard.addEventListener('touchend', (e) => {
+                    if (e.touches.length === 0) {
+                        this.isDragging = false;
+                        this.gameBoard.classList.remove('dragging');
+                        lastTouchDistance = 0;
+                    }
+                });
+            }
+            
+            resetView() {
+                this.viewportX = window.innerWidth / 2;
+                this.viewportY = window.innerHeight / 2;
+                this.setZoom(1);
             }
 
             loadBoardData(boardData) {

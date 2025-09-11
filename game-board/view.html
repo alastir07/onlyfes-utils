@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=3.0, minimum-scale=0.5">
     <title>Game Board - View</title>
     <link rel="stylesheet" href="styles.css">
     <style>
@@ -19,6 +19,109 @@
         .hex:hover::before {
             background-color: inherit !important;
         }
+        
+        /* Mobile-specific styles for view.html - only for touch devices */
+        @media (max-width: 768px) and (pointer: coarse), (max-width: 768px) and (hover: none) {
+            body {
+                overflow: auto;
+                -webkit-overflow-scrolling: touch;
+                -webkit-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;
+            }
+            
+            .game-board {
+                width: 100vw;
+                height: 100vh;
+                position: fixed;
+                top: 0;
+                left: 0;
+                margin-right: 0 !important;
+                touch-action: manipulation;
+            }
+            
+            .tile-details {
+                width: 100vw;
+                height: 60vh;
+                top: auto;
+                bottom: 0;
+                transform: translateY(100%);
+                border-radius: 20px 20px 0 0;
+                box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+            }
+            
+            .tile-details.active {
+                transform: translateY(0);
+            }
+            
+            .tile-details.expanded {
+                width: 100vw;
+                height: 80vh;
+            }
+            
+            .toggle-sidebar {
+                transform: rotate(90deg);
+            }
+            
+            .tile-details.active .toggle-sidebar {
+                transform: rotate(-90deg);
+            }
+            
+            /* Mobile zoom controls */
+            .mobile-controls {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                z-index: 1000;
+            }
+            
+            .zoom-button {
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                background: rgba(51, 51, 51, 0.9);
+                color: white;
+                border: 2px solid #666;
+                font-size: 24px;
+                font-weight: bold;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+                backdrop-filter: blur(10px);
+            }
+            
+            .zoom-button:active {
+                background: rgba(76, 175, 80, 0.9);
+                transform: scale(0.95);
+            }
+            
+            .reset-view-button {
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                background: rgba(51, 51, 51, 0.9);
+                color: white;
+                border: 2px solid #666;
+                font-size: 16px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+                backdrop-filter: blur(10px);
+            }
+            
+            .reset-view-button:active {
+                background: rgba(76, 175, 80, 0.9);
+                transform: scale(0.95);
+            }
+        }
     </style>
 </head>
 <body>
@@ -28,6 +131,11 @@
     <div id="tileDetails" class="tile-details">
         <h2>Tile Details</h2>
         <div id="tileContent"></div>
+    </div>
+    <div class="mobile-controls">
+        <button class="zoom-button" id="zoomIn">+</button>
+        <button class="zoom-button" id="zoomOut">−</button>
+        <button class="reset-view-button" id="resetView">⌂</button>
     </div>
     <script src="script.js"></script>
     <script>
@@ -39,8 +147,109 @@
                 this.isEditMode = false;
                 this.updateEditModeUI();
                 
+                // Add mobile controls
+                this.setupMobileControls();
+                
+                // Add touch support
+                this.setupTouchHandlers();
+                
                 // Load the board state from URL parameters
                 this.loadBoardFromUrl();
+            }
+            
+            setupMobileControls() {
+                // Only set up mobile controls if they exist (for shareable boards)
+                const zoomInBtn = document.getElementById('zoomIn');
+                const zoomOutBtn = document.getElementById('zoomOut');
+                const resetViewBtn = document.getElementById('resetView');
+                
+                if (zoomInBtn) {
+                    zoomInBtn.addEventListener('click', () => {
+                        this.setZoom(this.zoom * 1.2);
+                    });
+                }
+                
+                if (zoomOutBtn) {
+                    zoomOutBtn.addEventListener('click', () => {
+                        this.setZoom(this.zoom / 1.2);
+                    });
+                }
+                
+                if (resetViewBtn) {
+                    resetViewBtn.addEventListener('click', () => {
+                        this.resetView();
+                    });
+                }
+            }
+            
+            setupTouchHandlers() {
+                let lastTouchDistance = 0;
+                let lastTouchCenter = { x: 0, y: 0 };
+                let initialPinchZoom = 1;
+                
+                this.gameBoard.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 2) {
+                        // Pinch-to-zoom start
+                        const touch1 = e.touches[0];
+                        const touch2 = e.touches[1];
+                        lastTouchDistance = Math.hypot(
+                            touch2.clientX - touch1.clientX,
+                            touch2.clientY - touch1.clientY
+                        );
+                        lastTouchCenter = {
+                            x: (touch1.clientX + touch2.clientX) / 2,
+                            y: (touch1.clientY + touch2.clientY) / 2
+                        };
+                        initialPinchZoom = this.zoom;
+                        e.preventDefault();
+                    } else if (e.touches.length === 1) {
+                        // Single touch for panning
+                        this.isDragging = true;
+                        this.dragStart = {
+                            x: e.touches[0].clientX - this.viewportX,
+                            y: e.touches[0].clientY - this.viewportY
+                        };
+                        this.gameBoard.classList.add('dragging');
+                    }
+                });
+                
+                this.gameBoard.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 2) {
+                        // Pinch-to-zoom
+                        const touch1 = e.touches[0];
+                        const touch2 = e.touches[1];
+                        const currentDistance = Math.hypot(
+                            touch2.clientX - touch1.clientX,
+                            touch2.clientY - touch1.clientY
+                        );
+                        
+                        if (lastTouchDistance > 0) {
+                            const scale = currentDistance / lastTouchDistance;
+                            this.setZoom(initialPinchZoom * scale);
+                        }
+                        e.preventDefault();
+                    } else if (e.touches.length === 1 && this.isDragging) {
+                        // Single touch panning
+                        this.viewportX = e.touches[0].clientX - this.dragStart.x;
+                        this.viewportY = e.touches[0].clientY - this.dragStart.y;
+                        this.updateTilePositions();
+                        e.preventDefault();
+                    }
+                });
+                
+                this.gameBoard.addEventListener('touchend', (e) => {
+                    if (e.touches.length === 0) {
+                        this.isDragging = false;
+                        this.gameBoard.classList.remove('dragging');
+                        lastTouchDistance = 0;
+                    }
+                });
+            }
+            
+            resetView() {
+                this.viewportX = window.innerWidth / 2;
+                this.viewportY = window.innerHeight / 2;
+                this.setZoom(1);
             }
 
             loadBoardFromUrl() {
