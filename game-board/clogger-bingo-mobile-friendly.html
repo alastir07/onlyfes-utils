@@ -1002,9 +1002,19 @@ body {
                 // Initialize empty grid first
                 this.initializeGrid();
                 
-                this.viewportX = boardData.viewportX || window.innerWidth / 2;
-                this.viewportY = boardData.viewportY || window.innerHeight / 2;
-                this.zoom = boardData.zoom || 1;
+                // Use resetView logic for mobile devices, saved coordinates for desktop
+                const isMobile = window.innerWidth <= 768 && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+                if (isMobile) {
+                    // On mobile, always center the board regardless of saved coordinates
+                    this.viewportX = window.innerWidth / 2;
+                    this.viewportY = window.innerHeight / 2;
+                    this.zoom = 1;
+                } else {
+                    // On desktop, use saved coordinates or fallback to center
+                    this.viewportX = boardData.viewportX || window.innerWidth / 2;
+                    this.viewportY = boardData.viewportY || window.innerHeight / 2;
+                    this.zoom = boardData.zoom || 1;
+                }
                 
                 // Fill and update tiles
                 boardData.tiles.forEach(tileData => {
