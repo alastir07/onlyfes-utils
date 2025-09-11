@@ -143,6 +143,10 @@
         class ViewOnlyHexGrid extends HexGrid {
             constructor() {
                 super();
+                
+                // Mark that we need to calculate mobile zoom when board data loads
+                this.needsMobileZoom = this.isMobileDevice();
+                
                 // Force view mode
                 this.isEditMode = false;
                 this.updateEditModeUI();
@@ -260,9 +264,13 @@
                 
                 // Use optimal zoom on mobile, default zoom on desktop
                 const isMobile = this.isMobileDevice();
+                console.log('Reset view - isMobile:', isMobile, 'window.innerWidth:', window.innerWidth);
                 if (isMobile && this.boardData) {
-                    this.setZoom(this.calculateOptimalZoom(this.boardData));
+                    const optimalZoom = this.calculateOptimalZoom(this.boardData);
+                    console.log('Reset view - calculated optimal zoom:', optimalZoom);
+                    this.setZoom(optimalZoom);
                 } else {
+                    console.log('Reset view - using default zoom: 1');
                     this.setZoom(1);
                 }
             }
@@ -311,8 +319,8 @@
                     boardHeight = (maxR - minR + 1) * yStep + hexSpacing * 2;
                 }
                 
-                // More conservative padding (30% of screen size) and account for mobile controls
-                const padding = 0.3;
+                // More conservative padding (10% of screen size) and account for mobile controls
+                const padding = 0.1;
                 const mobileControlsHeight = 200; // Height for mobile zoom controls
                 const availableWidth = window.innerWidth * (1 - padding);
                 const availableHeight = (window.innerHeight - mobileControlsHeight) * (1 - padding);
@@ -377,17 +385,21 @@
                 this.initializeGrid();
                 
                 // Use optimal zoom and centering for mobile devices, saved coordinates for desktop
-                const isMobile = this.isMobileDevice();
-                if (isMobile) {
+                console.log('LoadBoardData - needsMobileZoom:', this.needsMobileZoom, 'current zoom:', this.zoom);
+                if (this.needsMobileZoom) {
                     // On mobile, center the board and calculate optimal zoom to fit all tiles
                     this.viewportX = window.innerWidth / 2;
                     this.viewportY = window.innerHeight / 2;
-                    this.zoom = this.calculateOptimalZoom(boardData);
+                    const optimalZoom = this.calculateOptimalZoom(boardData);
+                    console.log('LoadBoardData - calculated optimal zoom:', optimalZoom);
+                    this.setZoom(optimalZoom);
+                    console.log('LoadBoardData - zoom after setZoom:', this.zoom);
                 } else {
                     // On desktop, use saved coordinates or fallback to center
                     this.viewportX = boardData.x || boardData.viewportX || window.innerWidth / 2;
                     this.viewportY = boardData.y || boardData.viewportY || window.innerHeight / 2;
                     this.zoom = boardData.z || boardData.zoom || 1;
+                    console.log('LoadBoardData - using desktop zoom:', this.zoom);
                 }
                 
                 // Handle both compressed and uncompressed tile data formats

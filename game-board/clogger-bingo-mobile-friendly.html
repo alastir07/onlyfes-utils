@@ -580,7 +580,7 @@ body {
                 // Viewport position and zoom
                 this.viewportX = window.innerWidth / 2;
                 this.viewportY = window.innerHeight / 2;
-                this.zoom = 1;
+                this.zoom = this.zoom || 1; // Don't override if already set
                 this.isDragging = false;
                 this.dragStart = { x: 0, y: 0 };
                 
@@ -762,7 +762,8 @@ body {
             }
 
             setZoom(newZoom) {
-                this.zoom = Math.max(0.5, Math.min(2, newZoom));
+                this.zoom = Math.max(0.1, Math.min(3, newZoom));
+                console.log('ViewOnlyHexGrid setZoom called with:', newZoom, 'final zoom:', this.zoom, 'gridType:', this.gridType);
                 
                 if (this.gridType === 'square') {
                     // Update square sizes while keeping spacing consistent
@@ -788,7 +789,9 @@ body {
                     this.gameBoard.style.setProperty('--hex-height', `${this.hexHeight}px`);
                 }
                 
+                console.log('ViewOnlyHexGrid setZoom - about to call updateTilePositions, hexSize:', this.hexSize);
                 this.updateTilePositions();
+                console.log('ViewOnlyHexGrid setZoom - updateTilePositions completed');
             }
 
             handleBoardClick(e) {
@@ -868,6 +871,17 @@ body {
         class ViewOnlyHexGrid extends HexGrid {
             constructor() {
                 super();
+                
+                // Pre-calculate optimal zoom for mobile before loading board data
+                const isMobile = this.isMobileDevice();
+                if (isMobile) {
+                    const boardData = {"viewportX":729,"viewportY":517,"zoom":1.464100000000001,"isEditMode":true,"gridType":"square","tiles":[{"key":"-2,-2","q":-2,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/The_Hueycoatl.png/1280px-The_Hueycoatl.png?7b216\")","details":{"name":"Tile -2,-2","description":"<p>Obtain any 2 uniques from The Hueycoatl, excluding Hueycoatl Hides</p>","title":"Hueycoatl"}},{"key":"-2,-1","q":-2,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/CmLNXtU.png\")","details":{"name":"Tile -2,-1","description":"<p>Obtain both components of the Twinflame Staff. The pieces do not need to be combined into the full staff.</p>","title":"Twinflame Staff"}},{"key":"-2,0","q":-2,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Phantom_Muspah_%28ranged%29.png/1024px-Phantom_Muspah_%28ranged%29.png?9cf6a\")","details":{"name":"Tile -2,0","description":"<p>Obtain any 4 uniques from Phantom Muspah, excluding Ancient Essence, Frozen Cache, or Charged Ice.</p>","title":"Phantom Muspah"}},{"key":"-2,1","q":-2,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Dragon_warhammer_detail.png?7f65a\")","details":{"name":"Tile -2,1","description":"<p>Obtain a Dragon Warhammer</p>","title":"Dragon Warhammer"}},{"key":"-2,2","q":-2,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Demonic_gorilla.png/1024px-Demonic_gorilla.png?5f457\")","details":{"name":"Tile -2,2","description":"<p>Obtain any 4 uniques from Demonic Gorillas</p>","title":"Demonic Gorillas"}},{"key":"-1,-4","q":-1,"r":-4,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Lumbridge_Guide_icon.png\")","details":{"name":"Tile -1,-4","description":"<p><strong>Claiming Tiles</strong></p>\n<p>Drops can only be claimed if the drop triggers a unique collection log popup for the player obtaining the drop. Submissions will require that the chat log message indicating the player has obtained a unique collection log pop-up are visible. The collection log pop-up box is not necessary for a valid submission, but the chat message must be included in the submission post. <br><br>Players can only claim 1 drop for any tile (for example, on the tile \"Obtain any 2 General Graardor uniques\", any 1 player can only contribute 1 unique drop). <br><br><em>Example tile completion</em> Team 1 is attempting to complete, \"Obtain any 4 uniques from the Phantom Muspah, excluding Ancient Essence and Charged Ice.\" Zaoirse submits a Venator Shard collection log, Corvidastir submits a Venator Shard collection log, Bristle Pig submits an Ancient Icon collection Log, and Whyte Tree submits a Venator Shard collection Log. The tile is completed. An invalid submission would be if Corvidastir submitted a Venator Shard and Ancient Icon collection log (only one submitted item per player per tile) or if Zoooom submitted an Ancient Icon drop that was not a unique collection log pop-up.</p>","title":"Claiming Tiles"}},{"key":"-1,-2","q":-1,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/K%27ril_Tsutsaroth.png/800px-K%27ril_Tsutsaroth.png?73bda\")","details":{"name":"Tile -1,-2","description":"<p>Obtain any 2 uniques from K'ril Tsutsaroth</p>","title":"K'ril Tsutsaroth"}},{"key":"-1,-1","q":-1,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/UakvEWy.png\")","details":{"name":"Tile -1,-1","description":"<p>Obtain Claws of Callisto, Tyrannical Ring, or Voidwaker Hilt</p>","title":"Callisto/Artio"}},{"key":"-1,0","q":-1,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Void_Knight_%281%29.png/800px-Void_Knight_%281%29.png?a8d16\")","details":{"name":"Tile -1,0","description":"<p>Obtain any 6 uniques from Pest Control</p>","title":"Pest Control"}},{"key":"-1,1","q":-1,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Zulrah_%28serpentine%29.png/800px-Zulrah_%28serpentine%29.png?29a54\")","details":{"name":"Tile -1,1","description":"<p>Obtain any 2 uniques from Zulrah</p>","title":"Zulrah"}},{"key":"-1,2","q":-1,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Chest_%28Barrows%29.png/1280px-Chest_%28Barrows%29.png?9aff2\")","details":{"name":"Tile -1,2","description":"<p>Barrows Bingo Jr - Obtain any 6 uniques from Barrows, excluding Bolt Racks</p>","title":"Barrows Bingo Jr"}},{"key":"0,-4","q":0,"r":-4,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Huberte_%28follower%29.png/1200px-Huberte_%28follower%29.png?19e22\")","details":{"name":"Tile 0,-4","description":"<p>Pets or jars that trigger a collection log popup can be used to immediately complete the tile containing that boss's drop. The pet must be unique for the player receiving the drop (for example, if you are attempting to obtain a Dragon Pickaxe from Chaos Elemental, the player must not have previously obtained a Chaos Elemental pet).</p>","title":"Pets"}},{"key":"0,-2","q":0,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Dragon_pickaxe_detail.png?4f4ee\")","details":{"name":"Tile 0,-2","description":"<p>Obtain a Dragon Pickaxe</p>","title":"Dragon Pickaxe"}},{"key":"0,-1","q":0,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/4CGycPT.png\")","details":{"name":"Tile 0,-1","description":"<p>Obtain Wizard Boots, Ranger Boots, or Spiked Manacles</p>","title":"Medium Clue Boots"}},{"key":"0,0","q":0,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Corrupted_Hunllef.png/280px-Corrupted_Hunllef.png?0cd55\")","details":{"name":"Tile 0,0","description":"<p>Obtain any 3 uniques from The Gauntlet</p>","title":"Gauntlet"}},{"key":"0,1","q":0,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Yama.png/1200px-Yama.png?7653a\")","details":{"name":"Tile 0,1","description":"<p>Obtain a Soulflame Horn or piece of Oathplate armor from Yama</p>","title":"Yama"}},{"key":"0,2","q":0,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Lunar_Chest_%28open%29.png/1280px-Lunar_Chest_%28open%29.png?a87f5\")","details":{"name":"Tile 0,2","description":"<p>Obtain any 4 uniques from Moons of Peril, excluding Atlatl Darts</p>","title":"Moons of Peril"}},{"key":"1,-4","q":1,"r":-4,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Royal_crown_detail.png/1200px-Royal_crown_detail.png?3ed5c\")","details":{"name":"Tile 1,-4","description":"<p><strong>Win Conditions</strong> <br>The event will run from 26 September 2025 15:00 UTC until 06 October 2025 01:00 UTC.<br><br>Each win condition can only be claimed once. A team can claim multiple win conditions. <br>'Row' Complete a row<br>'Column' Complete a column<br>'X' complete tiles in the shape of the letter X <br>'4 corners' complete the 4 corner tiles <br>'Blackout' complete the entire board</p>","title":"Win Conditions"}},{"key":"1,-2","q":1,"r":-2,"backgroundImage":"url(\"https://i.imgur.com/ZJB36Rh.png\")","details":{"name":"Tile 1,-2","description":"<p>Obtain Fangs of Venenatis, Treasonous Ring, or Voidwaker Gem</p>","title":"Venenatis/Spindel"}},{"key":"1,-1","q":1,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/00miUmO.png\")","details":{"name":"Tile 1,-1","description":"<p>Obtain any 2 of Fire Cape, Inferno Cape, or Dizana's Quiver. The same item can be obtained multiple times, as long as it is a collection log (i.e. two team members can get a Fire Cape).</p>","title":"Capes Galore"}},{"key":"1,0","q":1,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Zalcano.png/800px-Zalcano.png?6244d\")","details":{"name":"Tile 1,0","description":"<p>Obtain any 1 unique from Zalcano</p>","title":"Zalcano"}},{"key":"1,1","q":1,"r":1,"backgroundImage":"url(\"https://i.imgur.com/yJB4Ip9.png\")","details":{"name":"Tile 1,1","description":"<p>Obtain all 4 unique rings from The Dagannoth Kings</p>","title":"Dagannoth Kings"}},{"key":"1,2","q":1,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Commander_Zilyana.png?c5eaa\")","details":{"name":"Tile 1,2","description":"<p>Obtain any 2 uniques from Commander Zilyana</p>","title":"Commander Zilyana"}},{"key":"2,-2","q":2,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Tormented_synapse_detail.png?27153\")","details":{"name":"Tile 2,-2","description":"<p>Obtain a Tormented Synapse</p>","title":"Tormented Synapse"}},{"key":"2,-1","q":2,"r":-1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/General_Graardor.png/640px-General_Graardor.png?4dd90\")","details":{"name":"Tile 2,-1","description":"<p>Obtain any 2 uniques from General Graardor</p>","title":"General Graardor"}},{"key":"2,0","q":2,"r":0,"backgroundImage":"url(\"https://i.imgur.com/HRKsedE.png\")","details":{"name":"Tile 2,0","description":"<p>Obtain Skull of Vet'ion, Ring of the Gods, or Voidwaker Blade</p>","title":"Vet'ion/Calvar'ion"}},{"key":"2,1","q":2,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Fighter_torso_detail.png?19a96\")","details":{"name":"Tile 2,1","description":"<p>Obtain a Fighter Torso</p>","title":"Fighter Torso"}},{"key":"2,2","q":2,"r":2,"backgroundImage":"url(\"https://i.imgur.com/bdukcBY.png\")","details":{"name":"Tile 2,2","description":"<p>Obtain an Osmumten's Fang and Lightbearer</p>","title":"Tombs of Amascut"}}]};
+                    const optimalZoom = this.calculateOptimalZoom(boardData);
+                    console.log('Constructor - setting optimal zoom for mobile:', optimalZoom);
+                    // Store the zoom to apply after loadBoardData sets up the grid properly
+                    this.pendingMobileZoom = optimalZoom;
+                }
+                
                 // Force view mode
                 this.isEditMode = false;
                 this.updateEditModeUI();
@@ -974,10 +988,29 @@ body {
                 });
             }
             
+            isMobileDevice() {
+                // More reliable mobile detection that works in dev tools
+                return window.innerWidth <= 768 || 
+                       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                       ('ontouchstart' in window) || 
+                       (navigator.maxTouchPoints > 0);
+            }
+            
             resetView() {
                 this.viewportX = window.innerWidth / 2;
                 this.viewportY = window.innerHeight / 2;
-                this.setZoom(1);
+                
+                // Use optimal zoom on mobile, default zoom on desktop
+                const isMobile = this.isMobileDevice();
+                console.log('Reset view - isMobile:', isMobile, 'window.innerWidth:', window.innerWidth);
+                if (isMobile && this.boardData) {
+                    const optimalZoom = this.calculateOptimalZoom(this.boardData);
+                    console.log('Reset view - calculated optimal zoom:', optimalZoom);
+                    this.setZoom(optimalZoom);
+                } else {
+                    console.log('Reset view - using default zoom: 1');
+                    this.setZoom(1);
+                }
             }
             
             calculateOptimalZoom(boardData) {
@@ -1006,8 +1039,9 @@ body {
                     const xStep = squareSize + squareSpacing;
                     const yStep = squareSize + squareSpacing;
                     
-                    boardWidth = (maxQ - minQ) * xStep + squareSize;
-                    boardHeight = (maxR - minR) * yStep + squareSize;
+                    // Add extra padding for squares to account for borders
+                    boardWidth = (maxQ - minQ + 1) * xStep + squareSpacing * 2;
+                    boardHeight = (maxR - minR + 1) * yStep + squareSpacing * 2;
                 } else {
                     // Hex grid calculations
                     const hexSize = 50;
@@ -1017,27 +1051,32 @@ body {
                     const xStep = hexWidth + hexSpacing;
                     const yStep = (hexHeight * 3/4) + (hexSpacing * Math.cos(Math.PI/6));
                     
-                    boardWidth = (maxQ - minQ) * xStep + hexWidth;
-                    boardHeight = (maxR - minR) * yStep + hexHeight;
+                    // Add extra padding for hexes and account for hex shape
+                    boardWidth = (maxQ - minQ + 1) * xStep + hexSpacing * 2;
+                    boardHeight = (maxR - minR + 1) * yStep + hexSpacing * 2;
                 }
                 
-                // Add padding (20% of screen size)
-                const padding = 0.2;
+                // More conservative padding (10% of screen size) and account for mobile controls
+                const padding = 0.1;
+                const mobileControlsHeight = 200; // Height for mobile zoom controls
                 const availableWidth = window.innerWidth * (1 - padding);
-                const availableHeight = window.innerHeight * (1 - padding);
+                const availableHeight = (window.innerHeight - mobileControlsHeight) * (1 - padding);
                 
                 // Calculate zoom to fit both width and height
                 const zoomX = availableWidth / boardWidth;
                 const zoomY = availableHeight / boardHeight;
                 
-                // Use the smaller zoom to ensure everything fits
-                const optimalZoom = Math.min(zoomX, zoomY);
+                // Use the smaller zoom to ensure everything fits, with additional safety margin
+                const optimalZoom = Math.min(zoomX, zoomY) * 0.9;
                 
-                // Clamp zoom between reasonable bounds (0.1 to 2.0)
-                return Math.max(0.1, Math.min(2.0, optimalZoom));
+                // Clamp zoom between reasonable bounds (0.05 to 1.5)
+                return Math.max(0.05, Math.min(1.5, optimalZoom));
             }
 
             loadBoardData(boardData) {
+                // Store board data for resetView function
+                this.boardData = boardData;
+                
                 // Set grid type first
                 this.gridType = boardData.gridType || 'hex';
                 
@@ -1060,17 +1099,18 @@ body {
                 this.initializeGrid();
                 
                 // Use optimal zoom and centering for mobile devices, saved coordinates for desktop
-                const isMobile = window.innerWidth <= 768 && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+                const isMobile = this.isMobileDevice();
+                console.log('LoadBoardData - isMobile:', isMobile, 'current zoom:', this.zoom);
                 if (isMobile) {
-                    // On mobile, center the board and calculate optimal zoom to fit all tiles
+                    // On mobile, center the board (zoom already set in constructor)
                     this.viewportX = window.innerWidth / 2;
                     this.viewportY = window.innerHeight / 2;
-                    this.zoom = this.calculateOptimalZoom(boardData);
                 } else {
                     // On desktop, use saved coordinates or fallback to center
                     this.viewportX = boardData.viewportX || window.innerWidth / 2;
                     this.viewportY = boardData.viewportY || window.innerHeight / 2;
                     this.zoom = boardData.zoom || 1;
+                    console.log('LoadBoardData - using desktop zoom:', this.zoom);
                 }
                 
                 // Fill and update tiles
@@ -1091,6 +1131,18 @@ body {
                 });
 
                 this.updateTilePositions();
+                
+                // Apply pending mobile zoom if we have one
+                if (this.pendingMobileZoom) {
+                    console.log('Applying pending mobile zoom:', this.pendingMobileZoom);
+                    this.setZoom(this.pendingMobileZoom);
+                    this.pendingMobileZoom = null; // Clear it
+                }
+                
+                // Debug: Check if zoom changes after updateTilePositions
+                setTimeout(() => {
+                    console.log('Post-loadBoardData check - zoom is now:', this.zoom);
+                }, 100);
             }
             
             toggleSidebar() {

@@ -16,7 +16,7 @@ class BaseGrid {
         // Viewport position and zoom
         this.viewportX = window.innerWidth / 2;
         this.viewportY = window.innerHeight / 2;
-        this.zoom = 1;
+        this.zoom = this.zoom || 1; // Don't override if already set
         this.isDragging = false;
         this.dragStart = { x: 0, y: 0 };
         
@@ -588,8 +588,9 @@ class HexGrid extends BaseGrid {
     }
 
     setZoom(newZoom) {
-        // Clamp zoom between 0.5 and 2
-        this.zoom = Math.max(0.5, Math.min(2, newZoom));
+        // Clamp zoom between 0.1 and 3 (wider range for mobile)
+        this.zoom = Math.max(0.1, Math.min(3, newZoom));
+        console.log('setZoom called with:', newZoom, 'final zoom:', this.zoom, 'gridType:', this.gridType);
         
         if (this.gridType === 'square') {
             // Update square sizes while keeping spacing consistent
@@ -615,7 +616,9 @@ class HexGrid extends BaseGrid {
             this.gameBoard.style.setProperty('--hex-height', `${this.hexHeight}px`);
         }
         
+        console.log('setZoom - about to call updateTilePositions, hexSize:', this.hexSize);
         this.updateTilePositions();
+        console.log('setZoom - updateTilePositions completed');
     }
 
     // Convert grid coordinates to pixel coordinates
@@ -1655,7 +1658,7 @@ body {
                 // Viewport position and zoom
                 this.viewportX = window.innerWidth / 2;
                 this.viewportY = window.innerHeight / 2;
-                this.zoom = 1;
+                this.zoom = this.zoom || 1; // Don't override if already set
                 this.isDragging = false;
                 this.dragStart = { x: 0, y: 0 };
                 
@@ -1837,7 +1840,8 @@ body {
             }
 
             setZoom(newZoom) {
-                this.zoom = Math.max(0.5, Math.min(2, newZoom));
+                this.zoom = Math.max(0.1, Math.min(3, newZoom));
+                console.log('ViewOnlyHexGrid setZoom called with:', newZoom, 'final zoom:', this.zoom, 'gridType:', this.gridType);
                 
                 if (this.gridType === 'square') {
                     // Update square sizes while keeping spacing consistent
@@ -1863,7 +1867,9 @@ body {
                     this.gameBoard.style.setProperty('--hex-height', \`\${this.hexHeight}px\`);
                 }
                 
+                console.log('ViewOnlyHexGrid setZoom - about to call updateTilePositions, hexSize:', this.hexSize);
                 this.updateTilePositions();
+                console.log('ViewOnlyHexGrid setZoom - updateTilePositions completed');
             }
 
             handleBoardClick(e) {
@@ -1943,6 +1949,17 @@ body {
         class ViewOnlyHexGrid extends HexGrid {
             constructor() {
                 super();
+                
+                // Pre-calculate optimal zoom for mobile before loading board data
+                const isMobile = this.isMobileDevice();
+                if (isMobile) {
+                    const boardData = ${JSON.stringify(boardData)};
+                    const optimalZoom = this.calculateOptimalZoom(boardData);
+                    console.log('Constructor - setting optimal zoom for mobile:', optimalZoom);
+                    // Store the zoom to apply after loadBoardData sets up the grid properly
+                    this.pendingMobileZoom = optimalZoom;
+                }
+                
                 // Force view mode
                 this.isEditMode = false;
                 this.updateEditModeUI();
@@ -2063,9 +2080,13 @@ body {
                 
                 // Use optimal zoom on mobile, default zoom on desktop
                 const isMobile = this.isMobileDevice();
+                console.log('Reset view - isMobile:', isMobile, 'window.innerWidth:', window.innerWidth);
                 if (isMobile && this.boardData) {
-                    this.setZoom(this.calculateOptimalZoom(this.boardData));
+                    const optimalZoom = this.calculateOptimalZoom(this.boardData);
+                    console.log('Reset view - calculated optimal zoom:', optimalZoom);
+                    this.setZoom(optimalZoom);
                 } else {
+                    console.log('Reset view - using default zoom: 1');
                     this.setZoom(1);
                 }
             }
@@ -2113,8 +2134,8 @@ body {
                     boardHeight = (maxR - minR + 1) * yStep + hexSpacing * 2;
                 }
                 
-                // More conservative padding (30% of screen size) and account for mobile controls
-                const padding = 0.3;
+                // More conservative padding (10% of screen size) and account for mobile controls
+                const padding = 0.1;
                 const mobileControlsHeight = 200; // Height for mobile zoom controls
                 const availableWidth = window.innerWidth * (1 - padding);
                 const availableHeight = (window.innerHeight - mobileControlsHeight) * (1 - padding);
@@ -2157,16 +2178,17 @@ body {
                 
                 // Use optimal zoom and centering for mobile devices, saved coordinates for desktop
                 const isMobile = this.isMobileDevice();
+                console.log('LoadBoardData - isMobile:', isMobile, 'current zoom:', this.zoom);
                 if (isMobile) {
-                    // On mobile, center the board and calculate optimal zoom to fit all tiles
+                    // On mobile, center the board (zoom already set in constructor)
                     this.viewportX = window.innerWidth / 2;
                     this.viewportY = window.innerHeight / 2;
-                    this.zoom = this.calculateOptimalZoom(boardData);
                 } else {
                     // On desktop, use saved coordinates or fallback to center
                     this.viewportX = boardData.viewportX || window.innerWidth / 2;
                     this.viewportY = boardData.viewportY || window.innerHeight / 2;
                     this.zoom = boardData.zoom || 1;
+                    console.log('LoadBoardData - using desktop zoom:', this.zoom);
                 }
                 
                 // Fill and update tiles
@@ -2187,6 +2209,18 @@ body {
                 });
 
                 this.updateTilePositions();
+                
+                // Apply pending mobile zoom if we have one
+                if (this.pendingMobileZoom) {
+                    console.log('Applying pending mobile zoom:', this.pendingMobileZoom);
+                    this.setZoom(this.pendingMobileZoom);
+                    this.pendingMobileZoom = null; // Clear it
+                }
+                
+                // Debug: Check if zoom changes after updateTilePositions
+                setTimeout(() => {
+                    console.log('Post-loadBoardData check - zoom is now:', this.zoom);
+                }, 100);
             }
             
             toggleSidebar() {
