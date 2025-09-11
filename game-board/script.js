@@ -2049,10 +2049,25 @@ body {
                 });
             }
             
+            isMobileDevice() {
+                // More reliable mobile detection that works in dev tools
+                return window.innerWidth <= 768 || 
+                       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                       ('ontouchstart' in window) || 
+                       (navigator.maxTouchPoints > 0);
+            }
+            
             resetView() {
                 this.viewportX = window.innerWidth / 2;
                 this.viewportY = window.innerHeight / 2;
-                this.setZoom(1);
+                
+                // Use optimal zoom on mobile, default zoom on desktop
+                const isMobile = this.isMobileDevice();
+                if (isMobile && this.boardData) {
+                    this.setZoom(this.calculateOptimalZoom(this.boardData));
+                } else {
+                    this.setZoom(1);
+                }
             }
             
             calculateOptimalZoom(boardData) {
@@ -2081,8 +2096,9 @@ body {
                     const xStep = squareSize + squareSpacing;
                     const yStep = squareSize + squareSpacing;
                     
-                    boardWidth = (maxQ - minQ) * xStep + squareSize;
-                    boardHeight = (maxR - minR) * yStep + squareSize;
+                    // Add extra padding for squares to account for borders
+                    boardWidth = (maxQ - minQ + 1) * xStep + squareSpacing * 2;
+                    boardHeight = (maxR - minR + 1) * yStep + squareSpacing * 2;
                 } else {
                     // Hex grid calculations
                     const hexSize = 50;
@@ -2092,27 +2108,32 @@ body {
                     const xStep = hexWidth + hexSpacing;
                     const yStep = (hexHeight * 3/4) + (hexSpacing * Math.cos(Math.PI/6));
                     
-                    boardWidth = (maxQ - minQ) * xStep + hexWidth;
-                    boardHeight = (maxR - minR) * yStep + hexHeight;
+                    // Add extra padding for hexes and account for hex shape
+                    boardWidth = (maxQ - minQ + 1) * xStep + hexSpacing * 2;
+                    boardHeight = (maxR - minR + 1) * yStep + hexSpacing * 2;
                 }
                 
-                // Add padding (20% of screen size)
-                const padding = 0.2;
+                // More conservative padding (30% of screen size) and account for mobile controls
+                const padding = 0.3;
+                const mobileControlsHeight = 200; // Height for mobile zoom controls
                 const availableWidth = window.innerWidth * (1 - padding);
-                const availableHeight = window.innerHeight * (1 - padding);
+                const availableHeight = (window.innerHeight - mobileControlsHeight) * (1 - padding);
                 
                 // Calculate zoom to fit both width and height
                 const zoomX = availableWidth / boardWidth;
                 const zoomY = availableHeight / boardHeight;
                 
-                // Use the smaller zoom to ensure everything fits
-                const optimalZoom = Math.min(zoomX, zoomY);
+                // Use the smaller zoom to ensure everything fits, with additional safety margin
+                const optimalZoom = Math.min(zoomX, zoomY) * 0.9;
                 
-                // Clamp zoom between reasonable bounds (0.1 to 2.0)
-                return Math.max(0.1, Math.min(2.0, optimalZoom));
+                // Clamp zoom between reasonable bounds (0.05 to 1.5)
+                return Math.max(0.05, Math.min(1.5, optimalZoom));
             }
 
             loadBoardData(boardData) {
+                // Store board data for resetView function
+                this.boardData = boardData;
+                
                 // Set grid type first
                 this.gridType = boardData.gridType || 'hex';
                 
@@ -2135,7 +2156,7 @@ body {
                 this.initializeGrid();
                 
                 // Use optimal zoom and centering for mobile devices, saved coordinates for desktop
-                const isMobile = window.innerWidth <= 768 && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+                const isMobile = this.isMobileDevice();
                 if (isMobile) {
                     // On mobile, center the board and calculate optimal zoom to fit all tiles
                     this.viewportX = window.innerWidth / 2;
