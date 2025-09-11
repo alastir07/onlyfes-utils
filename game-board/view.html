@@ -251,6 +251,64 @@
                 this.viewportY = window.innerHeight / 2;
                 this.setZoom(1);
             }
+            
+            calculateOptimalZoom(boardData) {
+                const tiles = boardData.t || boardData.tiles || [];
+                if (tiles.length === 0) {
+                    return 1; // Default zoom if no tiles
+                }
+                
+                // Calculate board bounds based on tile positions
+                let minQ = Infinity, maxQ = -Infinity;
+                let minR = Infinity, maxR = -Infinity;
+                
+                tiles.forEach(tile => {
+                    minQ = Math.min(minQ, tile.q);
+                    maxQ = Math.max(maxQ, tile.q);
+                    minR = Math.min(minR, tile.r);
+                    maxR = Math.max(maxR, tile.r);
+                });
+                
+                // Calculate board dimensions in pixels based on grid type
+                let boardWidth, boardHeight;
+                
+                if (this.gridType === 'square') {
+                    // Square grid calculations
+                    const squareSize = 80;
+                    const squareSpacing = 5;
+                    const xStep = squareSize + squareSpacing;
+                    const yStep = squareSize + squareSpacing;
+                    
+                    boardWidth = (maxQ - minQ) * xStep + squareSize;
+                    boardHeight = (maxR - minR) * yStep + squareSize;
+                } else {
+                    // Hex grid calculations
+                    const hexSize = 50;
+                    const hexWidth = hexSize * Math.sqrt(3);
+                    const hexHeight = hexSize * 2;
+                    const hexSpacing = 5;
+                    const xStep = hexWidth + hexSpacing;
+                    const yStep = (hexHeight * 3/4) + (hexSpacing * Math.cos(Math.PI/6));
+                    
+                    boardWidth = (maxQ - minQ) * xStep + hexWidth;
+                    boardHeight = (maxR - minR) * yStep + hexHeight;
+                }
+                
+                // Add padding (20% of screen size)
+                const padding = 0.2;
+                const availableWidth = window.innerWidth * (1 - padding);
+                const availableHeight = window.innerHeight * (1 - padding);
+                
+                // Calculate zoom to fit both width and height
+                const zoomX = availableWidth / boardWidth;
+                const zoomY = availableHeight / boardHeight;
+                
+                // Use the smaller zoom to ensure everything fits
+                const optimalZoom = Math.min(zoomX, zoomY);
+                
+                // Clamp zoom between reasonable bounds (0.1 to 2.0)
+                return Math.max(0.1, Math.min(2.0, optimalZoom));
+            }
 
             loadBoardFromUrl() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -297,13 +355,13 @@
                 // Initialize empty grid first
                 this.initializeGrid();
                 
-                // Use resetView logic for mobile devices, saved coordinates for desktop
+                // Use optimal zoom and centering for mobile devices, saved coordinates for desktop
                 const isMobile = window.innerWidth <= 768 && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
                 if (isMobile) {
-                    // On mobile, always center the board regardless of saved coordinates
+                    // On mobile, center the board and calculate optimal zoom to fit all tiles
                     this.viewportX = window.innerWidth / 2;
                     this.viewportY = window.innerHeight / 2;
-                    this.zoom = 1;
+                    this.zoom = this.calculateOptimalZoom(boardData);
                 } else {
                     // On desktop, use saved coordinates or fallback to center
                     this.viewportX = boardData.x || boardData.viewportX || window.innerWidth / 2;
