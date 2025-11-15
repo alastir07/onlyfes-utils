@@ -1,39 +1,33 @@
-class HexGrid {
+// Base Grid class with common functionality
+class BaseGrid {
     constructor() {
         this.gameBoard = document.getElementById('gameBoard');
         this.tileDetails = document.getElementById('tileDetails');
         this.tileContent = document.getElementById('tileContent');
         this.editControls = document.getElementById('editControls');
         this.editModeToggle = document.getElementById('editModeToggle');
+        this.gridTypeToggle = document.getElementById('gridTypeToggle');
         this.tiles = new Map();
         this.contextMenu = null;
-
-        // Size calculations for perfect hexagon tiling
-        this.hexSize = 50; // Distance from center to corner
-        this.hexWidth = this.hexSize * Math.sqrt(3); // Width of hexagon
-        this.hexHeight = this.hexSize * 2; // Height of hexagon
-        this.hexSpacing = 5; // Gap between adjacent tiles
-        
-        // Calculate offsets based on hexagon geometry
-        this.xStep = this.hexWidth + this.hexSpacing;
-        this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
         
         // Grid dimensions
-        this.gridRadius = 10; // Increased from 5 to 10 for larger initial board
+        this.gridRadius = 10;
         
         // Viewport position and zoom
         this.viewportX = window.innerWidth / 2;
         this.viewportY = window.innerHeight / 2;
-        this.zoom = 1;
+        this.zoom = this.zoom || 1; // Don't override if already set
         this.isDragging = false;
         this.dragStart = { x: 0, y: 0 };
         
         // Edit mode state
         this.isEditMode = false;
         
-        // Initialize the grid
-        this.initializeGrid();
-        
+        // Grid type
+        this.gridType = 'hex'; // 'hex' or 'square'
+    }
+
+    setupCommonEventListeners() {
         // Add event listeners
         this.gameBoard.addEventListener('click', this.handleBoardClick.bind(this));
         this.setupDragHandlers();
@@ -52,6 +46,112 @@ class HexGrid {
         // Add sidebar toggle listener
         document.getElementById('toggleSidebar').addEventListener('click', () => this.toggleSidebar());
 
+        // Add grid type toggle listener
+        this.gridTypeToggle.addEventListener('click', () => this.toggleGridType());
+    }
+
+    toggleGridType() {
+        // Check if there are any filled tiles
+        const filledTiles = Array.from(this.tiles.values()).filter(tile => 
+            tile.element.classList.contains('filled')
+        );
+        
+        if (filledTiles.length > 0) {
+            // Show warning dialog
+            const newGridType = this.gridType === 'hex' ? 'square' : 'hex';
+            const newGridName = newGridType === 'hex' ? 'hexagonal' : 'square';
+            const currentGridName = this.gridType === 'hex' ? 'hexagonal' : 'square';
+            
+            const confirmed = confirm(
+                `Switching from ${currentGridName} to ${newGridName} grid will clear all current tiles and reset the board.\n\n` +
+                `This action cannot be undone. Do you want to continue?`
+            );
+            
+            if (!confirmed) {
+                return; // User cancelled, don't switch
+            }
+        }
+        
+        // Switch grid type
+        this.gridType = this.gridType === 'hex' ? 'square' : 'hex';
+        
+        // Update button text
+        this.gridTypeToggle.textContent = this.gridType === 'hex' ? '⬡ Hexes' : '⬛ Squares';
+        
+        // Update grid size calculations based on type
+        if (this.gridType === 'square') {
+            this.squareSize = 80;
+            this.squareSpacing = 5;
+            this.xStep = this.squareSize + this.squareSpacing;
+            this.yStep = this.squareSize + this.squareSpacing;
+        } else {
+            this.hexSize = 50;
+            this.hexWidth = this.hexSize * Math.sqrt(3);
+            this.hexHeight = this.hexSize * 2;
+            this.hexSpacing = 5;
+            this.xStep = this.hexWidth + this.hexSpacing;
+            this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+        }
+        
+        // Clear current grid and reset to blank state
+        this.gameBoard.innerHTML = '';
+        this.tiles.clear();
+        
+        // Hide tile details panel
+        this.tileDetails.classList.remove('active');
+        
+        // Reinitialize with new grid type (blank)
+        this.initializeGrid();
+        
+        // Update positions
+        this.updateTilePositions();
+    }
+
+    getBoardData() {
+        return {
+            viewportX: this.viewportX,
+            viewportY: this.viewportY,
+            zoom: this.zoom,
+            isEditMode: this.isEditMode,
+            gridType: this.gridType,
+            tiles: Array.from(this.tiles.entries())
+                .filter(([_, tile]) => tile.element.classList.contains('filled'))
+                .map(([key, tile]) => ({
+                    key,
+                    q: tile.q,
+                    r: tile.r,
+                    backgroundImage: tile.backgroundImage,
+                    details: tile.details
+                }))
+        };
+    }
+}
+
+class HexGrid extends BaseGrid {
+    constructor() {
+        super();
+        this.gridType = 'hex';
+
+        // Size calculations for perfect hexagon tiling
+        this.hexSize = 50; // Distance from center to corner
+        this.hexWidth = this.hexSize * Math.sqrt(3); // Width of hexagon
+        this.hexHeight = this.hexSize * 2; // Height of hexagon
+        this.hexSpacing = 5; // Gap between adjacent tiles
+        
+        // Size calculations for square grid
+        this.squareSize = 80; // Size of each square
+        this.squareSpacing = 5; // Gap between squares
+        
+        // Calculate offsets based on hexagon geometry (default)
+        this.xStep = this.hexWidth + this.hexSpacing;
+        this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+        
+        // Initialize the grid
+        this.initializeGrid();
+        
+        // Setup event listeners
+        this.setupCommonEventListeners();
+
         // Create edge arrows
         this.createEdgeArrows();
     }
@@ -61,14 +161,23 @@ class HexGrid {
         this.gameBoard.innerHTML = '';
         this.tiles.clear();
 
-        // Create a hexagonal grid with offset rows
-        for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
-            for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
-                // Offset alternate rows
-                const offsetQ = q + (r % 2) * 0.5;
-                // Check if this hex is within the circular radius
-                if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2) {
-                    this.createEmptyHex(offsetQ, r);
+        if (this.gridType === 'square') {
+            // Create a square grid
+            for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                    this.createEmptySquare(q, r);
+                }
+            }
+        } else {
+            // Create a hexagonal grid with offset rows
+            for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                    // Offset alternate rows
+                    const offsetQ = q + (r % 2) * 0.5;
+                    // Check if this hex is within the circular radius
+                    if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2) {
+                        this.createEmptyHex(offsetQ, r);
+                    }
                 }
             }
         }
@@ -124,6 +233,49 @@ class HexGrid {
 
         this.tiles.set(key, tileData);
         this.gameBoard.appendChild(hex);
+    }
+
+    createEmptySquare(q, r) {
+        const key = `${q},${r}`;
+        const { x, y } = this.gridToPixel(q, r);
+        
+        const square = document.createElement('div');
+        square.className = 'square';
+        square.style.left = `${x}px`;
+        square.style.top = `${y}px`;
+
+        const content = document.createElement('div');
+        content.className = 'square-content';
+        content.style.backgroundImage = 'url("https://via.placeholder.com/80x80")';
+        square.appendChild(content);
+
+        const tileData = {
+            element: square,
+            q,
+            r,
+            backgroundImage: content.style.backgroundImage,
+            details: {
+                name: `Tile ${key}`,
+                description: 'Click to edit details'
+            }
+        };
+
+        square.addEventListener('click', (e) => {
+            // Only toggle if we're in edit mode and this wasn't a drag
+            if (this.isEditMode && !this.gameBoard.classList.contains('dragging')) {
+                this.toggleTile(q, r);
+            }
+        });
+
+        square.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (this.isEditMode && square.classList.contains('filled')) {
+                this.showContextMenu(e, key);
+            }
+        });
+
+        this.tiles.set(key, tileData);
+        this.gameBoard.appendChild(square);
     }
 
     showContextMenu(e, key) {
@@ -182,27 +334,13 @@ class HexGrid {
 
     // Update save/load to handle filled state
     saveBoard() {
-        const boardData = {
-            viewportX: this.viewportX,
-            viewportY: this.viewportY,
-            zoom: this.zoom,
-            isEditMode: this.isEditMode,
-            tiles: Array.from(this.tiles.entries())
-                .filter(([_, tile]) => tile.element.classList.contains('filled'))
-                .map(([key, tile]) => ({
-                    key,
-                    q: tile.q,
-                    r: tile.r,
-                    backgroundImage: tile.backgroundImage,
-                    details: tile.details
-                })),
-        };
+        const boardData = this.getBoardData();
 
         const blob = new Blob([JSON.stringify(boardData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'hex-board.json';
+        a.download = `${this.gridType}-board.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -217,6 +355,39 @@ class HexGrid {
         reader.onload = (e) => {
             try {
                 const boardData = JSON.parse(e.target.result);
+                
+                // Detect grid type if not explicitly specified
+                if (!boardData.gridType && boardData.tiles && boardData.tiles.length > 0) {
+                    // Try to detect grid type based on coordinate patterns
+                    boardData.gridType = this.detectGridType(boardData.tiles);
+                }
+                
+                // Switch grid type if needed
+                if (boardData.gridType && boardData.gridType !== this.gridType) {
+                    const oldGridType = this.gridType;
+                    this.gridType = boardData.gridType;
+                    this.gridTypeToggle.textContent = this.gridType === 'hex' ? '⬡ Hexes' : '⬛ Squares';
+                    
+                    // Update grid size calculations based on detected type
+                    if (this.gridType === 'square') {
+                        this.squareSize = 80;
+                        this.squareSpacing = 5;
+                        this.xStep = this.squareSize + this.squareSpacing;
+                        this.yStep = this.squareSize + this.squareSpacing;
+                    } else {
+                        this.hexSize = 50;
+                        this.hexWidth = this.hexSize * Math.sqrt(3);
+                        this.hexHeight = this.hexSize * 2;
+                        this.hexSpacing = 5;
+                        this.xStep = this.hexWidth + this.hexSpacing;
+                        this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+                    }
+                    
+                    // Show user-friendly notification
+                    const gridTypeName = this.gridType === 'hex' ? 'hexagonal' : 'square';
+                    const oldGridTypeName = oldGridType === 'hex' ? 'hexagonal' : 'square';
+                    console.log(`Automatically switched from ${oldGridTypeName} to ${gridTypeName} grid based on loaded board data.`);
+                }
                 
                 // Initialize empty grid first
                 this.initializeGrid();
@@ -239,7 +410,11 @@ class HexGrid {
                         tile.element.classList.add('filled');
                         tile.backgroundImage = backgroundImage;
                         tile.details = details;
-                        tile.element.querySelector('.hex-content').style.backgroundImage = backgroundImage;
+                        const contentSelector = this.gridType === 'hex' ? '.hex-content' : '.square-content';
+                        const content = tile.element.querySelector(contentSelector);
+                        if (content) {
+                            content.style.backgroundImage = backgroundImage;
+                        }
                     }
                 });
 
@@ -249,6 +424,59 @@ class HexGrid {
             }
         };
         reader.readAsText(file);
+    }
+
+    detectGridType(tiles) {
+        // Analyze tile coordinates to determine if it's a hex or square grid
+        // Hex grids typically have fractional q coordinates due to offset rows
+        // Square grids have integer coordinates in a regular pattern
+        
+        const coordinates = tiles.map(tile => ({ q: tile.q, r: tile.r }));
+        
+        // Check for fractional coordinates (typical of hex grids with offset rows)
+        const hasFractionalCoords = coordinates.some(coord => 
+            coord.q % 1 !== 0 || coord.r % 1 !== 0
+        );
+        
+        if (hasFractionalCoords) {
+            return 'hex';
+        }
+        
+        // Check coordinate distribution patterns
+        // Square grids tend to have more regular, rectangular patterns
+        // Hex grids tend to have more circular/hexagonal patterns
+        
+        if (coordinates.length >= 3) {
+            // Look for typical hex offset patterns (like 0.5 offsets)
+            const hasHexOffsets = coordinates.some(coord => 
+                Math.abs(coord.q - Math.round(coord.q)) === 0.5
+            );
+            
+            if (hasHexOffsets) {
+                return 'hex';
+            }
+            
+            // If all coordinates are integers, check for square-like patterns
+            const allIntegers = coordinates.every(coord => 
+                coord.q % 1 === 0 && coord.r % 1 === 0
+            );
+            
+            if (allIntegers) {
+                // Check if coordinates form more of a square pattern
+                const qValues = coordinates.map(c => c.q);
+                const rValues = coordinates.map(c => c.r);
+                const qRange = Math.max(...qValues) - Math.min(...qValues);
+                const rRange = Math.max(...rValues) - Math.min(...rValues);
+                
+                // If the ranges are similar, it's likely a square grid
+                if (qRange > 0 && rRange > 0 && Math.abs(qRange - rRange) <= 2) {
+                    return 'square';
+                }
+            }
+        }
+        
+        // Default to hex if we can't determine
+        return 'hex';
     }
 
     setupEditModeHandlers() {
@@ -360,33 +588,56 @@ class HexGrid {
     }
 
     setZoom(newZoom) {
-        // Clamp zoom between 0.5 and 2
-        this.zoom = Math.max(0.5, Math.min(2, newZoom));
+        // Clamp zoom between 0.1 and 3 (wider range for mobile)
+        this.zoom = Math.max(0.1, Math.min(3, newZoom));
+        console.log('setZoom called with:', newZoom, 'final zoom:', this.zoom, 'gridType:', this.gridType);
         
-        // Update hex sizes while keeping spacing consistent
-        const baseSize = 50;
-        this.hexSize = baseSize * this.zoom;
-        this.hexWidth = this.hexSize * Math.sqrt(3);
-        this.hexHeight = this.hexSize * 2;
-        this.xStep = this.hexWidth + this.hexSpacing;
-        this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+        if (this.gridType === 'square') {
+            // Update square sizes while keeping spacing consistent
+            const baseSize = 80;
+            this.squareSize = baseSize * this.zoom;
+            this.xStep = this.squareSize + this.squareSpacing;
+            this.yStep = this.squareSize + this.squareSpacing;
 
-        // Update CSS variables for hex sizing
-        this.gameBoard.style.setProperty('--hex-size', `${this.hexSize}px`);
-        this.gameBoard.style.setProperty('--hex-width', `${this.hexWidth}px`);
-        this.gameBoard.style.setProperty('--hex-height', `${this.hexHeight}px`);
+            // Update CSS variables for square sizing
+            this.gameBoard.style.setProperty('--square-size', `${this.squareSize}px`);
+        } else {
+            // Update hex sizes while keeping spacing consistent
+            const baseSize = 50;
+            this.hexSize = baseSize * this.zoom;
+            this.hexWidth = this.hexSize * Math.sqrt(3);
+            this.hexHeight = this.hexSize * 2;
+            this.xStep = this.hexWidth + this.hexSpacing;
+            this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+
+            // Update CSS variables for hex sizing
+            this.gameBoard.style.setProperty('--hex-size', `${this.hexSize}px`);
+            this.gameBoard.style.setProperty('--hex-width', `${this.hexWidth}px`);
+            this.gameBoard.style.setProperty('--hex-height', `${this.hexHeight}px`);
+        }
         
+        console.log('setZoom - about to call updateTilePositions, hexSize:', this.hexSize);
         this.updateTilePositions();
+        console.log('setZoom - updateTilePositions completed');
     }
 
     // Convert grid coordinates to pixel coordinates
     gridToPixel(q, r) {
-        const x = q * this.xStep;
-        const y = -r * this.yStep;
-        return { 
-            x: x + this.viewportX, 
-            y: y + this.viewportY 
-        };
+        if (this.gridType === 'square') {
+            const x = q * this.xStep;
+            const y = r * this.yStep;
+            return { 
+                x: x + this.viewportX, 
+                y: y + this.viewportY 
+            };
+        } else {
+            const x = q * this.xStep;
+            const y = -r * this.yStep;
+            return { 
+                x: x + this.viewportX, 
+                y: y + this.viewportY 
+            };
+        }
     }
 
     // Update all tile positions based on viewport
@@ -492,7 +743,11 @@ class HexGrid {
                         const tile = this.tiles.get(key);
                         if (tile) {
                             tile.backgroundImage = `url("${imageUrl}")`;
-                            tile.element.querySelector('.hex-content').style.backgroundImage = tile.backgroundImage;
+                            const contentSelector = this.gridType === 'hex' ? '.hex-content' : '.square-content';
+                            const content = tile.element.querySelector(contentSelector);
+                            if (content) {
+                                content.style.backgroundImage = tile.backgroundImage;
+                            }
                             tile.details.description = `<a href="${wikiUrl}" target="_blank">${results[0].title}</a>`;
                             this.showTileDetails(key);
                         }
@@ -534,11 +789,14 @@ class HexGrid {
     handleBoardClick(e) {
         if (e.target === this.gameBoard) {
             this.tileDetails.classList.remove('active');
-        } else if (e.target.closest('.hex')) {
-            const hex = e.target.closest('.hex');
-            const key = Array.from(this.tiles.keys()).find(k => this.tiles.get(k).element === hex);
-            if (key) {
-                this.showTileDetails(key);
+        } else {
+            // Check for both hex and square tiles
+            const tile = e.target.closest('.hex') || e.target.closest('.square');
+            if (tile) {
+                const key = Array.from(this.tiles.keys()).find(k => this.tiles.get(k).element === tile);
+                if (key) {
+                    this.showTileDetails(key);
+                }
             }
         }
     }
@@ -717,7 +975,11 @@ class HexGrid {
             const imageUrl = input.value.trim();
             if (imageUrl) {
                 tile.backgroundImage = `url("${imageUrl}")`;
-                tile.element.querySelector('.hex-content').style.backgroundImage = tile.backgroundImage;
+                const contentSelector = this.gridType === 'hex' ? '.hex-content' : '.square-content';
+                const content = tile.element.querySelector(contentSelector);
+                if (content) {
+                    content.style.backgroundImage = tile.backgroundImage;
+                }
                 this.showTileDetails(key);
             }
         };
@@ -759,16 +1021,30 @@ class HexGrid {
         const oldRadius = this.gridRadius;
         this.gridRadius += expansionSize;
 
-        // Create new hexes in the expanded area
-        for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
-            for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
-                const offsetQ = q + (r % 2) * 0.5;
-                const key = `${offsetQ},${r}`;
-                
-                // Only create hexes in the new area
-                if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2 &&
-                    Math.abs(offsetQ) + Math.abs(r) > oldRadius * 2) {
-                    this.createEmptyHex(offsetQ, r);
+        if (this.gridType === 'square') {
+            // Create new squares in the expanded area
+            for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                    const key = `${q},${r}`;
+                    
+                    // Only create squares in the new area
+                    if ((Math.abs(q) > oldRadius || Math.abs(r) > oldRadius) && !this.tiles.has(key)) {
+                        this.createEmptySquare(q, r);
+                    }
+                }
+            }
+        } else {
+            // Create new hexes in the expanded area
+            for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                    const offsetQ = q + (r % 2) * 0.5;
+                    const key = `${offsetQ},${r}`;
+                    
+                    // Only create hexes in the new area
+                    if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2 &&
+                        Math.abs(offsetQ) + Math.abs(r) > oldRadius * 2) {
+                        this.createEmptyHex(offsetQ, r);
+                    }
                 }
             }
         }
@@ -794,22 +1070,9 @@ class HexGrid {
     }
 
     shareBoard() {
-        const boardData = {
-            viewportX: this.viewportX,
-            viewportY: this.viewportY,
-            zoom: this.zoom,
-            tiles: Array.from(this.tiles.entries())
-                .filter(([_, tile]) => tile.element.classList.contains('filled'))
-                .map(([key, tile]) => ({
-                    key,
-                    q: tile.q,
-                    r: tile.r,
-                    backgroundImage: tile.backgroundImage,
-                    details: tile.details
-                }))
-        };
+        const boardData = this.getBoardData();
 
-        // Include the actual CSS content directly
+        // Include the actual CSS content directly with mobile enhancements
         const cssContent = `
 * {
     margin: 0;
@@ -823,6 +1086,13 @@ body {
     background-color: #000;
     font-family: Arial, sans-serif;
     overflow: hidden;
+    /* Enable touch scrolling on mobile */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent text selection on mobile */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
 .controls {
@@ -884,6 +1154,10 @@ body {
     --hex-width: 86.6px;
     --hex-height: 100px;
     transition: margin-right 0.3s ease;
+    /* Enable touch interactions */
+    touch-action: pan-x pan-y;
+    /* Prevent bounce scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
 }
 
 .game-board.edit-mode {
@@ -966,6 +1240,55 @@ body {
     background-color: #888;
 }
 
+/* Square Grid Styles */
+.square {
+    position: absolute;
+    width: var(--square-size, 80px);
+    height: var(--square-size, 80px);
+    margin: 0;
+    cursor: pointer;
+    transition: transform 0.2s;
+    border: 1px solid #666;
+    background-color: rgba(102, 102, 102, 0.4);
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.square.filled {
+    border-color: #0066ff;
+    background-color: #0066ff;
+}
+
+.square-content {
+    position: absolute;
+    width: calc(100% - 4px);
+    height: calc(100% - 4px);
+    top: 2px;
+    left: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: #000;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.square.filled .square-content {
+    opacity: 1;
+}
+
+.game-board:not(.edit-mode) .square:not(.filled) {
+    display: none;
+}
+
+.edit-mode .square:hover {
+    background-color: #888;
+    border-color: #888;
+}
+
 .tile-details {
     position: fixed;
     right: 0;
@@ -1031,6 +1354,124 @@ body {
 
 .tile-details.active.expanded ~ .game-board {
     margin-right: 600px;
+}
+
+/* Mobile-specific styles - only for touch devices */
+@media (max-width: 768px) and (pointer: coarse), (max-width: 768px) and (hover: none) {
+    body {
+        overflow: auto;
+    }
+    
+    .game-board {
+        width: 100vw !important;
+        height: 100vh !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        margin-right: 0 !important;
+        /* Allow pinch-to-zoom on mobile */
+        touch-action: manipulation;
+    }
+    
+    .tile-details {
+        width: 100vw;
+        height: 60vh;
+        top: auto;
+        bottom: 0;
+        transform: translateY(100%);
+        border-radius: 20px 20px 0 0;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+    }
+    
+    .tile-details.active {
+        transform: translateY(0);
+    }
+    
+    .tile-details.expanded {
+        width: 100vw;
+        height: 80vh;
+    }
+    
+    .toggle-sidebar {
+        transform: rotate(90deg);
+    }
+    
+    .tile-details.active .toggle-sidebar {
+        transform: rotate(-90deg);
+    }
+    
+    /* Mobile zoom controls */
+    .mobile-controls {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 1000;
+    }
+    
+    .zoom-button {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: rgba(51, 51, 51, 0.9);
+        color: white;
+        border: 2px solid #666;
+        font-size: 24px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(10px);
+    }
+    
+    .zoom-button:active {
+        background: rgba(76, 175, 80, 0.9);
+        transform: scale(0.95);
+    }
+    
+    .reset-view-button {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: rgba(51, 51, 51, 0.9);
+        color: white;
+        border: 2px solid #666;
+        font-size: 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(10px);
+    }
+    
+    .reset-view-button:active {
+        background: rgba(76, 175, 80, 0.9);
+        transform: scale(0.95);
+    }
+}
+
+/* Tablet styles */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .tile-details {
+        width: 400px;
+    }
+    
+    .tile-details.expanded {
+        width: 600px;
+    }
+    
+    .tile-details.active ~ .game-board {
+        margin-right: 400px;
+    }
+    
+    .tile-details.active.expanded ~ .game-board {
+        margin-right: 600px;
+    }
 }
 
 .tile-details-content {
@@ -1159,10 +1600,9 @@ body {
 }
 
 /* Override styles for view-only mode */
-.controls { display: none; }
-.game-board { cursor: default; }
-.hex { cursor: pointer; }
-.hex:hover::before { background-color: inherit !important; }
+.controls { display: none !important; }
+.edit-controls { display: none !important; }
+.toggle-button { display: none !important; }
 `;
 
         // Create the HTML content
@@ -1170,15 +1610,15 @@ body {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hexagonal Game Board - View</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=3.0, minimum-scale=0.5">
+    <title>${boardData.gridType === 'square' ? 'Square' : 'Hexagonal'} Game Board - View</title>
     <style>
         ${cssContent}
     </style>
 </head>
 <body>
     <div class="game-board" id="gameBoard">
-        <!-- Hexagons will be added here dynamically -->
+        <!-- Game tiles will be added here dynamically -->
     </div>
     <div id="tileDetails" class="tile-details">
         <div class="tile-details-header">
@@ -1186,6 +1626,11 @@ body {
             <button id="toggleSidebar" class="toggle-sidebar">◀</button>
         </div>
         <div id="tileContent"></div>
+    </div>
+    <div class="mobile-controls">
+        <button class="zoom-button" id="zoomIn">+</button>
+        <button class="zoom-button" id="zoomOut">−</button>
+        <button class="reset-view-button" id="resetView">⌂</button>
     </div>
     <script>
         // Include the HexGrid class
@@ -1213,7 +1658,7 @@ body {
                 // Viewport position and zoom
                 this.viewportX = window.innerWidth / 2;
                 this.viewportY = window.innerHeight / 2;
-                this.zoom = 1;
+                this.zoom = this.zoom || 1; // Don't override if already set
                 this.isDragging = false;
                 this.dragStart = { x: 0, y: 0 };
                 
@@ -1233,14 +1678,53 @@ body {
                 this.gameBoard.innerHTML = '';
                 this.tiles.clear();
 
-                for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
-                    for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
-                        const offsetQ = q + (r % 2) * 0.5;
-                        if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2) {
-                            this.createEmptyHex(offsetQ, r);
+                if (this.gridType === 'square') {
+                    // Create a square grid
+                    for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                        for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                            this.createEmptySquare(q, r);
+                        }
+                    }
+                } else {
+                    // Create a hexagonal grid with offset rows
+                    for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                        for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                            const offsetQ = q + (r % 2) * 0.5;
+                            if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2) {
+                                this.createEmptyHex(offsetQ, r);
+                            }
                         }
                     }
                 }
+            }
+
+            createEmptySquare(q, r) {
+                const key = \`\${q},\${r}\`;
+                const { x, y } = this.gridToPixel(q, r);
+                
+                const square = document.createElement('div');
+                square.className = 'square';
+                square.style.left = \`\${x}px\`;
+                square.style.top = \`\${y}px\`;
+
+                const content = document.createElement('div');
+                content.className = 'square-content';
+                content.style.backgroundImage = 'url("https://via.placeholder.com/80x80")';
+                square.appendChild(content);
+
+                const tileData = {
+                    element: square,
+                    q,
+                    r,
+                    backgroundImage: content.style.backgroundImage,
+                    details: {
+                        name: \`Tile \${key}\`,
+                        description: 'Click to view details'
+                    }
+                };
+
+                this.tiles.set(key, tileData);
+                this.gameBoard.appendChild(square);
             }
 
             createEmptyHex(q, r) {
@@ -1273,12 +1757,21 @@ body {
             }
 
             gridToPixel(q, r) {
-                const x = q * this.xStep;
-                const y = -r * this.yStep;
-                return { 
-                    x: x + this.viewportX, 
-                    y: y + this.viewportY 
-                };
+                if (this.gridType === 'square') {
+                    const x = q * this.xStep;
+                    const y = r * this.yStep;
+                    return { 
+                        x: x + this.viewportX, 
+                        y: y + this.viewportY 
+                    };
+                } else {
+                    const x = q * this.xStep;
+                    const y = -r * this.yStep;
+                    return { 
+                        x: x + this.viewportX, 
+                        y: y + this.viewportY 
+                    };
+                }
             }
 
             updateTilePositions() {
@@ -1347,30 +1840,49 @@ body {
             }
 
             setZoom(newZoom) {
-                this.zoom = Math.max(0.5, Math.min(2, newZoom));
+                this.zoom = Math.max(0.1, Math.min(3, newZoom));
+                console.log('ViewOnlyHexGrid setZoom called with:', newZoom, 'final zoom:', this.zoom, 'gridType:', this.gridType);
                 
-                const baseSize = 50;
-                this.hexSize = baseSize * this.zoom;
-                this.hexWidth = this.hexSize * Math.sqrt(3);
-                this.hexHeight = this.hexSize * 2;
-                this.xStep = this.hexWidth + this.hexSpacing;
-                this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+                if (this.gridType === 'square') {
+                    // Update square sizes while keeping spacing consistent
+                    const baseSize = 80;
+                    this.squareSize = baseSize * this.zoom;
+                    this.xStep = this.squareSize + this.squareSpacing;
+                    this.yStep = this.squareSize + this.squareSpacing;
 
-                this.gameBoard.style.setProperty('--hex-size', \`\${this.hexSize}px\`);
-                this.gameBoard.style.setProperty('--hex-width', \`\${this.hexWidth}px\`);
-                this.gameBoard.style.setProperty('--hex-height', \`\${this.hexHeight}px\`);
+                    // Update CSS variables for square sizing
+                    this.gameBoard.style.setProperty('--square-size', \`\${this.squareSize}px\`);
+                } else {
+                    // Update hex sizes while keeping spacing consistent
+                    const baseSize = 50;
+                    this.hexSize = baseSize * this.zoom;
+                    this.hexWidth = this.hexSize * Math.sqrt(3);
+                    this.hexHeight = this.hexSize * 2;
+                    this.xStep = this.hexWidth + this.hexSpacing;
+                    this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+
+                    // Update CSS variables for hex sizing
+                    this.gameBoard.style.setProperty('--hex-size', \`\${this.hexSize}px\`);
+                    this.gameBoard.style.setProperty('--hex-width', \`\${this.hexWidth}px\`);
+                    this.gameBoard.style.setProperty('--hex-height', \`\${this.hexHeight}px\`);
+                }
                 
+                console.log('ViewOnlyHexGrid setZoom - about to call updateTilePositions, hexSize:', this.hexSize);
                 this.updateTilePositions();
+                console.log('ViewOnlyHexGrid setZoom - updateTilePositions completed');
             }
 
             handleBoardClick(e) {
                 if (e.target === this.gameBoard) {
                     this.tileDetails.classList.remove('active');
-                } else if (e.target.closest('.hex')) {
-                    const hex = e.target.closest('.hex');
-                    const key = Array.from(this.tiles.keys()).find(k => this.tiles.get(k).element === hex);
-                    if (key) {
-                        this.showTileDetails(key);
+                } else {
+                    // Check for both hex and square tiles
+                    const tile = e.target.closest('.hex') || e.target.closest('.square');
+                    if (tile) {
+                        const key = Array.from(this.tiles.keys()).find(k => this.tiles.get(k).element === tile);
+                        if (key) {
+                            this.showTileDetails(key);
+                        }
                     }
                 }
             }
@@ -1437,6 +1949,17 @@ body {
         class ViewOnlyHexGrid extends HexGrid {
             constructor() {
                 super();
+                
+                // Pre-calculate optimal zoom for mobile before loading board data
+                const isMobile = this.isMobileDevice();
+                if (isMobile) {
+                    const boardData = ${JSON.stringify(boardData)};
+                    const optimalZoom = this.calculateOptimalZoom(boardData);
+                    console.log('Constructor - setting optimal zoom for mobile:', optimalZoom);
+                    // Store the zoom to apply after loadBoardData sets up the grid properly
+                    this.pendingMobileZoom = optimalZoom;
+                }
+                
                 // Force view mode
                 this.isEditMode = false;
                 this.updateEditModeUI();
@@ -1444,8 +1967,260 @@ body {
                 // Add sidebar toggle listener
                 document.getElementById('toggleSidebar').addEventListener('click', () => this.toggleSidebar());
                 
+                // Add mobile controls
+                this.setupMobileControls();
+                
+                // Add touch support
+                this.setupTouchHandlers();
+                
                 // Load the board state
                 this.loadBoardData(${JSON.stringify(boardData)});
+            }
+            
+            setupMobileControls() {
+                // Only set up mobile controls if they exist (for shareable boards)
+                const zoomInBtn = document.getElementById('zoomIn');
+                const zoomOutBtn = document.getElementById('zoomOut');
+                const resetViewBtn = document.getElementById('resetView');
+                
+                if (zoomInBtn) {
+                    zoomInBtn.addEventListener('click', () => {
+                        this.setZoom(this.zoom * 1.2);
+                    });
+                }
+                
+                if (zoomOutBtn) {
+                    zoomOutBtn.addEventListener('click', () => {
+                        this.setZoom(this.zoom / 1.2);
+                    });
+                }
+                
+                if (resetViewBtn) {
+                    resetViewBtn.addEventListener('click', () => {
+                        this.resetView();
+                    });
+                }
+            }
+            
+            setupTouchHandlers() {
+                let lastTouchDistance = 0;
+                let lastTouchCenter = { x: 0, y: 0 };
+                let initialPinchZoom = 1;
+                
+                this.gameBoard.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 2) {
+                        // Pinch-to-zoom start
+                        const touch1 = e.touches[0];
+                        const touch2 = e.touches[1];
+                        lastTouchDistance = Math.hypot(
+                            touch2.clientX - touch1.clientX,
+                            touch2.clientY - touch1.clientY
+                        );
+                        lastTouchCenter = {
+                            x: (touch1.clientX + touch2.clientX) / 2,
+                            y: (touch1.clientY + touch2.clientY) / 2
+                        };
+                        initialPinchZoom = this.zoom;
+                        e.preventDefault();
+                    } else if (e.touches.length === 1) {
+                        // Single touch for panning
+                        this.isDragging = true;
+                        this.dragStart = {
+                            x: e.touches[0].clientX - this.viewportX,
+                            y: e.touches[0].clientY - this.viewportY
+                        };
+                        this.gameBoard.classList.add('dragging');
+                    }
+                });
+                
+                this.gameBoard.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 2) {
+                        // Pinch-to-zoom
+                        const touch1 = e.touches[0];
+                        const touch2 = e.touches[1];
+                        const currentDistance = Math.hypot(
+                            touch2.clientX - touch1.clientX,
+                            touch2.clientY - touch1.clientY
+                        );
+                        
+                        if (lastTouchDistance > 0) {
+                            const scale = currentDistance / lastTouchDistance;
+                            this.setZoom(initialPinchZoom * scale);
+                        }
+                        e.preventDefault();
+                    } else if (e.touches.length === 1 && this.isDragging) {
+                        // Single touch panning
+                        this.viewportX = e.touches[0].clientX - this.dragStart.x;
+                        this.viewportY = e.touches[0].clientY - this.dragStart.y;
+                        this.updateTilePositions();
+                        e.preventDefault();
+                    }
+                });
+                
+                this.gameBoard.addEventListener('touchend', (e) => {
+                    if (e.touches.length === 0) {
+                        this.isDragging = false;
+                        this.gameBoard.classList.remove('dragging');
+                        lastTouchDistance = 0;
+                    }
+                });
+            }
+            
+            isMobileDevice() {
+                // More reliable mobile detection that works in dev tools
+                return window.innerWidth <= 768 || 
+                       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                       ('ontouchstart' in window) || 
+                       (navigator.maxTouchPoints > 0);
+            }
+            
+            resetView() {
+                this.viewportX = window.innerWidth / 2;
+                this.viewportY = window.innerHeight / 2;
+                
+                // Use optimal zoom on mobile, default zoom on desktop
+                const isMobile = this.isMobileDevice();
+                console.log('Reset view - isMobile:', isMobile, 'window.innerWidth:', window.innerWidth);
+                if (isMobile && this.boardData) {
+                    const optimalZoom = this.calculateOptimalZoom(this.boardData);
+                    console.log('Reset view - calculated optimal zoom:', optimalZoom);
+                    this.setZoom(optimalZoom);
+                } else {
+                    console.log('Reset view - using default zoom: 1');
+                    this.setZoom(1);
+                }
+            }
+            
+            calculateOptimalZoom(boardData) {
+                if (!boardData.tiles || boardData.tiles.length === 0) {
+                    return 1; // Default zoom if no tiles
+                }
+                
+                // Calculate board bounds based on tile positions
+                let minQ = Infinity, maxQ = -Infinity;
+                let minR = Infinity, maxR = -Infinity;
+                
+                boardData.tiles.forEach(tile => {
+                    minQ = Math.min(minQ, tile.q);
+                    maxQ = Math.max(maxQ, tile.q);
+                    minR = Math.min(minR, tile.r);
+                    maxR = Math.max(maxR, tile.r);
+                });
+                
+                // Calculate board dimensions in pixels based on grid type
+                let boardWidth, boardHeight;
+                
+                if (this.gridType === 'square') {
+                    // Square grid calculations
+                    const squareSize = 80;
+                    const squareSpacing = 5;
+                    const xStep = squareSize + squareSpacing;
+                    const yStep = squareSize + squareSpacing;
+                    
+                    // Add extra padding for squares to account for borders
+                    boardWidth = (maxQ - minQ + 1) * xStep + squareSpacing * 2;
+                    boardHeight = (maxR - minR + 1) * yStep + squareSpacing * 2;
+                } else {
+                    // Hex grid calculations
+                    const hexSize = 50;
+                    const hexWidth = hexSize * Math.sqrt(3);
+                    const hexHeight = hexSize * 2;
+                    const hexSpacing = 5;
+                    const xStep = hexWidth + hexSpacing;
+                    const yStep = (hexHeight * 3/4) + (hexSpacing * Math.cos(Math.PI/6));
+                    
+                    // Add extra padding for hexes and account for hex shape
+                    boardWidth = (maxQ - minQ + 1) * xStep + hexSpacing * 2;
+                    boardHeight = (maxR - minR + 1) * yStep + hexSpacing * 2;
+                }
+                
+                // More conservative padding (10% of screen size) and account for mobile controls
+                const padding = 0.1;
+                const mobileControlsHeight = 200; // Height for mobile zoom controls
+                const availableWidth = window.innerWidth * (1 - padding);
+                const availableHeight = (window.innerHeight - mobileControlsHeight) * (1 - padding);
+                
+                // Calculate zoom to fit both width and height
+                const zoomX = availableWidth / boardWidth;
+                const zoomY = availableHeight / boardHeight;
+                
+                // Use the smaller zoom to ensure everything fits, with additional safety margin
+                const optimalZoom = Math.min(zoomX, zoomY) * 0.9;
+                
+                // Clamp zoom between reasonable bounds (0.05 to 1.5)
+                return Math.max(0.05, Math.min(1.5, optimalZoom));
+            }
+
+            loadBoardData(boardData) {
+                // Store board data for resetView function
+                this.boardData = boardData;
+                
+                // Set grid type first
+                this.gridType = boardData.gridType || 'hex';
+                
+                // Update grid size calculations based on type
+                if (this.gridType === 'square') {
+                    this.squareSize = 80;
+                    this.squareSpacing = 5;
+                    this.xStep = this.squareSize + this.squareSpacing;
+                    this.yStep = this.squareSize + this.squareSpacing;
+                } else {
+                    this.hexSize = 50;
+                    this.hexWidth = this.hexSize * Math.sqrt(3);
+                    this.hexHeight = this.hexSize * 2;
+                    this.hexSpacing = 5;
+                    this.xStep = this.hexWidth + this.hexSpacing;
+                    this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+                }
+                
+                // Initialize empty grid first
+                this.initializeGrid();
+                
+                // Use optimal zoom and centering for mobile devices, saved coordinates for desktop
+                const isMobile = this.isMobileDevice();
+                console.log('LoadBoardData - isMobile:', isMobile, 'current zoom:', this.zoom);
+                if (isMobile) {
+                    // On mobile, center the board (zoom already set in constructor)
+                    this.viewportX = window.innerWidth / 2;
+                    this.viewportY = window.innerHeight / 2;
+                } else {
+                    // On desktop, use saved coordinates or fallback to center
+                    this.viewportX = boardData.viewportX || window.innerWidth / 2;
+                    this.viewportY = boardData.viewportY || window.innerHeight / 2;
+                    this.zoom = boardData.zoom || 1;
+                    console.log('LoadBoardData - using desktop zoom:', this.zoom);
+                }
+                
+                // Fill and update tiles
+                boardData.tiles.forEach(tileData => {
+                    const { q, r, backgroundImage, details } = tileData;
+                    const key = \`\${q},\${r}\`;
+                    const tile = this.tiles.get(key);
+                    if (tile) {
+                        tile.element.classList.add('filled');
+                        tile.backgroundImage = backgroundImage;
+                        tile.details = details;
+                        const contentSelector = this.gridType === 'hex' ? '.hex-content' : '.square-content';
+                        const content = tile.element.querySelector(contentSelector);
+                        if (content) {
+                            content.style.backgroundImage = backgroundImage;
+                        }
+                    }
+                });
+
+                this.updateTilePositions();
+                
+                // Apply pending mobile zoom if we have one
+                if (this.pendingMobileZoom) {
+                    console.log('Applying pending mobile zoom:', this.pendingMobileZoom);
+                    this.setZoom(this.pendingMobileZoom);
+                    this.pendingMobileZoom = null; // Clear it
+                }
+                
+                // Debug: Check if zoom changes after updateTilePositions
+                setTimeout(() => {
+                    console.log('Post-loadBoardData check - zoom is now:', this.zoom);
+                }, 100);
             }
             
             toggleSidebar() {
@@ -1474,7 +2249,7 @@ body {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'hex-board-view.html';
+        a.download = `${boardData.gridType}-board-view.html`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1492,5 +2267,5 @@ body {
     }
 }
 
-// Initialize the hex grid
+// Initialize the game board (supports both hex and square grids)
 const hexGrid = new HexGrid(); 

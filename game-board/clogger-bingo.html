@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=3.0, minimum-scale=0.5">
+    <title>Square Game Board - View</title>
+    <style>
+        
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    display: flex;
+    min-height: 100vh;
+    background-color: #000;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+    /* Enable touch scrolling on mobile */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent text selection on mobile */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.controls {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.edit-controls {
+    display: none;
+    gap: 10px;
+}
+
+.edit-controls.active {
+    display: flex;
+}
+
+.toggle-button {
+    padding: 8px 16px;
+    background-color: #333;
+    color: white;
+    border: 2px solid #666;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.toggle-button.edit-mode {
+    background-color: #4CAF50;
+    border-color: #45a049;
+}
+
+.controls button:not(.toggle-button) {
+    padding: 8px 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.controls button:hover {
+    background-color: #45a049;
+}
+
+.game-board {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    background-color: #222;
+    --hex-size: 50px;
+    --hex-width: 86.6px;
+    --hex-height: 100px;
+    transition: margin-right 0.3s ease;
+    /* Enable touch interactions */
+    touch-action: pan-x pan-y;
+    /* Prevent bounce scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+}
+
+.game-board.edit-mode {
+    background-color: #2a2a2a;
+}
+
+.game-board.dragging {
+    cursor: grabbing;
+}
+
+.hex {
+    position: absolute;
+    width: var(--hex-width);
+    height: var(--hex-height);
+    margin: 0;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.hex::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #666;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0.4;
+    transition: opacity 0.2s, background-color 0.2s;
+}
+
+.hex.filled::before {
+    background-color: #0066ff;
+    opacity: 1;
+}
+
+.hex::after {
+    content: '';
+    position: absolute;
+    width: calc(100% - 8px);
+    height: calc(100% - 8px);
+    top: 4px;
+    left: 4px;
+    background-color: #000;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.hex.filled::after {
+    opacity: 1;
+}
+
+.hex-content {
+    position: absolute;
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+    top: 8px;
+    left: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.hex.filled .hex-content {
+    opacity: 1;
+}
+
+.game-board:not(.edit-mode) .hex:not(.filled) {
+    display: none;
+}
+
+.edit-mode .hex:hover::before {
+    background-color: #888;
+}
+
+/* Square Grid Styles */
+.square {
+    position: absolute;
+    width: var(--square-size, 80px);
+    height: var(--square-size, 80px);
+    margin: 0;
+    cursor: pointer;
+    transition: transform 0.2s;
+    border: 1px solid #666;
+    background-color: rgba(102, 102, 102, 0.4);
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.square.filled {
+    border-color: #0066ff;
+    background-color: #0066ff;
+}
+
+.square-content {
+    position: absolute;
+    width: calc(100% - 4px);
+    height: calc(100% - 4px);
+    top: 2px;
+    left: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: #000;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.square.filled .square-content {
+    opacity: 1;
+}
+
+.game-board:not(.edit-mode) .square:not(.filled) {
+    display: none;
+}
+
+.edit-mode .square:hover {
+    background-color: #888;
+    border-color: #888;
+}
+
+.tile-details {
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 350px;
+    height: 100vh;
+    background: #1a1a1a;
+    color: #fff;
+    padding: 20px;
+    transform: translateX(100%);
+    transition: transform 0.3s ease, width 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.tile-details.expanded {
+    width: 1000px;
+}
+
+.tile-details.active {
+    transform: translateX(0);
+}
+
+.tile-details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.tile-details-header h2 {
+    margin: 0;
+    font-size: 1.5em;
+    color: #fff;
+}
+
+.toggle-sidebar {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.tile-details.expanded .toggle-sidebar {
+    transform: rotate(180deg);
+}
+
+.toggle-sidebar:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.game-board {
+    transition: margin-right 0.3s ease;
+}
+
+.tile-details.active ~ .game-board {
+    margin-right: 350px;
+}
+
+.tile-details.active.expanded ~ .game-board {
+    margin-right: 600px;
+}
+
+/* Mobile-specific styles - only for touch devices */
+@media (max-width: 768px) and (pointer: coarse), (max-width: 768px) and (hover: none) {
+    body {
+        overflow: auto;
+    }
+    
+    .game-board {
+        width: 100vw !important;
+        height: 100vh !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        margin-right: 0 !important;
+        /* Allow pinch-to-zoom on mobile */
+        touch-action: manipulation;
+    }
+    
+    .tile-details {
+        width: 100vw;
+        height: 60vh;
+        top: auto;
+        bottom: 0;
+        transform: translateY(100%);
+        border-radius: 20px 20px 0 0;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+    }
+    
+    .tile-details.active {
+        transform: translateY(0);
+    }
+    
+    .tile-details.expanded {
+        width: 100vw;
+        height: 80vh;
+    }
+    
+    .toggle-sidebar {
+        transform: rotate(90deg);
+    }
+    
+    .tile-details.active .toggle-sidebar {
+        transform: rotate(-90deg);
+    }
+    
+    /* Mobile zoom controls */
+    .mobile-controls {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 1000;
+    }
+    
+    .zoom-button {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: rgba(51, 51, 51, 0.9);
+        color: white;
+        border: 2px solid #666;
+        font-size: 24px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(10px);
+    }
+    
+    .zoom-button:active {
+        background: rgba(76, 175, 80, 0.9);
+        transform: scale(0.95);
+    }
+    
+    .reset-view-button {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: rgba(51, 51, 51, 0.9);
+        color: white;
+        border: 2px solid #666;
+        font-size: 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(10px);
+    }
+    
+    .reset-view-button:active {
+        background: rgba(76, 175, 80, 0.9);
+        transform: scale(0.95);
+    }
+}
+
+/* Tablet styles */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .tile-details {
+        width: 400px;
+    }
+    
+    .tile-details.expanded {
+        width: 600px;
+    }
+    
+    .tile-details.active ~ .game-board {
+        margin-right: 400px;
+    }
+    
+    .tile-details.active.expanded ~ .game-board {
+        margin-right: 600px;
+    }
+}
+
+.tile-details-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 100%;
+}
+
+.details-section {
+    background: #2a2a2a;
+    padding: 15px;
+    border-radius: 5px;
+    flex: 1;
+}
+
+.details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.details-header h3 {
+    margin: 0;
+    color: #ccc;
+    font-size: 1.1em;
+}
+
+.details-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.edit-link {
+    background: none;
+    border: none;
+    color: #4CAF50;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.reset-link {
+    background: none;
+    border: none;
+    color: #f44336;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.edit-link:hover {
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.reset-link:hover {
+    background: rgba(244, 67, 54, 0.1);
+}
+
+.details-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.details-label {
+    color: #888;
+    font-size: 0.9em;
+}
+
+.details-value {
+    padding: 8px;
+    background: #333;
+    border-radius: 4px;
+    min-height: 20px;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.details-value ul, .details-value ol {
+    list-style-type: disc;
+    padding-left: 2em;
+    margin: 0.5em 0;
+}
+
+.details-value li {
+    margin: 0.25em 0;
+}
+
+.details-value a {
+    color: #4CAF50;
+    text-decoration: none;
+}
+
+.details-value a:hover {
+    text-decoration: underline;
+}
+
+.image-section {
+    margin-top: auto;
+    padding: 15px;
+    background: #2a2a2a;
+    border-radius: 5px;
+}
+
+.image-section h3 {
+    color: #ccc;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.image-preview {
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.image-preview img {
+    max-width: 100%;
+    max-height: 150px;
+    border-radius: 4px;
+}
+
+/* Override styles for view-only mode */
+.controls { display: none !important; }
+.edit-controls { display: none !important; }
+.toggle-button { display: none !important; }
+
+    </style>
+</head>
+<body>
+    <div class="game-board" id="gameBoard">
+        <!-- Game tiles will be added here dynamically -->
+    </div>
+    <div id="tileDetails" class="tile-details">
+        <div class="tile-details-header">
+            <h2>Tile Details</h2>
+            <button id="toggleSidebar" class="toggle-sidebar">◀</button>
+        </div>
+        <div id="tileContent"></div>
+    </div>
+    <div class="mobile-controls">
+        <button class="zoom-button" id="zoomIn">+</button>
+        <button class="zoom-button" id="zoomOut">−</button>
+        <button class="reset-view-button" id="resetView">⌂</button>
+    </div>
+    <script>
+        // Include the HexGrid class
+        class HexGrid {
+            constructor() {
+                this.gameBoard = document.getElementById('gameBoard');
+                this.tileDetails = document.getElementById('tileDetails');
+                this.tileContent = document.getElementById('tileContent');
+                this.tiles = new Map();
+                this.contextMenu = null;
+
+                // Size calculations for perfect hexagon tiling
+                this.hexSize = 50;
+                this.hexWidth = this.hexSize * Math.sqrt(3);
+                this.hexHeight = this.hexSize * 2;
+                this.hexSpacing = 5;
+                
+                // Calculate offsets based on hexagon geometry
+                this.xStep = this.hexWidth + this.hexSpacing;
+                this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+                
+                // Grid dimensions
+                this.gridRadius = 10;
+                
+                // Viewport position and zoom
+                this.viewportX = window.innerWidth / 2;
+                this.viewportY = window.innerHeight / 2;
+                this.zoom = this.zoom || 1; // Don't override if already set
+                this.isDragging = false;
+                this.dragStart = { x: 0, y: 0 };
+                
+                // Edit mode state
+                this.isEditMode = false;
+                
+                // Initialize the grid
+                this.initializeGrid();
+                
+                // Add event listeners
+                this.gameBoard.addEventListener('click', this.handleBoardClick.bind(this));
+                this.setupDragHandlers();
+                this.setupZoomHandlers();
+            }
+
+            initializeGrid() {
+                this.gameBoard.innerHTML = '';
+                this.tiles.clear();
+
+                if (this.gridType === 'square') {
+                    // Create a square grid
+                    for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                        for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                            this.createEmptySquare(q, r);
+                        }
+                    }
+                } else {
+                    // Create a hexagonal grid with offset rows
+                    for (let q = -this.gridRadius; q <= this.gridRadius; q++) {
+                        for (let r = -this.gridRadius; r <= this.gridRadius; r++) {
+                            const offsetQ = q + (r % 2) * 0.5;
+                            if (Math.abs(offsetQ) + Math.abs(r) <= this.gridRadius * 2) {
+                                this.createEmptyHex(offsetQ, r);
+                            }
+                        }
+                    }
+                }
+            }
+
+            createEmptySquare(q, r) {
+                const key = `${q},${r}`;
+                const { x, y } = this.gridToPixel(q, r);
+                
+                const square = document.createElement('div');
+                square.className = 'square';
+                square.style.left = `${x}px`;
+                square.style.top = `${y}px`;
+
+                const content = document.createElement('div');
+                content.className = 'square-content';
+                content.style.backgroundImage = 'url("https://via.placeholder.com/80x80")';
+                square.appendChild(content);
+
+                const tileData = {
+                    element: square,
+                    q,
+                    r,
+                    backgroundImage: content.style.backgroundImage,
+                    details: {
+                        name: `Tile ${key}`,
+                        description: 'Click to view details'
+                    }
+                };
+
+                this.tiles.set(key, tileData);
+                this.gameBoard.appendChild(square);
+            }
+
+            createEmptyHex(q, r) {
+                const key = `${q},${r}`;
+                const { x, y } = this.gridToPixel(q, r);
+                
+                const hex = document.createElement('div');
+                hex.className = 'hex';
+                hex.style.left = `${x}px`;
+                hex.style.top = `${y}px`;
+
+                const content = document.createElement('div');
+                content.className = 'hex-content';
+                content.style.backgroundImage = 'url("https://via.placeholder.com/100x115")';
+                hex.appendChild(content);
+
+                const tileData = {
+                    element: hex,
+                    q,
+                    r,
+                    backgroundImage: content.style.backgroundImage,
+                    details: {
+                        name: `Tile ${key}`,
+                        description: 'Click to view details'
+                    }
+                };
+
+                this.tiles.set(key, tileData);
+                this.gameBoard.appendChild(hex);
+            }
+
+            gridToPixel(q, r) {
+                if (this.gridType === 'square') {
+                    const x = q * this.xStep;
+                    const y = r * this.yStep;
+                    return { 
+                        x: x + this.viewportX, 
+                        y: y + this.viewportY 
+                    };
+                } else {
+                    const x = q * this.xStep;
+                    const y = -r * this.yStep;
+                    return { 
+                        x: x + this.viewportX, 
+                        y: y + this.viewportY 
+                    };
+                }
+            }
+
+            updateTilePositions() {
+                this.tiles.forEach((tile, key) => {
+                    const { x, y } = this.gridToPixel(tile.q, tile.r);
+                    tile.element.style.left = `${x}px`;
+                    tile.element.style.top = `${y}px`;
+                });
+            }
+
+            setupDragHandlers() {
+                let isDragging = false;
+                let dragStart = { x: 0, y: 0 };
+
+                this.gameBoard.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0) return;
+
+                    isDragging = false;
+                    dragStart = {
+                        x: e.clientX - this.viewportX,
+                        y: e.clientY - this.viewportY
+                    };
+
+                    const handleMouseMove = (e) => {
+                        const dx = e.clientX - (dragStart.x + this.viewportX);
+                        const dy = e.clientY - (dragStart.y + this.viewportY);
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance > 5) {
+                            isDragging = true;
+                            this.gameBoard.classList.add('dragging');
+                        }
+
+                        if (isDragging) {
+                            this.viewportX = e.clientX - dragStart.x;
+                            this.viewportY = e.clientY - dragStart.y;
+                            this.updateTilePositions();
+                        }
+                    };
+
+                    const handleMouseUp = (e) => {
+                        window.removeEventListener('mousemove', handleMouseMove);
+                        window.removeEventListener('mouseup', handleMouseUp);
+                        
+                        if (isDragging) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                        
+                        isDragging = false;
+                        this.gameBoard.classList.remove('dragging');
+                    };
+
+                    window.addEventListener('mousemove', handleMouseMove);
+                    window.addEventListener('mouseup', handleMouseUp);
+                });
+            }
+
+            setupZoomHandlers() {
+                this.gameBoard.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const zoomFactor = 1.1;
+                    const delta = e.deltaY > 0 ? 1/zoomFactor : zoomFactor;
+                    this.setZoom(this.zoom * delta);
+                });
+            }
+
+            setZoom(newZoom) {
+                this.zoom = Math.max(0.1, Math.min(3, newZoom));
+                console.log('ViewOnlyHexGrid setZoom called with:', newZoom, 'final zoom:', this.zoom, 'gridType:', this.gridType);
+                
+                if (this.gridType === 'square') {
+                    // Update square sizes while keeping spacing consistent
+                    const baseSize = 80;
+                    this.squareSize = baseSize * this.zoom;
+                    this.xStep = this.squareSize + this.squareSpacing;
+                    this.yStep = this.squareSize + this.squareSpacing;
+
+                    // Update CSS variables for square sizing
+                    this.gameBoard.style.setProperty('--square-size', `${this.squareSize}px`);
+                } else {
+                    // Update hex sizes while keeping spacing consistent
+                    const baseSize = 50;
+                    this.hexSize = baseSize * this.zoom;
+                    this.hexWidth = this.hexSize * Math.sqrt(3);
+                    this.hexHeight = this.hexSize * 2;
+                    this.xStep = this.hexWidth + this.hexSpacing;
+                    this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+
+                    // Update CSS variables for hex sizing
+                    this.gameBoard.style.setProperty('--hex-size', `${this.hexSize}px`);
+                    this.gameBoard.style.setProperty('--hex-width', `${this.hexWidth}px`);
+                    this.gameBoard.style.setProperty('--hex-height', `${this.hexHeight}px`);
+                }
+                
+                console.log('ViewOnlyHexGrid setZoom - about to call updateTilePositions, hexSize:', this.hexSize);
+                this.updateTilePositions();
+                console.log('ViewOnlyHexGrid setZoom - updateTilePositions completed');
+            }
+
+            handleBoardClick(e) {
+                if (e.target === this.gameBoard) {
+                    this.tileDetails.classList.remove('active');
+                } else {
+                    // Check for both hex and square tiles
+                    const tile = e.target.closest('.hex') || e.target.closest('.square');
+                    if (tile) {
+                        const key = Array.from(this.tiles.keys()).find(k => this.tiles.get(k).element === tile);
+                        if (key) {
+                            this.showTileDetails(key);
+                        }
+                    }
+                }
+            }
+
+            showTileDetails(key) {
+                const tile = this.tiles.get(key);
+                if (!tile) return;
+
+                let content = `
+                    <div class="tile-details-content">
+                        <div class="details-section">
+                            <div class="details-field">
+                                <div class="details-value">
+                                    ${tile.details.description}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="image-section">
+                            <div class="image-preview">
+                                <img src="${tile.backgroundImage.replace(/url\(['"](.+)['"]\)/, '$1')}" alt="Tile preview">
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                this.tileContent.innerHTML = content;
+                this.tileDetails.classList.add('active');
+
+                // Update the sidebar header with the tile title (matching view mode behavior)
+                const headerTitle = this.tileDetails.querySelector('.tile-details-header h2');
+                if (headerTitle) {
+                    headerTitle.textContent = tile.details.title || `Tile ${key}`;
+                }
+            }
+
+            updateEditModeUI() {
+                this.gameBoard.classList.toggle('edit-mode', this.isEditMode);
+            }
+
+            loadBoardData(boardData) {
+                this.initializeGrid();
+                
+                this.viewportX = boardData.viewportX || window.innerWidth / 2;
+                this.viewportY = boardData.viewportY || window.innerHeight / 2;
+                this.zoom = boardData.zoom || 1;
+                
+                boardData.tiles.forEach(tileData => {
+                    const { q, r, backgroundImage, details } = tileData;
+                    const key = `${q},${r}`;
+                    const tile = this.tiles.get(key);
+                    if (tile) {
+                        tile.element.classList.add('filled');
+                        tile.backgroundImage = backgroundImage;
+                        tile.details = details;
+                        tile.element.querySelector('.hex-content').style.backgroundImage = backgroundImage;
+                    }
+                });
+
+                this.updateTilePositions();
+            }
+        }
+
+        // Override the HexGrid class to disable editing features
+        class ViewOnlyHexGrid extends HexGrid {
+            constructor() {
+                super();
+                
+                // Pre-calculate optimal zoom for mobile before loading board data
+                const isMobile = this.isMobileDevice();
+                if (isMobile) {
+                    const boardData = {"viewportX":729,"viewportY":517,"zoom":1.464100000000001,"isEditMode":true,"gridType":"square","tiles":[{"key":"-2,-2","q":-2,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/The_Hueycoatl.png/1280px-The_Hueycoatl.png?7b216\")","details":{"name":"Tile -2,-2","description":"<p>Obtain any 2 uniques from The Hueycoatl, excluding Hueycoatl Hides, Huasca Seeds, and Soiled Pages</p>","title":"Hueycoatl"}},{"key":"-2,-1","q":-2,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/CmLNXtU.png\")","details":{"name":"Tile -2,-1","description":"<p>Obtain both components of the Twinflame Staff. The pieces do not need to be combined into the full staff.</p>","title":"Twinflame Staff"}},{"key":"-2,0","q":-2,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Phantom_Muspah_%28ranged%29.png/1024px-Phantom_Muspah_%28ranged%29.png?9cf6a\")","details":{"name":"Tile -2,0","description":"<p>Obtain any 4 uniques from Phantom Muspah, excluding Ancient Essence, Frozen Cache, or Charged Ice.</p>","title":"Phantom Muspah"}},{"key":"-2,1","q":-2,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Dragon_warhammer_detail.png?7f65a\")","details":{"name":"Tile -2,1","description":"<p>Obtain a Dragon Warhammer</p>","title":"Dragon Warhammer"}},{"key":"-2,2","q":-2,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Demonic_gorilla.png/1024px-Demonic_gorilla.png?5f457\")","details":{"name":"Tile -2,2","description":"<p>Obtain any 4 uniques from Demonic Gorillas</p>","title":"Demonic Gorillas"}},{"key":"-1,-4","q":-1,"r":-4,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Lumbridge_Guide_icon.png\")","details":{"name":"Tile -1,-4","description":"<p><strong>Claiming Tiles</strong></p>\n<p>Drops can only be claimed if the drop triggers a unique collection log popup for the player obtaining the drop. Submissions will require that the chat log message indicating the player has obtained a unique collection log pop-up are visible. The collection log pop-up box is not necessary for a valid submission, but the chat message must be included in the submission post. <br><br>Players can only claim 1 drop for any tile (for example, on the tile \"Obtain any 2 General Graardor uniques, excluding Godsword shards\", any 1 player can only contribute 1 unique drop). <br><br><em>Example tile completion</em> Team 1 is attempting to complete, \"Obtain any 4 uniques from the Phantom Muspah, excluding Ancient Essence and Charged Ice.\" Zaoirse submits a Venator Shard collection log, Corvidastir submits a Venator Shard collection log, Bristle Pig submits an Ancient Icon collection Log, and Whyte Tree submits a Venator Shard collection Log. The tile is completed. An invalid submission would be if Corvidastir submitted a Venator Shard and Ancient Icon collection log (only one submitted item per player per tile) or if Zoooom submitted an Ancient Icon drop that was not a unique collection log pop-up.</p>","title":"Claiming Tiles"}},{"key":"-1,-2","q":-1,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/K%27ril_Tsutsaroth.png/800px-K%27ril_Tsutsaroth.png?73bda\")","details":{"name":"Tile -1,-2","description":"<p>Obtain any 2 uniques from K'ril Tsutsaroth, excluding Godsword shards</p>","title":"K'ril Tsutsaroth"}},{"key":"-1,-1","q":-1,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/UakvEWy.png\")","details":{"name":"Tile -1,-1","description":"<p>Obtain Claws of Callisto, Tyrannical Ring, or Voidwaker Hilt</p>","title":"Callisto/Artio"}},{"key":"-1,0","q":-1,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Void_Knight_%281%29.png/800px-Void_Knight_%281%29.png?a8d16\")","details":{"name":"Tile -1,0","description":"<p>Obtain any 6 uniques from Pest Control</p>","title":"Pest Control"}},{"key":"-1,1","q":-1,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Zulrah_%28serpentine%29.png/800px-Zulrah_%28serpentine%29.png?29a54\")","details":{"name":"Tile -1,1","description":"<p>Obtain any 2 uniques from Zulrah, excluding Zulrah's scales and Zul-andra teleport.</p>","title":"Zulrah"}},{"key":"-1,2","q":-1,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Chest_%28Barrows%29.png/1280px-Chest_%28Barrows%29.png?9aff2\")","details":{"name":"Tile -1,2","description":"<p>Barrows Bingo Jr - Obtain any 6 uniques from Barrows, excluding Bolt Racks</p>","title":"Barrows Bingo Jr"}},{"key":"0,-4","q":0,"r":-4,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Huberte_%28follower%29.png/1200px-Huberte_%28follower%29.png?19e22\")","details":{"name":"Tile 0,-4","description":"<p>Pets or jars that trigger a collection log popup can be used to immediately complete the tile containing that boss's drop. The pet must be unique for the player receiving the drop (for example, if you are attempting to obtain a Dragon Pickaxe from Chaos Elemental, the player must not have previously obtained a Chaos Elemental pet).</p>","title":"Pets"}},{"key":"0,-2","q":0,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Dragon_pickaxe_detail.png?4f4ee\")","details":{"name":"Tile 0,-2","description":"<p>Obtain a Dragon Pickaxe</p>","title":"Dragon Pickaxe"}},{"key":"0,-1","q":0,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/4CGycPT.png\")","details":{"name":"Tile 0,-1","description":"<p>Obtain Wizard Boots, Ranger Boots, or Spiked Manacles</p>","title":"Medium Clue Boots"}},{"key":"0,0","q":0,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Corrupted_Hunllef.png/280px-Corrupted_Hunllef.png?0cd55\")","details":{"name":"Tile 0,0","description":"<p>Obtain any 3 uniques from The Gauntlet</p>","title":"Gauntlet"}},{"key":"0,1","q":0,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Yama.png/1200px-Yama.png?7653a\")","details":{"name":"Tile 0,1","description":"<p>Obtain a Soulflame Horn or piece of Oathplate armor from Yama</p>","title":"Yama"}},{"key":"0,2","q":0,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Lunar_Chest_%28open%29.png/1280px-Lunar_Chest_%28open%29.png?a87f5\")","details":{"name":"Tile 0,2","description":"<p>Obtain any 4 uniques from Moons of Peril, excluding Atlatl Darts</p>","title":"Moons of Peril"}},{"key":"1,-4","q":1,"r":-4,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Royal_crown_detail.png/1200px-Royal_crown_detail.png?3ed5c\")","details":{"name":"Tile 1,-4","description":"<p><strong>Win Conditions</strong> <br>The event will run from 26 September 2025 15:00 UTC until 06 October 2025 01:00 UTC.<br><br>Each win condition can only be claimed once. A team can claim multiple win conditions. <br>'Row' Complete a row<br>'Column' Complete a column<br>'X' complete tiles in the shape of the letter X <br>'4 corners' complete the 4 corner tiles <br>'Blackout' complete the entire board</p>","title":"Win Conditions"}},{"key":"1,-2","q":1,"r":-2,"backgroundImage":"url(\"https://i.imgur.com/ZJB36Rh.png\")","details":{"name":"Tile 1,-2","description":"<p>Obtain Fangs of Venenatis, Treasonous Ring, or Voidwaker Gem</p>","title":"Venenatis/Spindel"}},{"key":"1,-1","q":1,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/00miUmO.png\")","details":{"name":"Tile 1,-1","description":"<p>Obtain any 2 of Fire Cape, Inferno Cape, or Dizana's Quiver. The same item can be obtained multiple times, as long as it is a collection log (i.e. two team members can get a Fire Cape).</p>","title":"Capes Galore"}},{"key":"1,0","q":1,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Zalcano.png/800px-Zalcano.png?6244d\")","details":{"name":"Tile 1,0","description":"<p>Obtain any 1 unique from Zalcano</p>","title":"Zalcano"}},{"key":"1,1","q":1,"r":1,"backgroundImage":"url(\"https://i.imgur.com/yJB4Ip9.png\")","details":{"name":"Tile 1,1","description":"<p>Obtain all 4 unique rings from The Dagannoth Kings</p>","title":"Dagannoth Kings"}},{"key":"1,2","q":1,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Commander_Zilyana.png?c5eaa\")","details":{"name":"Tile 1,2","description":"<p>Obtain any 2 uniques from Commander Zilyana, excluding Godsword shards</p>","title":"Commander Zilyana"}},{"key":"2,-2","q":2,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Tormented_synapse_detail.png?27153\")","details":{"name":"Tile 2,-2","description":"<p>Obtain a Tormented Synapse</p>","title":"Tormented Synapse"}},{"key":"2,-1","q":2,"r":-1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/General_Graardor.png/640px-General_Graardor.png?4dd90\")","details":{"name":"Tile 2,-1","description":"<p>Obtain any 2 uniques from General Graardor, excluding Godsword shards</p>","title":"General Graardor"}},{"key":"2,0","q":2,"r":0,"backgroundImage":"url(\"https://i.imgur.com/HRKsedE.png\")","details":{"name":"Tile 2,0","description":"<p>Obtain Skull of Vet'ion, Ring of the Gods, or Voidwaker Blade</p>","title":"Vet'ion/Calvar'ion"}},{"key":"2,1","q":2,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Fighter_torso_detail.png?19a96\")","details":{"name":"Tile 2,1","description":"<p>Obtain a Fighter Torso</p>","title":"Fighter Torso"}},{"key":"2,2","q":2,"r":2,"backgroundImage":"url(\"https://i.imgur.com/bdukcBY.png\")","details":{"name":"Tile 2,2","description":"<p>Obtain an Osmumten's Fang and Lightbearer</p>","title":"Tombs of Amascut"}}]};
+                    const optimalZoom = this.calculateOptimalZoom(boardData);
+                    console.log('Constructor - setting optimal zoom for mobile:', optimalZoom);
+                    // Store the zoom to apply after loadBoardData sets up the grid properly
+                    this.pendingMobileZoom = optimalZoom;
+                }
+                
+                // Force view mode
+                this.isEditMode = false;
+                this.updateEditModeUI();
+                
+                // Add sidebar toggle listener
+                document.getElementById('toggleSidebar').addEventListener('click', () => this.toggleSidebar());
+                
+                // Add mobile controls
+                this.setupMobileControls();
+                
+                // Add touch support
+                this.setupTouchHandlers();
+                
+                // Load the board state
+                this.loadBoardData({"viewportX":729,"viewportY":517,"zoom":1.464100000000001,"isEditMode":true,"gridType":"square","tiles":[{"key":"-2,-2","q":-2,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/The_Hueycoatl.png/1280px-The_Hueycoatl.png?7b216\")","details":{"name":"Tile -2,-2","description":"<p>Obtain any 2 uniques from The Hueycoatl, excluding Hueycoatl Hides, Huasca Seeds, and Soiled Pages</p>","title":"Hueycoatl"}},{"key":"-2,-1","q":-2,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/CmLNXtU.png\")","details":{"name":"Tile -2,-1","description":"<p>Obtain both components of the Twinflame Staff. The pieces do not need to be combined into the full staff.</p>","title":"Twinflame Staff"}},{"key":"-2,0","q":-2,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Phantom_Muspah_%28ranged%29.png/1024px-Phantom_Muspah_%28ranged%29.png?9cf6a\")","details":{"name":"Tile -2,0","description":"<p>Obtain any 4 uniques from Phantom Muspah, excluding Ancient Essence, Frozen Cache, or Charged Ice.</p>","title":"Phantom Muspah"}},{"key":"-2,1","q":-2,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Dragon_warhammer_detail.png?7f65a\")","details":{"name":"Tile -2,1","description":"<p>Obtain a Dragon Warhammer</p>","title":"Dragon Warhammer"}},{"key":"-2,2","q":-2,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Demonic_gorilla.png/1024px-Demonic_gorilla.png?5f457\")","details":{"name":"Tile -2,2","description":"<p>Obtain any 4 uniques from Demonic Gorillas</p>","title":"Demonic Gorillas"}},{"key":"-1,-4","q":-1,"r":-4,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Lumbridge_Guide_icon.png\")","details":{"name":"Tile -1,-4","description":"<p><strong>Claiming Tiles</strong></p>\n<p>Drops can only be claimed if the drop triggers a unique collection log popup for the player obtaining the drop. Submissions will require that the chat log message indicating the player has obtained a unique collection log pop-up are visible. The collection log pop-up box is not necessary for a valid submission, but the chat message must be included in the submission post. <br><br>Players can only claim 1 drop for any tile (for example, on the tile \"Obtain any 2 General Graardor uniques\", any 1 player can only contribute 1 unique drop). <br><br><em>Example tile completion</em> Team 1 is attempting to complete, \"Obtain any 4 uniques from the Phantom Muspah, excluding Ancient Essence and Charged Ice.\" Zaoirse submits a Venator Shard collection log, Corvidastir submits a Venator Shard collection log, Bristle Pig submits an Ancient Icon collection Log, and Whyte Tree submits a Venator Shard collection Log. The tile is completed. An invalid submission would be if Corvidastir submitted a Venator Shard and Ancient Icon collection log (only one submitted item per player per tile) or if Zoooom submitted an Ancient Icon drop that was not a unique collection log pop-up.</p>","title":"Claiming Tiles"}},{"key":"-1,-2","q":-1,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/K%27ril_Tsutsaroth.png/800px-K%27ril_Tsutsaroth.png?73bda\")","details":{"name":"Tile -1,-2","description":"<p>Obtain any 2 uniques from K'ril Tsutsaroth, excluding Godsword shards</p>","title":"K'ril Tsutsaroth"}},{"key":"-1,-1","q":-1,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/UakvEWy.png\")","details":{"name":"Tile -1,-1","description":"<p>Obtain Claws of Callisto, Tyrannical Ring, or Voidwaker Hilt</p>","title":"Callisto/Artio"}},{"key":"-1,0","q":-1,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Void_Knight_%281%29.png/800px-Void_Knight_%281%29.png?a8d16\")","details":{"name":"Tile -1,0","description":"<p>Obtain any 6 uniques from Pest Control</p>","title":"Pest Control"}},{"key":"-1,1","q":-1,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Zulrah_%28serpentine%29.png/800px-Zulrah_%28serpentine%29.png?29a54\")","details":{"name":"Tile -1,1","description":"<p>Obtain any 2 uniques from Zulrah, excluding Zulrah's scales and Zul-andra teleport.</p>","title":"Zulrah"}},{"key":"-1,2","q":-1,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Chest_%28Barrows%29.png/1280px-Chest_%28Barrows%29.png?9aff2\")","details":{"name":"Tile -1,2","description":"<p>Barrows Bingo Jr - Obtain any 6 uniques from Barrows, excluding Bolt Racks</p>","title":"Barrows Bingo Jr"}},{"key":"0,-4","q":0,"r":-4,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Huberte_%28follower%29.png/1200px-Huberte_%28follower%29.png?19e22\")","details":{"name":"Tile 0,-4","description":"<p>Pets or jars that trigger a collection log popup can be used to immediately complete the tile containing that boss's drop. The pet must be unique for the player receiving the drop (for example, if you are attempting to obtain a Dragon Pickaxe from Chaos Elemental, the player must not have previously obtained a Chaos Elemental pet).</p>","title":"Pets"}},{"key":"0,-2","q":0,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Dragon_pickaxe_detail.png?4f4ee\")","details":{"name":"Tile 0,-2","description":"<p>Obtain a Dragon Pickaxe</p>","title":"Dragon Pickaxe"}},{"key":"0,-1","q":0,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/4CGycPT.png\")","details":{"name":"Tile 0,-1","description":"<p>Obtain Wizard Boots, Ranger Boots, or Spiked Manacles</p>","title":"Medium Clue Boots"}},{"key":"0,0","q":0,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Corrupted_Hunllef.png/280px-Corrupted_Hunllef.png?0cd55\")","details":{"name":"Tile 0,0","description":"<p>Obtain any 3 uniques from The Gauntlet</p>","title":"Gauntlet"}},{"key":"0,1","q":0,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Yama.png/1200px-Yama.png?7653a\")","details":{"name":"Tile 0,1","description":"<p>Obtain a Soulflame Horn or piece of Oathplate armor from Yama</p>","title":"Yama"}},{"key":"0,2","q":0,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Lunar_Chest_%28open%29.png/1280px-Lunar_Chest_%28open%29.png?a87f5\")","details":{"name":"Tile 0,2","description":"<p>Obtain any 4 uniques from Moons of Peril, excluding Atlatl Darts</p>","title":"Moons of Peril"}},{"key":"1,-4","q":1,"r":-4,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Royal_crown_detail.png/1200px-Royal_crown_detail.png?3ed5c\")","details":{"name":"Tile 1,-4","description":"<p><strong>Win Conditions</strong> <br>The event will run from 26 September 2025 15:00 UTC until 06 October 2025 01:00 UTC.<br><br>Each win condition can only be claimed once. A team can claim multiple win conditions. <br>'Row' Complete a row<br>'Column' Complete a column<br>'X' complete tiles in the shape of the letter X <br>'4 corners' complete the 4 corner tiles <br>'Blackout' complete the entire board</p>","title":"Win Conditions"}},{"key":"1,-2","q":1,"r":-2,"backgroundImage":"url(\"https://i.imgur.com/ZJB36Rh.png\")","details":{"name":"Tile 1,-2","description":"<p>Obtain Fangs of Venenatis, Treasonous Ring, or Voidwaker Gem</p>","title":"Venenatis/Spindel"}},{"key":"1,-1","q":1,"r":-1,"backgroundImage":"url(\"https://i.imgur.com/00miUmO.png\")","details":{"name":"Tile 1,-1","description":"<p>Obtain any 2 of Fire Cape, Inferno Cape, or Dizana's Quiver. The same item can be obtained multiple times, as long as it is a collection log (i.e. two team members can get a Fire Cape).</p>","title":"Capes Galore"}},{"key":"1,0","q":1,"r":0,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/Zalcano.png/800px-Zalcano.png?6244d\")","details":{"name":"Tile 1,0","description":"<p>Obtain any 1 unique from Zalcano</p>","title":"Zalcano"}},{"key":"1,1","q":1,"r":1,"backgroundImage":"url(\"https://i.imgur.com/yJB4Ip9.png\")","details":{"name":"Tile 1,1","description":"<p>Obtain all 4 unique rings from The Dagannoth Kings</p>","title":"Dagannoth Kings"}},{"key":"1,2","q":1,"r":2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Commander_Zilyana.png?c5eaa\")","details":{"name":"Tile 1,2","description":"<p>Obtain any 2 uniques from Commander Zilyana, excluding Godsword shards</p>","title":"Commander Zilyana"}},{"key":"2,-2","q":2,"r":-2,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Tormented_synapse_detail.png?27153\")","details":{"name":"Tile 2,-2","description":"<p>Obtain a Tormented Synapse</p>","title":"Tormented Synapse"}},{"key":"2,-1","q":2,"r":-1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/thumb/General_Graardor.png/640px-General_Graardor.png?4dd90\")","details":{"name":"Tile 2,-1","description":"<p>Obtain any 2 uniques from General Graardor, excluding Godsword shards</p>","title":"General Graardor"}},{"key":"2,0","q":2,"r":0,"backgroundImage":"url(\"https://i.imgur.com/HRKsedE.png\")","details":{"name":"Tile 2,0","description":"<p>Obtain Skull of Vet'ion, Ring of the Gods, or Voidwaker Blade</p>","title":"Vet'ion/Calvar'ion"}},{"key":"2,1","q":2,"r":1,"backgroundImage":"url(\"https://oldschool.runescape.wiki/images/Fighter_torso_detail.png?19a96\")","details":{"name":"Tile 2,1","description":"<p>Obtain a Fighter Torso</p>","title":"Fighter Torso"}},{"key":"2,2","q":2,"r":2,"backgroundImage":"url(\"https://i.imgur.com/bdukcBY.png\")","details":{"name":"Tile 2,2","description":"<p>Obtain an Osmumten's Fang and Lightbearer</p>","title":"Tombs of Amascut"}}]});
+            }
+            
+            setupMobileControls() {
+                // Only set up mobile controls if they exist (for shareable boards)
+                const zoomInBtn = document.getElementById('zoomIn');
+                const zoomOutBtn = document.getElementById('zoomOut');
+                const resetViewBtn = document.getElementById('resetView');
+                
+                if (zoomInBtn) {
+                    zoomInBtn.addEventListener('click', () => {
+                        this.setZoom(this.zoom * 1.2);
+                    });
+                }
+                
+                if (zoomOutBtn) {
+                    zoomOutBtn.addEventListener('click', () => {
+                        this.setZoom(this.zoom / 1.2);
+                    });
+                }
+                
+                if (resetViewBtn) {
+                    resetViewBtn.addEventListener('click', () => {
+                        this.resetView();
+                    });
+                }
+            }
+            
+            setupTouchHandlers() {
+                let lastTouchDistance = 0;
+                let lastTouchCenter = { x: 0, y: 0 };
+                let initialPinchZoom = 1;
+                
+                this.gameBoard.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 2) {
+                        // Pinch-to-zoom start
+                        const touch1 = e.touches[0];
+                        const touch2 = e.touches[1];
+                        lastTouchDistance = Math.hypot(
+                            touch2.clientX - touch1.clientX,
+                            touch2.clientY - touch1.clientY
+                        );
+                        lastTouchCenter = {
+                            x: (touch1.clientX + touch2.clientX) / 2,
+                            y: (touch1.clientY + touch2.clientY) / 2
+                        };
+                        initialPinchZoom = this.zoom;
+                        e.preventDefault();
+                    } else if (e.touches.length === 1) {
+                        // Single touch for panning
+                        this.isDragging = true;
+                        this.dragStart = {
+                            x: e.touches[0].clientX - this.viewportX,
+                            y: e.touches[0].clientY - this.viewportY
+                        };
+                        this.gameBoard.classList.add('dragging');
+                    }
+                });
+                
+                this.gameBoard.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 2) {
+                        // Pinch-to-zoom
+                        const touch1 = e.touches[0];
+                        const touch2 = e.touches[1];
+                        const currentDistance = Math.hypot(
+                            touch2.clientX - touch1.clientX,
+                            touch2.clientY - touch1.clientY
+                        );
+                        
+                        if (lastTouchDistance > 0) {
+                            const scale = currentDistance / lastTouchDistance;
+                            this.setZoom(initialPinchZoom * scale);
+                        }
+                        e.preventDefault();
+                    } else if (e.touches.length === 1 && this.isDragging) {
+                        // Single touch panning
+                        this.viewportX = e.touches[0].clientX - this.dragStart.x;
+                        this.viewportY = e.touches[0].clientY - this.dragStart.y;
+                        this.updateTilePositions();
+                        e.preventDefault();
+                    }
+                });
+                
+                this.gameBoard.addEventListener('touchend', (e) => {
+                    if (e.touches.length === 0) {
+                        this.isDragging = false;
+                        this.gameBoard.classList.remove('dragging');
+                        lastTouchDistance = 0;
+                    }
+                });
+            }
+            
+            isMobileDevice() {
+                // More reliable mobile detection that works in dev tools
+                return window.innerWidth <= 768 || 
+                       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                       ('ontouchstart' in window) || 
+                       (navigator.maxTouchPoints > 0);
+            }
+            
+            resetView() {
+                this.viewportX = window.innerWidth / 2;
+                this.viewportY = window.innerHeight / 2;
+                
+                // Use optimal zoom on mobile, default zoom on desktop
+                const isMobile = this.isMobileDevice();
+                console.log('Reset view - isMobile:', isMobile, 'window.innerWidth:', window.innerWidth);
+                if (isMobile && this.boardData) {
+                    const optimalZoom = this.calculateOptimalZoom(this.boardData);
+                    console.log('Reset view - calculated optimal zoom:', optimalZoom);
+                    this.setZoom(optimalZoom);
+                } else {
+                    console.log('Reset view - using default zoom: 1');
+                    this.setZoom(1);
+                }
+            }
+            
+            calculateOptimalZoom(boardData) {
+                if (!boardData.tiles || boardData.tiles.length === 0) {
+                    return 1; // Default zoom if no tiles
+                }
+                
+                // Calculate board bounds based on tile positions
+                let minQ = Infinity, maxQ = -Infinity;
+                let minR = Infinity, maxR = -Infinity;
+                
+                boardData.tiles.forEach(tile => {
+                    minQ = Math.min(minQ, tile.q);
+                    maxQ = Math.max(maxQ, tile.q);
+                    minR = Math.min(minR, tile.r);
+                    maxR = Math.max(maxR, tile.r);
+                });
+                
+                // Calculate board dimensions in pixels based on grid type
+                let boardWidth, boardHeight;
+                
+                if (this.gridType === 'square') {
+                    // Square grid calculations
+                    const squareSize = 80;
+                    const squareSpacing = 5;
+                    const xStep = squareSize + squareSpacing;
+                    const yStep = squareSize + squareSpacing;
+                    
+                    // Add extra padding for squares to account for borders
+                    boardWidth = (maxQ - minQ + 1) * xStep + squareSpacing * 2;
+                    boardHeight = (maxR - minR + 1) * yStep + squareSpacing * 2;
+                } else {
+                    // Hex grid calculations
+                    const hexSize = 50;
+                    const hexWidth = hexSize * Math.sqrt(3);
+                    const hexHeight = hexSize * 2;
+                    const hexSpacing = 5;
+                    const xStep = hexWidth + hexSpacing;
+                    const yStep = (hexHeight * 3/4) + (hexSpacing * Math.cos(Math.PI/6));
+                    
+                    // Add extra padding for hexes and account for hex shape
+                    boardWidth = (maxQ - minQ + 1) * xStep + hexSpacing * 2;
+                    boardHeight = (maxR - minR + 1) * yStep + hexSpacing * 2;
+                }
+                
+                // More conservative padding (10% of screen size) and account for mobile controls
+                const padding = 0.1;
+                const mobileControlsHeight = 200; // Height for mobile zoom controls
+                const availableWidth = window.innerWidth * (1 - padding);
+                const availableHeight = (window.innerHeight - mobileControlsHeight) * (1 - padding);
+                
+                // Calculate zoom to fit both width and height
+                const zoomX = availableWidth / boardWidth;
+                const zoomY = availableHeight / boardHeight;
+                
+                // Use the smaller zoom to ensure everything fits, with additional safety margin
+                const optimalZoom = Math.min(zoomX, zoomY) * 0.9;
+                
+                // Clamp zoom between reasonable bounds (0.05 to 1.5)
+                return Math.max(0.05, Math.min(1.5, optimalZoom));
+            }
+
+            loadBoardData(boardData) {
+                // Store board data for resetView function
+                this.boardData = boardData;
+                
+                // Set grid type first
+                this.gridType = boardData.gridType || 'hex';
+                
+                // Update grid size calculations based on type
+                if (this.gridType === 'square') {
+                    this.squareSize = 80;
+                    this.squareSpacing = 5;
+                    this.xStep = this.squareSize + this.squareSpacing;
+                    this.yStep = this.squareSize + this.squareSpacing;
+                } else {
+                    this.hexSize = 50;
+                    this.hexWidth = this.hexSize * Math.sqrt(3);
+                    this.hexHeight = this.hexSize * 2;
+                    this.hexSpacing = 5;
+                    this.xStep = this.hexWidth + this.hexSpacing;
+                    this.yStep = (this.hexHeight * 3/4) + (this.hexSpacing * Math.cos(Math.PI/6));
+                }
+                
+                // Initialize empty grid first
+                this.initializeGrid();
+                
+                // Use optimal zoom and centering for mobile devices, saved coordinates for desktop
+                const isMobile = this.isMobileDevice();
+                console.log('LoadBoardData - isMobile:', isMobile, 'current zoom:', this.zoom);
+                if (isMobile) {
+                    // On mobile, center the board (zoom already set in constructor)
+                    this.viewportX = window.innerWidth / 2;
+                    this.viewportY = window.innerHeight / 2;
+                } else {
+                    // On desktop, use saved coordinates or fallback to center
+                    this.viewportX = boardData.viewportX || window.innerWidth / 2;
+                    this.viewportY = boardData.viewportY || window.innerHeight / 2;
+                    this.zoom = boardData.zoom || 1;
+                    console.log('LoadBoardData - using desktop zoom:', this.zoom);
+                }
+                
+                // Fill and update tiles
+                boardData.tiles.forEach(tileData => {
+                    const { q, r, backgroundImage, details } = tileData;
+                    const key = `${q},${r}`;
+                    const tile = this.tiles.get(key);
+                    if (tile) {
+                        tile.element.classList.add('filled');
+                        tile.backgroundImage = backgroundImage;
+                        tile.details = details;
+                        const contentSelector = this.gridType === 'hex' ? '.hex-content' : '.square-content';
+                        const content = tile.element.querySelector(contentSelector);
+                        if (content) {
+                            content.style.backgroundImage = backgroundImage;
+                        }
+                    }
+                });
+
+                this.updateTilePositions();
+                
+                // Apply pending mobile zoom if we have one
+                if (this.pendingMobileZoom) {
+                    console.log('Applying pending mobile zoom:', this.pendingMobileZoom);
+                    this.setZoom(this.pendingMobileZoom);
+                    this.pendingMobileZoom = null; // Clear it
+                }
+                
+                // Debug: Check if zoom changes after updateTilePositions
+                setTimeout(() => {
+                    console.log('Post-loadBoardData check - zoom is now:', this.zoom);
+                }, 100);
+            }
+            
+            toggleSidebar() {
+                this.tileDetails.classList.toggle('expanded');
+            }
+
+            // Override methods to disable editing
+            toggleTile() { return; }
+            showContextMenu() { return; }
+            startEditing() { return; }
+            saveEdit() { return; }
+            cancelEdit() { return; }
+            changeTileImage() { return; }
+            removeTile() { return; }
+            expandBoard() { return; }
+        }
+
+        // Initialize the view-only grid
+        const hexGrid = new ViewOnlyHexGrid();
+    </script>
+</body>
+</html>

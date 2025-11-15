@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=3.0, minimum-scale=0.5">
+    <title>Game Board - View</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Override some styles for view-only mode */
+        .controls {
+            display: none;
+        }
+        .game-board {
+            cursor: default;
+        }
+        .hex {
+            cursor: default;
+        }
+        .hex:hover::before {
+            background-color: inherit !important;
+        }
+        
+        /* Mobile-specific styles for view.html - only for touch devices */
+        @media (max-width: 768px) and (pointer: coarse), (max-width: 768px) and (hover: none) {
+            body {
+                overflow: auto;
+                -webkit-overflow-scrolling: touch;
+                -webkit-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;
+            }
+            
+            .game-board {
+                width: 100vw;
+                height: 100vh;
+                position: fixed;
+                top: 0;
+                left: 0;
+                margin-right: 0 !important;
+                touch-action: manipulation;
+            }
+            
+            .tile-details {
+                width: 100vw;
+                height: 60vh;
+                top: auto;
+                bottom: 0;
+                transform: translateY(100%);
+                border-radius: 20px 20px 0 0;
+                box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+            }
+            
+            .tile-details.active {
+                transform: translateY(0);
+            }
+            
+            .tile-details.expanded {
+                width: 100vw;
+                height: 80vh;
+            }
+            
+            .toggle-sidebar {
+                transform: rotate(90deg);
+            }
+            
+            .tile-details.active .toggle-sidebar {
+                transform: rotate(-90deg);
+            }
+            
+            /* Mobile zoom controls */
+            .mobile-controls {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                z-index: 1000;
+            }
+            
+            .zoom-button {
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                background: rgba(51, 51, 51, 0.9);
+                color: white;
+                border: 2px solid #666;
+                font-size: 24px;
+                font-weight: bold;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+                backdrop-filter: blur(10px);
+            }
+            
+            .zoom-button:active {
+                background: rgba(76, 175, 80, 0.9);
+                transform: scale(0.95);
+            }
+            
+            .reset-view-button {
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                background: rgba(51, 51, 51, 0.9);
+                color: white;
+                border: 2px solid #666;
+                font-size: 16px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+                backdrop-filter: blur(10px);
+            }
+            
+            .reset-view-button:active {
+                background: rgba(76, 175, 80, 0.9);
+                transform: scale(0.95);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-board" id="gameBoard">
+        <!-- Game tiles will be added here dynamically -->
+    </div>
+    <div id="tileDetails" class="tile-details">
+        <h2>Tile Details</h2>
+        <div id="tileContent"></div>
+    </div>
+    <div class="mobile-controls">
+        <button class="zoom-button" id="zoomIn">+</button>
+        <button class="zoom-button" id="zoomOut">−</button>
+        <button class="reset-view-button" id="resetView">⌂</button>
+    </div>
+    <script src="script.js"></script>
+    <script>
+        // Override the HexGrid class to disable editing features
+        class ViewOnlyHexGrid extends HexGrid {
+            constructor() {
+                super();
+                
+                // Mark that we need to calculate mobile zoom when board data loads
+                this.needsMobileZoom = this.isMobileDevice();
+                
+                // Force view mode
+                this.isEditMode = false;
+                this.updateEditModeUI();
+                
+                // Add mobile controls
+                this.setupMobileControls();
+                
+                // Add touch support
+                this.setupTouchHandlers();
+                
+                // Load the board state from URL parameters
+                this.loadBoardFromUrl();
+            }
+            
+            setupMobileControls() {
+                // Only set up mobile controls if they exist (for shareable boards)
+                const zoomInBtn = document.getElementById('zoomIn');
+                const zoomOutBtn = document.getElementById('zoomOut');
+                const resetViewBtn = document.getElementById('resetView');
+                
+                if (zoomInBtn) {
+                    zoomInBtn.addEventListener('click', () => {
+                        this.setZoom(this.zoom * 1.2);
+                    });
+                }
+                
+                if (zoomOutBtn) {
+                    zoomOutBtn.addEventListener('click', () => {
+                        this.setZoom(this.zoom / 1.2);
+                    });
+                }
+                
+                if (resetViewBtn) {
+                    resetViewBtn.addEventListener('click', () => {
+                        this.resetView();
+                    });
+                }
+            }
+            
+            setupTouchHandlers() {
+                let lastTouchDistance = 0;
+                let lastTouchCenter = { x: 0, y: 0 };
+                let initialPinchZoom = 1;
+                
+                this.gameBoard.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 2) {
+                        // Pinch-to-zoom start
+                        const touch1 = e.touches[0];
+                        const touch2 = e.touches[1];
+                        lastTouchDistance = Math.hypot(
+                            touch2.clientX - touch1.clientX,
+                            touch2.clientY - touch1.clientY
+                        );
+                        lastTouchCenter = {
+                            x: (touch1.clientX + touch2.clientX) / 2,
+                            y: (touch1.clientY + touch2.clientY) / 2
+                        };
+                        initialPinchZoom = this.zoom;
+                        e.preventDefault();
+                    } else if (e.touches.length === 1) {
+                        // Single touch for panning
+                        this.isDragging = true;
+                        this.dragStart = {
+                            x: e.touches[0].clientX - this.viewportX,
+                            y: e.touches[0].clientY - this.viewportY
+                        };
+                        this.gameBoard.classList.add('dragging');
+                    }
+                });
+                
+                this.gameBoard.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 2) {
+                        // Pinch-to-zoom
+                        const touch1 = e.touches[0];
+                        const touch2 = e.touches[1];
+                        const currentDistance = Math.hypot(
+                            touch2.clientX - touch1.clientX,
+                            touch2.clientY - touch1.clientY
+                        );
+                        
+                        if (lastTouchDistance > 0) {
+                            const scale = currentDistance / lastTouchDistance;
+                            this.setZoom(initialPinchZoom * scale);
+                        }
+                        e.preventDefault();
+                    } else if (e.touches.length === 1 && this.isDragging) {
+                        // Single touch panning
+                        this.viewportX = e.touches[0].clientX - this.dragStart.x;
+                        this.viewportY = e.touches[0].clientY - this.dragStart.y;
+                        this.updateTilePositions();
+                        e.preventDefault();
+                    }
+                });
+                
+                this.gameBoard.addEventListener('touchend', (e) => {
+                    if (e.touches.length === 0) {
+                        this.isDragging = false;
+                        this.gameBoard.classList.remove('dragging');
+                        lastTouchDistance = 0;
+                    }
+                });
+            }
+            
+            isMobileDevice() {
+                // More reliable mobile detection that works in dev tools
+                return window.innerWidth <= 768 || 
+                       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                       ('ontouchstart' in window) || 
+                       (navigator.maxTouchPoints > 0);
+            }
+            
+            resetView() {
+                this.viewportX = window.innerWidth / 2;
+                this.viewportY = window.innerHeight / 2;
+                
+                // Use optimal zoom on mobile, default zoom on desktop
+                const isMobile = this.isMobileDevice();
+                console.log('Reset view - isMobile:', isMobile, 'window.innerWidth:', window.innerWidth);
+                if (isMobile && this.boardData) {
+                    const optimalZoom = this.calculateOptimalZoom(this.boardData);
+                    console.log('Reset view - calculated optimal zoom:', optimalZoom);
+                    this.setZoom(optimalZoom);
+                } else {
+                    console.log('Reset view - using default zoom: 1');
+                    this.setZoom(1);
+                }
+            }
+            
+            calculateOptimalZoom(boardData) {
+                const tiles = boardData.t || boardData.tiles || [];
+                if (tiles.length === 0) {
+                    return 1; // Default zoom if no tiles
+                }
+                
+                // Calculate board bounds based on tile positions
+                let minQ = Infinity, maxQ = -Infinity;
+                let minR = Infinity, maxR = -Infinity;
+                
+                tiles.forEach(tile => {
+                    minQ = Math.min(minQ, tile.q);
+                    maxQ = Math.max(maxQ, tile.q);
+                    minR = Math.min(minR, tile.r);
+                    maxR = Math.max(maxR, tile.r);
+                });
+                
+                // Calculate board dimensions in pixels based on grid type
+                let boardWidth, boardHeight;
+                
+                if (this.gridType === 'square') {
+                    // Square grid calculations
+                    const squareSize = 80;
+                    const squareSpacing = 5;
+                    const xStep = squareSize + squareSpacing;
+                    const yStep = squareSize + squareSpacing;
+                    
+                    // Add extra padding for squares to account for borders
+                    boardWidth = (maxQ - minQ + 1) * xStep + squareSpacing * 2;
+                    boardHeight = (maxR - minR + 1) * yStep + squareSpacing * 2;
+                } else {
+                    // Hex grid calculations
+                    const hexSize = 50;
+                    const hexWidth = hexSize * Math.sqrt(3);
+                    const hexHeight = hexSize * 2;
+                    const hexSpacing = 5;
+                    const xStep = hexWidth + hexSpacing;
+                    const yStep = (hexHeight * 3/4) + (hexSpacing * Math.cos(Math.PI/6));
+                    
+                    // Add extra padding for hexes and account for hex shape
+                    boardWidth = (maxQ - minQ + 1) * xStep + hexSpacing * 2;
+                    boardHeight = (maxR - minR + 1) * yStep + hexSpacing * 2;
+                }
+                
+                // More conservative padding (10% of screen size) and account for mobile controls
+                const padding = 0.1;
+                const mobileControlsHeight = 200; // Height for mobile zoom controls
+                const availableWidth = window.innerWidth * (1 - padding);
+                const availableHeight = (window.innerHeight - mobileControlsHeight) * (1 - padding);
+                
+                // Calculate zoom to fit both width and height
+                const zoomX = availableWidth / boardWidth;
+                const zoomY = availableHeight / boardHeight;
+                
+                // Use the smaller zoom to ensure everything fits, with additional safety margin
+                const optimalZoom = Math.min(zoomX, zoomY) * 0.9;
+                
+                // Clamp zoom between reasonable bounds (0.05 to 1.5)
+                return Math.max(0.05, Math.min(1.5, optimalZoom));
+            }
+
+            loadBoardFromUrl() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const boardData = urlParams.get('board');
+                
+                if (boardData) {
+                    try {
+                        let decodedData;
+                        // Check if this is a localStorage reference
+                        if (boardData.startsWith('board_')) {
+                            const storedData = localStorage.getItem(boardData);
+                            if (!storedData) {
+                                throw new Error('Board data not found in localStorage');
+                            }
+                            decodedData = this.decompressBoardData(storedData);
+                        } else {
+                            decodedData = this.decompressBoardData(boardData);
+                        }
+                        this.loadBoardData(decodedData);
+                    } catch (error) {
+                        console.error('Error loading board data:', error);
+                        alert('Error loading board data. The link may be invalid or expired.');
+                    }
+                }
+            }
+
+            decompressBoardData(data) {
+                // Decode from base64
+                const decoded = atob(data);
+                // Convert back to standard JSON format
+                const standard = decoded
+                    .replace(/([a-zA-Z0-9_]+):/g, '"$1":') // Add quotes back to property names
+                    .replace(/;/g, ',') // Convert semicolons back to commas
+                    .replace(/'/g, '"'); // Convert single quotes back to double quotes
+                return JSON.parse(standard);
+            }
+
+            loadBoardData(boardData) {
+                // Store board data for resetView function
+                this.boardData = boardData;
+                
+                // Set grid type if available
+                if (boardData.gridType) {
+                    this.gridType = boardData.gridType;
+                }
+                
+                // Initialize empty grid first
+                this.initializeGrid();
+                
+                // Use optimal zoom and centering for mobile devices, saved coordinates for desktop
+                console.log('LoadBoardData - needsMobileZoom:', this.needsMobileZoom, 'current zoom:', this.zoom);
+                if (this.needsMobileZoom) {
+                    // On mobile, center the board and calculate optimal zoom to fit all tiles
+                    this.viewportX = window.innerWidth / 2;
+                    this.viewportY = window.innerHeight / 2;
+                    const optimalZoom = this.calculateOptimalZoom(boardData);
+                    console.log('LoadBoardData - calculated optimal zoom:', optimalZoom);
+                    this.setZoom(optimalZoom);
+                    console.log('LoadBoardData - zoom after setZoom:', this.zoom);
+                } else {
+                    // On desktop, use saved coordinates or fallback to center
+                    this.viewportX = boardData.x || boardData.viewportX || window.innerWidth / 2;
+                    this.viewportY = boardData.y || boardData.viewportY || window.innerHeight / 2;
+                    this.zoom = boardData.z || boardData.zoom || 1;
+                    console.log('LoadBoardData - using desktop zoom:', this.zoom);
+                }
+                
+                // Handle both compressed and uncompressed tile data formats
+                const tiles = boardData.t || boardData.tiles || [];
+                
+                // Fill and update tiles
+                tiles.forEach(tileData => {
+                    const { q, r, i, d, backgroundImage, details } = tileData;
+                    const key = `${q},${r}`;
+                    const tile = this.tiles.get(key);
+                    if (tile) {
+                        tile.element.classList.add('filled');
+                        tile.backgroundImage = backgroundImage || `url("${i}")`;
+                        tile.details = details || { description: d };
+                        const contentSelector = this.gridType === 'hex' ? '.hex-content' : '.square-content';
+                        const content = tile.element.querySelector(contentSelector);
+                        if (content) {
+                            content.style.backgroundImage = tile.backgroundImage;
+                        }
+                    }
+                });
+
+                this.updateTilePositions();
+            }
+
+            // Override methods to disable editing
+            toggleTile() { return; }
+            showContextMenu() { return; }
+            startEditing() { return; }
+            saveEdit() { return; }
+            cancelEdit() { return; }
+            changeTileImage() { return; }
+            removeTile() { return; }
+            expandBoard() { return; }
+        }
+
+        // Initialize the view-only grid
+        const hexGrid = new ViewOnlyHexGrid();
+    </script>
+</body>
+</html> 
