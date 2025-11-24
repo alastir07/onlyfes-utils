@@ -7,6 +7,7 @@ import asyncio
 from io import StringIO
 import traceback
 from datetime import datetime
+import functools
 
 # --- Import your logic module ---
 import clan_sync_logic
@@ -40,6 +41,39 @@ def get_staff_member_id(interaction: discord.Interaction) -> str | None:
         print(f"Warning: Could not find member_id for staff {interaction.user}: {e}")
     return None
 
+# --- Role-Based Permission System ---
+STAFF_ROLES = ["Owner", "Colonel", "General", "Captain"] # Ordered Highest to Lowest
+
+def check_staff_role(required_role: str):
+    """
+    Decorator to check if a user has the required role or higher.
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(interaction: discord.Interaction, *args, **kwargs):
+            if not isinstance(interaction.user, discord.Member):
+                await interaction.response.send_message("⛔ This command can only be used in a server.", ephemeral=True)
+                return
+
+            user_role_names = [r.name for r in interaction.user.roles]
+            
+            # Determine allowed roles based on hierarchy
+            allowed_roles = []
+            if required_role in STAFF_ROLES:
+                req_index = STAFF_ROLES.index(required_role)
+                allowed_roles = STAFF_ROLES[:req_index+1] # Slice includes the role and all above it
+            else:
+                # Fallback: if role not in list, require exact match (shouldn't happen with correct usage)
+                allowed_roles = [required_role]
+
+            if any(r in allowed_roles for r in user_role_names):
+                return await func(interaction, *args, **kwargs)
+            else:
+                await interaction.response.send_message(f"⛔ You need the **{required_role}** role (or higher) to use this command.", ephemeral=True)
+                return
+        return wrapper
+    return decorator
+
 intents = discord.Intents.default()
 intents.message_content = True 
 
@@ -72,7 +106,6 @@ async def on_ready():
     print('Bot is ready and online.')
 
 # --- 3. /HELP COMMAND ---
-# (This is the correct version with /link-rsn)
 @client.tree.command(name="help", description="Shows a list of all available commands.")
 @app_commands.describe(publish="True to post the help message publicly.")
 async def help(interaction: discord.Interaction, publish: bool = False):
@@ -103,10 +136,12 @@ async def help(interaction: discord.Interaction, publish: bool = False):
               "Updates multiple members to the same rank. RSNs must be comma-separated.\n\n" \
               "`/link-rsn <rsn> <@user> [publish]`\n" \
               "Links an existing member's RSN to their Discord account.\n\n" \
-              "--- *Planned Commands* ---\n" \
-              "`/add-member <rsn> <@user> [date] [publish]`\n" \
-              "`/remove-member <rsn> [publish]`\n" \
-              "`/add-points <rsn> <points> <reason> [publish]`\n\n" \
+              "`/add-points <rsn> <points> <reason> [publish]`\n" \
+              "Adds Event Points for a member.\n\n" \
+              "`/remove-points <rsn> <points> <reason> [publish]`\n" \
+              "Removes Event Points for a member.\n\n" \
+              "`/bulk-add-points <points> <reason> <rsn_list> [publish]`\n" \
+              "Adds Event Points to multiple members at once.\n\n" \
               "--- *DANGER ZONE* ---\n" \
               "`/purge-member <rsn>`\n" \
               "**IRREVERSIBLE.** Deletes a member and all their associated data from the database.",
@@ -169,21 +204,22 @@ async def member_info(interaction: discord.Interaction, rsn: str, publish: bool 
         
                 
 # --- 5. /RANKHISTORY COMMAND ---
-@client.tree.command(name="rankhistory", description="Get a member's 3 most recent rank changes.")
+@client.tree.command(name="rankhistory", description="Get a member's recent rank changes.")
 @app_commands.describe(
     rsn="The RSN (current or past) of the member to look up.",
+    num_changes="Number of changes to show (default: 3).",
     publish="True to post the history publicly."
 )
-async def rankhistory(interaction: discord.Interaction, rsn: str, publish: bool = False):
+async def rankhistory(interaction: discord.Interaction, rsn: str, num_changes: int = 3, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /rankhistory rsn='{rsn}' publish={publish} used by {interaction.user}")
+    print(f"[{timestamp}] /rankhistory rsn='{rsn}' num_changes={num_changes} publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral) 
 
     try:
-        response = supabase.rpc('get_rank_history', {'rsn_query': rsn}).execute()
+        response = supabase.rpc('get_rank_history', {'rsn_query': rsn, 'limit_count': num_changes}).execute()
         if not response.data:
             await interaction.followup.send(f"Sorry, I couldn't find anyone with an RSN matching `{rsn}` (or they have no rank history).", ephemeral=True)
             return
@@ -191,7 +227,7 @@ async def rankhistory(interaction: discord.Interaction, rsn: str, publish: bool 
         primary_rsn = history_list[0]['primary_rsn']
         embed = discord.Embed(
             title=f"Rank History: {primary_rsn}",
-            description="Showing the 3 most recent rank changes.",
+            description=f"Showing the {len(history_list)} most recent rank changes.",
             color=discord.Color.blue()
         )
         for change in history_list:
@@ -209,13 +245,13 @@ async def rankhistory(interaction: discord.Interaction, rsn: str, publish: bool 
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 # --- 6. /SYNC-CLAN COMMAND ---
-@app_commands.default_permissions(manage_guild=True) 
-@client.tree.command(name="sync-clan", description="Manually run the daily sync with WOM.")
+@client.tree.command(name="syncclan", description="Manually run the daily sync with WOM.")
 @app_commands.describe(
     dry_run="True (default) to just see the report. False to execute changes.",
     force_run="False (default). True to bypass the rank mismatch safety check.",
     publish="False (default). True to post the final report publicly."
 )
+@check_staff_role("Captain")
 async def sync_clan(
     interaction: discord.Interaction, 
     dry_run: bool = True, 
@@ -224,7 +260,7 @@ async def sync_clan(
 ):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /sync-clan dry_run={dry_run} force_run={force_run} publish={publish} used by {interaction.user}")
+    print(f"[{timestamp}] /syncclan dry_run={dry_run} force_run={force_run} publish={publish} used by {interaction.user}")
     is_ephemeral = not publish 
     await interaction.response.defer(ephemeral=is_ephemeral)
     if force_run and dry_run:
@@ -295,13 +331,13 @@ class ConfirmPurgeView(ui.View):
             item.disabled = True
         await interaction.response.edit_message(content="Purge operation cancelled.", embed=None, view=self)
 
-@app_commands.default_permissions(administrator=True) 
-@client.tree.command(name="purge-member", description="DANGER: Permanently deletes a member and all their data.")
+@client.tree.command(name="purgemember", description="DANGER: Permanently deletes a member and all their data.")
 @app_commands.describe(rsn="The RSN of the member to purge (must be an exact, case-sensitive match).")
+@check_staff_role("Colonel")
 async def purge_member(interaction: discord.Interaction, rsn: str):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /purge-member rsn='{rsn}' used by {interaction.user}")
+    print(f"[{timestamp}] /purgemember rsn='{rsn}' used by {interaction.user}")
     await interaction.response.defer(ephemeral=True)
     try:
         response = supabase.table('member_rsns').select('member_id, members(date_joined)').eq('rsn', rsn).limit(1).execute()
@@ -326,13 +362,13 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 # --- 8. /RANKUP COMMAND ---
-@app_commands.default_permissions(manage_guild=True)
 @client.tree.command(name="rankup", description="Promote or demote a single member.")
 @app_commands.describe(
     rsn="The member's RSN (current or past).",
     rank_name="The new rank to assign (e.g., 'Ruby', 'Beast').",
     publish="True to post the confirmation publicly."
 )
+@check_staff_role("Captain")
 async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -390,13 +426,13 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
 
 
 # --- 9. /BULKRANKUP COMMAND ---
-@app_commands.default_permissions(manage_guild=True)
 @client.tree.command(name="bulkrankup", description="Promote or demote multiple members to the same rank.")
 @app_commands.describe(
     rank_name="The new rank to assign all members (e.g., 'Beast').",
     rsn_list="A comma-separated list of RSNs.",
     publish="True to post the confirmation publicly."
 )
+@check_staff_role("Captain")
 async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -495,17 +531,17 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 # --- 10. /LINK-RSN COMMAND ---
-@app_commands.default_permissions(manage_guild=True)
-@client.tree.command(name="link-rsn", description="Links a member's RSN to their Discord account.")
+@client.tree.command(name="linkrsn", description="Links a member's RSN to their Discord account.")
 @app_commands.describe(
     rsn="The member's RSN (current or past).",
     user="The @discord user to link.",
     publish="True to post the confirmation publicly."
 )
+@check_staff_role("Captain")
 async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Member, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /link-rsn rsn='{rsn}' user='{user}' publish={publish} used by {interaction.user}")
+    print(f"[{timestamp}] /linkrsn rsn='{rsn}' user='{user}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -545,5 +581,362 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
-# --- 11. RUN THE BOT ---
+# --- 11. /ADD-POINTS COMMAND ---
+@client.tree.command(name="addpoints", description="Add Event Points (EP) for a member.")
+@app_commands.describe(
+    rsn="The member's RSN.",
+    points="The amount of points to add (must be positive).",
+    reason="The reason for this transaction (e.g., 'Event attendance', 'Store purchase').",
+    publish="True to post the confirmation publicly."
+)
+@check_staff_role("Captain")
+async def add_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"[{timestamp}] /addpoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    if points < 0:
+        await interaction.followup.send(f"⛔ Please use `/remove-points` to subtract points.", ephemeral=True)
+        return
+
+    try:
+        # 1. Find the member
+        member_res = supabase.table('member_rsns') \
+            .select('member_id, rsn') \
+            .ilike('rsn', rsn) \
+            .limit(1) \
+            .execute()
+
+        if not member_res.data:
+            await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
+            return
+
+        member_id = member_res.data[0]['member_id']
+        member_rsn = member_res.data[0]['rsn']
+        
+        # 2. Insert Transaction
+        supabase.table('event_point_transactions').insert({
+            'member_id': member_id,
+            'modification': points,
+            'reason': reason
+        }).execute()
+        
+        # 3. Fetch New Total
+        info_res = supabase.rpc('get_member_info', {'rsn_query': member_rsn}).execute()
+        new_total = "Unknown"
+        if info_res.data:
+            new_total = f"{info_res.data[0]['total_ep']:,}"
+            
+        # 4. Send Confirmation
+        embed = discord.Embed(
+            title="Event Points Added",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Member", value=member_rsn, inline=True)
+        embed.add_field(name="Added", value=f"+{points}", inline=True)
+        embed.add_field(name="New Total EP", value=new_total, inline=True)
+        embed.add_field(name="Reason", value=reason, inline=False)
+        
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+
+    except Exception as e:
+        print(f"Error in /addpoints command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
+# --- 12. /REMOVE-POINTS COMMAND ---
+@client.tree.command(name="removepoints", description="Remove Event Points (EP) from a member.")
+@app_commands.describe(
+    rsn="The member's RSN.",
+    points="The amount of points to remove (must be positive).",
+    reason="The reason for this transaction.",
+    publish="True to post the confirmation publicly."
+)
+@check_staff_role("Captain")
+async def remove_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"[{timestamp}] /removepoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    if points < 0:
+        await interaction.followup.send(f"⛔ Please enter a positive number (e.g., 10) to remove points.", ephemeral=True)
+        return
+
+    try:
+        # 1. Find the member
+        member_res = supabase.table('member_rsns') \
+            .select('member_id, rsn') \
+            .ilike('rsn', rsn) \
+            .limit(1) \
+            .execute()
+
+        if not member_res.data:
+            await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
+            return
+
+        member_id = member_res.data[0]['member_id']
+        member_rsn = member_res.data[0]['rsn']
+        
+        # 2. Insert Transaction (Negative modification)
+        supabase.table('event_point_transactions').insert({
+            'member_id': member_id,
+            'modification': -points,
+            'reason': reason
+        }).execute()
+        
+        # 3. Fetch New Total
+        info_res = supabase.rpc('get_member_info', {'rsn_query': member_rsn}).execute()
+        new_total = "Unknown"
+        if info_res.data:
+            new_total = f"{info_res.data[0]['total_ep']:,}"
+            
+        # 4. Send Confirmation
+        embed = discord.Embed(
+            title="Event Points Removed",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="Member", value=member_rsn, inline=True)
+        embed.add_field(name="Removed", value=f"-{points}", inline=True)
+        embed.add_field(name="New Total EP", value=new_total, inline=True)
+        embed.add_field(name="Reason", value=reason, inline=False)
+        
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+
+    except Exception as e:
+        print(f"Error in /remove-points command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
+# --- 13. /BULK-ADD-POINTS COMMAND ---
+@client.tree.command(name="bulkaddpoints", description="Add Event Points (EP) to multiple members at once.")
+@app_commands.describe(
+    points="The amount of points to add (must be positive).",
+    reason="The reason for this transaction.",
+    rsn_list="A comma-separated list of RSNs.",
+    publish="True to post the confirmation publicly."
+)
+@check_staff_role("Captain")
+async def bulk_add_points(interaction: discord.Interaction, points: int, reason: str, rsn_list: str, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"[{timestamp}] /bulkaddpoints points={points} reason='{reason}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    if points < 0:
+        await interaction.followup.send(f"⛔ Please enter a positive number for points.", ephemeral=True)
+        return
+
+    try:
+        # 1. Parse RSNs
+        rsns_to_process = [r.strip() for r in rsn_list.split(',') if r.strip()]
+        if not rsns_to_process:
+            await interaction.followup.send("Error: No RSNs provided.", ephemeral=True)
+            return
+
+        # 2. Build RSN Map (Optimization: Fetch all members once)
+        # We need to resolve RSN -> Member ID
+        print("Building RSN map for bulk add points...")
+        all_rsns_res = supabase.table('member_rsns').select('rsn, member_id').execute()
+        
+        rsn_map = {}
+        for item in all_rsns_res.data:
+            rsn_map[normalize_string(item['rsn'])] = {
+                "member_id": item['member_id'],
+                "original_rsn": item['rsn']
+            }
+        
+        transactions = []
+        success_list = []
+        not_found_list = []
+
+        for rsn in rsns_to_process:
+            normalized = normalize_string(rsn)
+            if normalized in rsn_map:
+                member_data = rsn_map[normalized]
+                transactions.append({
+                    'member_id': member_data['member_id'],
+                    'modification': points,
+                    'reason': reason
+                })
+                success_list.append(member_data['original_rsn'])
+            else:
+                not_found_list.append(rsn)
+
+        # 3. Execute Transactions
+        if transactions:
+            supabase.table('event_point_transactions').insert(transactions).execute()
+            
+        # 4. Send Report
+        embed = discord.Embed(
+            title="Bulk Event Points Added",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Points Added", value=f"+{points}", inline=True)
+        embed.add_field(name="Reason", value=reason, inline=True)
+        
+        if success_list:
+            embed.add_field(name=f"✅ Success ({len(success_list)})", value="```\n" + "\n".join(success_list) + "\n```", inline=False)
+        
+        if not_found_list:
+            embed.add_field(name=f"❌ Not Found ({len(not_found_list)})", value="```\n" + "\n".join(not_found_list) + "\n```", inline=False)
+
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+
+    except Exception as e:
+        print(f"Error in /bulkaddpoints command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
+# --- 14. COMPETITION POINT COMMANDS ---
+
+async def process_competition_points(
+    interaction: discord.Interaction, 
+    first: str, 
+    second: str, 
+    third: str, 
+    participants: str, 
+    points_map: dict, 
+    reason_prefix: str, 
+    publish: bool
+):
+    """
+    Helper to process points for BOTM, SOTM, and Big Booty.
+    points_map should be: {'1st': int, '2nd': int, '3rd': int, 'participation': int}
+    """
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    current_month = datetime.now().strftime('%B %Y') # e.g., "November 2025"
+    full_reason = f"{reason_prefix} {current_month}"
+    
+    print(f"[{timestamp}] Competition command ({reason_prefix}) used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+
+    # 1. Collect all RSNs to resolve
+    # We map normalized_rsn -> {'rank': '1st'/'2nd'/'3rd'/'participation', 'original': 'RsN'}
+    # Note: If a user is in multiple slots (unlikely but possible), we'll just take the highest value or process sequentially.
+    # For simplicity, we'll process them as a list of transactions.
+    
+    targets = []
+    if first: targets.append({'rsn': first.strip(), 'points': points_map['1st'], 'rank': '1st Place'})
+    if second: targets.append({'rsn': second.strip(), 'points': points_map['2nd'], 'rank': '2nd Place'})
+    if third: targets.append({'rsn': third.strip(), 'points': points_map['3rd'], 'rank': '3rd Place'})
+    
+    if participants:
+        part_list = [p.strip() for p in participants.split(',') if p.strip()]
+        for p in part_list:
+            targets.append({'rsn': p, 'points': points_map['participation'], 'rank': 'Participant'})
+
+    if not targets:
+        await interaction.followup.send("Error: No RSNs provided.", ephemeral=True)
+        return
+
+    try:
+        # 2. Resolve RSNs to Member IDs
+        # Fetch all member RSNs to minimize queries (or we could `in_` query if list is small, but map is safer for normalization)
+        all_rsns_res = supabase.table('member_rsns').select('rsn, member_id').execute()
+        rsn_map = {normalize_string(item['rsn']): item for item in all_rsns_res.data}
+
+        transactions = []
+        report_lines = []
+        not_found = []
+
+        for target in targets:
+            norm = normalize_string(target['rsn'])
+            if norm in rsn_map:
+                member_data = rsn_map[norm]
+                transactions.append({
+                    'member_id': member_data['member_id'],
+                    'modification': target['points'],
+                    'reason': full_reason
+                })
+                report_lines.append(f"**{target['rank']}**: {member_data['rsn']} (+{target['points']})")
+            else:
+                not_found.append(f"{target['rsn']} ({target['rank']})")
+
+        # 3. Execute Transactions
+        if transactions:
+            supabase.table('event_point_transactions').insert(transactions).execute()
+
+        # 4. Build Embed
+        embed = discord.Embed(
+            title=f"Points Added: {reason_prefix.title()}",
+            description=f"**Month:** {current_month}",
+            color=discord.Color.gold()
+        )
+        
+        if report_lines:
+            # Split into chunks if too long (basic check)
+            chunk_str = "\n".join(report_lines)
+            if len(chunk_str) > 1000:
+                embed.add_field(name="Results", value=chunk_str[:1000] + "...", inline=False)
+            else:
+                embed.add_field(name="Results", value=chunk_str, inline=False)
+        
+        if not_found:
+            embed.add_field(name="❌ RSNs Not Found", value="\n".join(not_found), inline=False)
+
+        if not transactions and not_found:
+            embed.description = "No valid members found to add points to."
+            embed.color = discord.Color.red()
+
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+
+    except Exception as e:
+        print(f"Error in competition command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
+@client.tree.command(name="addpointsbotm", description="Add points for Boss of the Month.")
+@app_commands.describe(
+    first="RSN of 1st place (12 pts)",
+    second="RSN of 2nd place (7 pts)",
+    third="RSN of 3rd place (5 pts)",
+    participants="Comma-separated list of other participants (3 pts each)",
+    publish="True to post publicly"
+)
+@check_staff_role("Captain")
+async def add_points_botm(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = False):
+    points = {'1st': 12, '2nd': 7, '3rd': 5, 'participation': 3}
+    await process_competition_points(interaction, first, second, third, participants, points, "boss of the month", publish)
+
+
+@client.tree.command(name="addpointssotm", description="Add points for Skill of the Month.")
+@app_commands.describe(
+    first="RSN of 1st place (12 pts)",
+    second="RSN of 2nd place (7 pts)",
+    third="RSN of 3rd place (5 pts)",
+    participants="Comma-separated list of other participants (3 pts each)",
+    publish="True to post publicly"
+)
+@check_staff_role("Captain")
+async def add_points_sotm(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = False):
+    points = {'1st': 12, '2nd': 7, '3rd': 5, 'participation': 3}
+    await process_competition_points(interaction, first, second, third, participants, points, "skill of the month", publish)
+
+
+@client.tree.command(name="addpointsbigbooty", description="Add points for Big Booty (Clue of the Month).")
+@app_commands.describe(
+    first="RSN of 1st place (20 pts)",
+    second="RSN of 2nd place (15 pts)",
+    third="RSN of 3rd place (10 pts)",
+    participants="Comma-separated list of other participants (5 pts each)",
+    publish="True to post publicly"
+)
+@check_staff_role("Captain")
+async def add_points_bigbooty(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = False):
+    points = {'1st': 20, '2nd': 15, '3rd': 10, 'participation': 5}
+    await process_competition_points(interaction, first, second, third, participants, points, "big booty", publish)
+
+
+# --- 15. RUN THE BOT ---
+
 client.run(DISCORD_TOKEN)

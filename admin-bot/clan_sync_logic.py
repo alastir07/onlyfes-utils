@@ -189,6 +189,15 @@ def fetch_and_process_name_changes(supabase: Client, db_rsn_map_normalized: dict
             if old_norm in db_rsn_map_normalized:
                 member_id = db_rsn_map_normalized[old_norm]['member_id']
                 original_db_rsn = db_rsn_map_normalized[old_norm]['original_rsn']
+
+                # --- FIX: Check if new name is already linked to this member ---
+                if new_norm in db_rsn_map_normalized:
+                    existing_member_id = db_rsn_map_normalized[new_norm]['member_id']
+                    if existing_member_id == member_id:
+                        print(f"Skipping name change {old_name} -> {new_name} (Already processed).")
+                        continue
+                # ---------------------------------------------------------------
+
                 report_lines.append(f"Processing name change: {old_name} -> {new_name}")
                 report_name_changes.append(f"{old_name} -> {new_name}")
 
@@ -301,38 +310,6 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                     report_lines.append(f"  > Successfully created new 'Other' rank: {rank_name}")
                 except Exception as e:
                     report_lines.append(f"  > ERROR: Could not create new rank '{rank_name}'. {e}")
-                    continue
-            else:
-                rank_id = -1
-                report_lines.append(f"  [DRY RUN] Would add new rank: {rank_name}")
-        
-        new_members_payload.append({
-            "wom_id": member['wom_id'],
-            "date_joined": today.isoformat(),
-            "current_rank_id": rank_id,
-            "status": 'Active',
-            "rsn": member['rsn']
-        })
-        report_newly_added.append(f"{member['rsn']} ({rank_name})")
-
-    # B: Process Departed Members
-    for member_id in departed_member_ids:
-        try:
-            rsn_res = supabase.table('member_rsns').select('rsn').eq('member_id', member_id).eq('is_primary', True).limit(1).execute()
-            rsn = rsn_res.data[0]['rsn'] if rsn_res.data else f"Unknown (ID: {member_id})"
-            report_deactivated.append(rsn)
-        except Exception as e:
-            report_deactivated.append(f"Error finding RSN for {member_id}: {e}")
-
-    # C: Process Active Members
-    report_lines.append("Processing active members for stats and rank audits...")
-    for member_id in wom_member_ids_present:
-        db_member = db_member_data.get(member_id)
-        if not db_member:
-            continue
-            
-        wom_rsn_for_this_member = None
-        for rsn in db_rsn_map_normalized:
             if rsn in db_rsn_map_normalized and db_rsn_map_normalized[rsn]['member_id'] == member_id and rsn in wom_members:
                 wom_rsn_for_this_member = rsn
                 break
@@ -367,7 +344,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
         days_in_clan = (today - join_date).days
         db_rank_name = ranks_map_by_id.get(db_member['current_rank_id'])
 
-        if db_rank_name == 'Sapphire' and days_in_clan >= 30:
+        if db_rank_name == 'Sapphire' and days_in_clan >= 28:
             report_promo_emerald.append(f"{wom_member['rsn']} (Joined {days_in_clan} days ago)")
         if db_rank_name == 'Emerald' and days_in_clan >= 56 and wom_total_level >= 1250:
             report_promo_ruby.append(f"{wom_member['rsn']} ({days_in_clan} days, {wom_total_level} total)")
@@ -498,33 +475,6 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
         if report_auto_rank_updates:
             report_lines.append(f"Would force-update {len(report_auto_rank_updates)} mismatched ranks.")
 
-    # --- 9. PRINT FINAL REPORT ---
-    report_lines.append(f"\n\n--- DAILY SYNC REPORT ({run_mode}) ---")
-    report_lines.append(f"Timestamp: {today.isoformat()}")
-    
-    report_lines.append("\n--- 🔄 Automated Name Changes ---")
-    if report_name_changes:
-        for report in report_name_changes:
-            report_lines.append(f"  - {report}")
-    else:
-        report_lines.append("  No name changes processed.")
-
-    report_lines.append("\n--- 🤖 Automated Roster Changes ---")
-    report_lines.append(f"New Members Found ({len(report_newly_added)}): {report_newly_added}")
-    report_lines.append(f"Departed Members Found ({len(report_deactivated)}): {report_deactivated}")
-    
-    if report_auto_rank_updates:
-        report_lines.append("\n--- 🤖 Automated Rank Updates (Force Run) ---")
-        for report in report_auto_rank_updates:
-            report_lines.append(f"  - {report}")
-    
-    report_lines.append("\n--- 🚩 Staff Action Required: Rank Mismatches ---")
-    report_lines.append("Use /rankup <rsn> <rank_name> to sync individual members, or re-run /sync-clan and set force_run=True")
-    if report_rank_mismatches:
-        for report in report_rank_mismatches:
-            report_lines.append(f"  - {report}")
-    else:
-        report_lines.append("  No mismatches found. Good job!")
         
     report_lines.append("\n--- 💎 Staff Action Required: Pending Promotions ---")
     report_lines.append("Promote in-game, then run /rankup <rsn> <rank>")
@@ -534,7 +484,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
             report_lines.append(f"    - {report}")
     if report_promo_ruby:
         report_lines.append("\n  Emerald -> Ruby (>= 56 days & 1250+ total):")
-        for report in report_promo_emerald:
+        for report in report_promo_ruby:
             report_lines.append(f"    - {report}")
     if not report_promo_emerald and not report_promo_ruby:
         report_lines.append("  No pending auto-promotions found.")
