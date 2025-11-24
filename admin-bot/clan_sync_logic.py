@@ -310,54 +310,24 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                     report_lines.append(f"  > Successfully created new 'Other' rank: {rank_name}")
                 except Exception as e:
                     report_lines.append(f"  > ERROR: Could not create new rank '{rank_name}'. {e}")
-            if rsn in db_rsn_map_normalized and db_rsn_map_normalized[rsn]['member_id'] == member_id and rsn in wom_members:
-                wom_rsn_for_this_member = rsn
-                break
-        if not wom_rsn_for_this_member:
-            continue
-            
-        wom_member = wom_members[wom_rsn_for_this_member]
         
-        db_rank_name = ranks_map_by_id.get(db_member['current_rank_id'], "Unknown Rank")
-        wom_rank_name = wom_member['rank']
-        normalized_db_rank = normalize_string(db_rank_name)
-        normalized_wom_rank = normalize_string(wom_rank_name)
+        # Prepare new member payload
+        latest_xp = 0
+        snapshot = member.get('latest_snapshot')
+        if snapshot:
+            latest_xp = snapshot.get('data', {}).get('skills', {}).get('overall', {}).get('experience', 0)
+        elif member.get('stale_exp'):
+            latest_xp = member.get('stale_exp')
 
-        if normalized_db_rank != normalized_wom_rank:
-            rsn_res = supabase.table('member_rsns').select('rsn').eq('member_id', member_id).eq('is_primary', True).limit(1).execute()
-            rsn = rsn_res.data[0]['rsn'] if rsn_res.data else f"ID: {member_id}"
-            report_rank_mismatches.append(f"{rsn}: DB says '{db_rank_name}', WOM says '{wom_rank_name}'")
-
-        snapshot = wom_member.get('latest_snapshot')
-        
-        if not snapshot:
-            if wom_member.get('stale_exp') is not None: 
-                pass
-            else:
-                report_lines.append(f"Warning: Snapshot for {wom_member['rsn']} not found. Skipping promo/stats.")
-            continue
-            
-        overall_stats = snapshot.get('data', {}).get('skills', {}).get('overall', {})
-        computed_stats = snapshot.get('data', {}).get('computed', {})
-        wom_total_level = overall_stats.get('level', 0)
-        join_date = parse(db_member['date_joined'])
-        days_in_clan = (today - join_date).days
-        db_rank_name = ranks_map_by_id.get(db_member['current_rank_id'])
-
-        if db_rank_name == 'Sapphire' and days_in_clan >= 28:
-            report_promo_emerald.append(f"{wom_member['rsn']} (Joined {days_in_clan} days ago)")
-        if db_rank_name == 'Emerald' and days_in_clan >= 56 and wom_total_level >= 1250:
-            report_promo_ruby.append(f"{wom_member['rsn']} ({days_in_clan} days, {wom_total_level} total)")
-
-        snapshots_payload.append({
-            "member_id": db_member['member_id'],
-            "snapshot_date": today.isoformat(),
-            "total_xp": overall_stats.get('experience', 0),
-            "total_level": wom_total_level,
-            "ehp": computed_stats.get('ehp', {}).get('value', 0),
-            "ehb": computed_stats.get('ehb', {}).get('value', 0),
-            "full_json_payload": snapshot 
+        new_members_payload.append({
+            "rsn": member['rsn'],
+            "date_joined": today.isoformat(),
+            "current_rank_id": rank_id,
+            "latest_db_xp": latest_xp,
+            "status": 'Active'
         })
+        
+        report_newly_added.append(f"{member['rsn']} (Rank: {rank_name})")
         
     # --- 6. CIRCUIT BREAKER CHECK ---
     report_lines.append("\n--- Running Safety Checks ---")
