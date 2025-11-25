@@ -33,7 +33,7 @@ def normalize_string(s: str) -> str:
 
 # --- 3. DATA FETCHING FUNCTIONS ---
 
-def fetch_wom_members() -> dict:
+def fetch_wom_members() -> tuple:
     print(f"Fetching group data from WOM Group ID: {WOM_GROUP_ID}...")
     url = f"https://api.wiseoldman.net/v2/groups/{WOM_GROUP_ID}"
     headers = {"User-Agent": "OnlyFEs-Clan-Bot-v1.0", "x-api-key": WOM_API_KEY}
@@ -54,10 +54,10 @@ def fetch_wom_members() -> dict:
                     "latest_snapshot": None
                 }
         print(f"Found {len(wom_members)} members on WOM.")
-        return wom_members
+        return wom_members, group_data
     except Exception as e:
         print(f"Error fetching from WOM API: {e}")
-        return None
+        return None, None
 
 def fetch_db_ranks_and_rsns(supabase: Client) -> (dict, dict, dict):
     print("Fetching ranks and RSN map from Supabase DB...")
@@ -252,11 +252,24 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
     # 1. FETCH ALL DATA
     ranks_map_normalized, ranks_map_by_id, db_rsn_map_normalized = fetch_db_ranks_and_rsns(supabase)
     db_member_data = fetch_db_member_data(supabase)
-    wom_members = fetch_wom_members()
+    wom_members, group_snapshot_data = fetch_wom_members()
     
     if not all([wom_members, ranks_map_normalized, db_member_data, db_rsn_map_normalized]):
         report_lines.append("CRITICAL ERROR: Halting sync due to data fetching error. Check console logs.")
         return "\n".join(report_lines)
+    
+    # 1.5. INSERT GROUP SNAPSHOT
+    if group_snapshot_data:
+        if not dry_run:
+            try:
+                supabase.table('group_snapshots').insert({
+                    'snapshot_data': group_snapshot_data
+                }).execute()
+                print("Group snapshot inserted successfully.")
+            except Exception as e:
+                report_lines.append(f"Warning: Failed to insert group snapshot: {e}")
+        else:
+            print("[DRY RUN] Would insert group snapshot.")
 
     # 2. PROCESS NAME CHANGES
     db_rsn_map_normalized, report_name_changes = fetch_and_process_name_changes(
