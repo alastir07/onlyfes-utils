@@ -102,6 +102,24 @@ def fetch_db_member_data(supabase: Client) -> dict:
         print(f"Error fetching active member snapshots: {e}")
         return None
 
+def fetch_all_db_members(supabase: Client) -> dict:
+    """Fetch ALL members (active and inactive) for detecting returning members"""
+    print("Fetching all members from DB (including inactive)...")
+    try:
+        response = supabase.table('members').select('id, current_rank_id, status').execute()
+        all_members = {}
+        for member in response.data:
+            all_members[member['id']] = {
+                "member_id": member['id'],
+                "current_rank_id": member['current_rank_id'],
+                "status": member['status']
+            }
+        print(f"Found {len(all_members)} total members in DB.")
+        return all_members
+    except Exception as e:
+        print(f"Error fetching all members: {e}")
+        return None
+
 def fetch_player_snapshots(supabase: Client, wom_members: dict, db_member_data: dict, db_rsn_map_normalized: dict, dry_run: bool):
     print("Enriching snapshots...")
     headers = {"User-Agent": "OnlyFEs-Clan-Bot-v1.0", "x-api-key": WOM_API_KEY}
@@ -252,9 +270,10 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
     # 1. FETCH ALL DATA
     ranks_map_normalized, ranks_map_by_id, db_rsn_map_normalized = fetch_db_ranks_and_rsns(supabase)
     db_member_data = fetch_db_member_data(supabase)
+    all_db_members = fetch_all_db_members(supabase)  # Fetch ALL members including inactive
     wom_members, group_snapshot_data = fetch_wom_members()
     
-    if not all([wom_members, ranks_map_normalized, db_member_data, db_rsn_map_normalized]):
+    if not all([wom_members, ranks_map_normalized, db_member_data, db_rsn_map_normalized, all_db_members]):
         report_lines.append("CRITICAL ERROR: Halting sync due to data fetching error. Check console logs.")
         return "\n".join(report_lines)
     
@@ -361,6 +380,46 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
         
         report_newly_added.append(f"{member['rsn']} (Rank: {rank_name})")
         
+    # B: Process Returning Members (inactive in DB, present in WOM)
+    report_returning_members = []
+    returning_members_payload = []
+    
+    for normalized_rsn in wom_normalized_rsns:
+        if normalized_rsn in db_rsn_map_normalized and normalized_rsn not in new_normalized_rsns:
+            member_id = db_rsn_map_normalized[normalized_rsn]['member_id']
+            if member_id in all_db_members and all_db_members[member_id]['status'] == 'Inactive':
+                # This member is inactive in DB but present in WOM - they've returned!
+                wom_member = wom_members[normalized_rsn]
+                wom_rank_name = wom_member['rank']
+                normalized_wom_rank = normalize_string(wom_rank_name)
+                new_rank_id = ranks_map_normalized.get(normalized_wom_rank)
+                old_rank_id = all_db_members[member_id]['current_rank_id']
+                
+                if new_rank_id:
+                    returning_members_payload.append({
+                        'member_id': member_id,
+                        'old_rank_id': old_rank_id,
+                        'new_rank_id': new_rank_id
+                    })
+                    old_rank_name = ranks_map_by_id.get(old_rank_id, 'Unknown')
+                    report_returning_members.append(f"{wom_member['rsn']}: {old_rank_name} -> {wom_rank_name}")
+    
+    # C: Check Rank Mismatches for Existing Active Members
+    for normalized_rsn in wom_normalized_rsns:
+        if normalized_rsn in db_rsn_map_normalized and normalized_rsn not in new_normalized_rsns:
+            member_id = db_rsn_map_normalized[normalized_rsn]['member_id']
+            if member_id in db_member_data:  # Active member
+                wom_member = wom_members[normalized_rsn]
+                wom_rank_name = wom_member['rank']
+                normalized_wom_rank = normalize_string(wom_rank_name)
+                wom_rank_id = ranks_map_normalized.get(normalized_wom_rank)
+                db_rank_id = db_member_data[member_id]['current_rank_id']
+                
+                if wom_rank_id and wom_rank_id != db_rank_id:
+                    # Rank mismatch detected!
+                    db_rank_name = ranks_map_by_id.get(db_rank_id, 'Unknown')
+                    report_rank_mismatches.append(f"{wom_member['rsn']}: DB says '{db_rank_name}', WOM says '{wom_rank_name}'")
+        
     # --- 6. CIRCUIT BREAKER CHECK ---
     report_lines.append("\n--- Running Safety Checks ---")
     mismatch_count = len(report_rank_mismatches)
@@ -449,6 +508,36 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
             except Exception as e:
                 report_lines.append(f"ERROR processing new members: {e}")
 
+        # A2: Process Returning Members
+        if returning_members_payload:
+            report_lines.append(f"Reactivating {len(returning_members_payload)} returning members...")
+            try:
+                rank_history_payload = []
+                for returning_member in returning_members_payload:
+                    member_id = returning_member['member_id']
+                    new_rank_id = returning_member['new_rank_id']
+                    old_rank_id = returning_member['old_rank_id']
+                    
+                    # Reactivate and update rank
+                    supabase.table('members').update({
+                        'status': 'Active',
+                        'current_rank_id': new_rank_id
+                    }).eq('id', member_id).execute()
+                    
+                    # Add rank history
+                    rank_history_payload.append({
+                        'member_id': member_id,
+                        'previous_rank_id': old_rank_id,
+                        'new_rank_id': new_rank_id
+                    })
+                
+                if rank_history_payload:
+                    supabase.table('rank_history').insert(rank_history_payload).execute()
+                
+                report_lines.append("Returning member processing complete.")
+            except Exception as e:
+                report_lines.append(f"ERROR processing returning members: {e}")
+
         # B: Process Departed Members
         if departed_member_ids:
             report_lines.append(f"Deactivating {len(report_deactivated)} departed members...")
@@ -472,6 +561,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
     else:
         report_lines.append("\n--- (DRY RUN) SKIPPING ALL DATABASE WRITES ---")
         report_lines.append(f"Would add {len(report_newly_added)} new members.")
+        report_lines.append(f"Would reactivate {len(returning_members_payload)} returning members.")
         report_lines.append(f"Would deactivate {len(report_deactivated)} members.")
         report_lines.append(f"Would insert {len(snapshots_payload)} stat snapshots.")
         if report_auto_rank_updates:
