@@ -281,6 +281,26 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
         
     wom_normalized_rsns = set(wom_members.keys())
     
+    # 3.5. BUILD SNAPSHOTS PAYLOAD
+    snapshots_payload = []
+    for normalized_rsn, wom_member in wom_members.items():
+        snapshot = wom_member.get('latest_snapshot')
+        if snapshot:
+            member_id = db_rsn_map_normalized.get(normalized_rsn, {}).get('member_id')
+            if member_id:
+                snapshot_data = snapshot.get('data', {})
+                skills_data = snapshot_data.get('skills', {})
+                overall_data = skills_data.get('overall', {})
+                
+                snapshots_payload.append({
+                    'member_id': member_id,
+                    'total_xp': overall_data.get('experience', 0),
+                    'total_level': snapshot_data.get('computed', {}).get('totalLevel', 0),
+                    'ehp': snapshot_data.get('computed', {}).get('ehp', {}).get('value', 0),
+                    'ehb': snapshot_data.get('computed', {}).get('ehb', {}).get('value', 0),
+                    'full_json_payload': snapshot
+                })
+    
     # 4. CALCULATE "DIFF"
     wom_member_ids_present = set()
     for rsn in wom_normalized_rsns:
@@ -298,7 +318,6 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
     report_rank_mismatches = []
     report_promo_emerald = []
     report_promo_ruby = []
-    snapshots_payload = []
     new_members_payload = []
     report_auto_rank_updates = []
     today = datetime.now(timezone.utc)
