@@ -380,12 +380,16 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
         
         report_newly_added.append(f"{member['rsn']} (Rank: {rank_name})")
         
-    # B: Process Returning Members (inactive in DB, present in WOM)
+    # B: Process Returning Members (inactive in DB, present in WOM) - PRIMARY RSNs ONLY
     report_returning_members = []
     returning_members_payload = []
     
     for normalized_rsn in wom_normalized_rsns:
         if normalized_rsn in db_rsn_map_normalized and normalized_rsn not in new_normalized_rsns:
+            # CRITICAL: Only process PRIMARY RSNs to avoid alt accounts triggering reactivation
+            if not db_rsn_map_normalized[normalized_rsn]['is_primary']:
+                continue  # Skip non-primary RSNs
+            
             member_id = db_rsn_map_normalized[normalized_rsn]['member_id']
             if member_id in all_db_members and all_db_members[member_id]['status'] == 'Inactive':
                 # This member is inactive in DB but present in WOM - they've returned!
@@ -404,9 +408,13 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                     old_rank_name = ranks_map_by_id.get(old_rank_id, 'Unknown')
                     report_returning_members.append(f"{wom_member['rsn']}: {old_rank_name} -> {wom_rank_name}")
     
-    # C: Check Rank Mismatches for Existing Active Members
+    # C: Check Rank Mismatches for Existing Active Members (PRIMARY RSNs ONLY)
     for normalized_rsn in wom_normalized_rsns:
         if normalized_rsn in db_rsn_map_normalized and normalized_rsn not in new_normalized_rsns:
+            # CRITICAL: Only check rank for PRIMARY RSNs to avoid alt accounts overwriting rank
+            if not db_rsn_map_normalized[normalized_rsn]['is_primary']:
+                continue  # Skip non-primary RSNs
+            
             member_id = db_rsn_map_normalized[normalized_rsn]['member_id']
             if member_id in db_member_data:  # Active member
                 wom_member = wom_members[normalized_rsn]
