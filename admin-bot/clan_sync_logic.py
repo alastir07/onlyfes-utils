@@ -503,7 +503,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
             report_lines.append(f"Adding {len(new_members_payload)} new members...")
             db_members_payload = []
             for m in new_members_payload:
-                db_members_payload.append({k: v for k, v in m.items() if k != 'rsn'})
+                db_members_payload.append({k: v for k, v in m.items() if k not in ['rsn', 'latest_db_xp']})
             try:
                 inserted_members = supabase.table('members').insert(db_members_payload).execute().data
                 new_rsns_payload = []
