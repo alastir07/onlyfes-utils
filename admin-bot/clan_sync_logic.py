@@ -430,6 +430,9 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
         
     # --- 6. CIRCUIT BREAKER CHECK ---
     report_lines.append("\n--- Running Safety Checks ---")
+    report_lines.append(f"Found {len(report_rank_mismatches)} rank mismatches.")
+    for report in report_rank_mismatches:
+        report_lines.append(f"  - {report}")
     mismatch_count = len(report_rank_mismatches)
     
     if force_run:
