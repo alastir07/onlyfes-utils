@@ -1,0 +1,14 @@
+# Discord Bot Requirements
+discord.py==2.3.2
+
+# Database
+supabase==2.3.4
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# HTTP Requests
+requests==2.31.0
+
+# Date/Time Utilities
+python-dateutil==2.8.2
