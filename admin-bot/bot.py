@@ -130,7 +130,11 @@ async def on_ready():
             log.error(f"CRITICAL ERROR during global on_ready sync: {e}")
         
         client.synced_on_startup = True 
-
+        
+        # Start scheduled tasks (only on first ready event)
+        scheduled_clan_sync.start()
+        scheduled_inactivity_check.start()
+        log.info("Scheduled tasks started: clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC)")
     log.info(f'Logged in as {client.user} (ID: {client.user.id})')
     log.info('Bot is ready and online.')
 
@@ -1161,11 +1165,6 @@ async def before_scheduled_inactivity_check():
     """Wait for bot to be ready before starting the inactivity check task"""
     await client.wait_until_ready()
     log.info("Bot is ready. Starting scheduled inactivity check task.")
-# --- 18. RUN THE BOT ---
-# Start scheduled tasks
-scheduled_clan_sync.start()
-scheduled_inactivity_check.start()
-log.info("Scheduled tasks started: clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC)")
 
 
 # --- 19. RUN THE BOT ---
