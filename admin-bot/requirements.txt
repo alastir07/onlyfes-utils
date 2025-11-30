@@ -1,14 +1,12 @@
-# requirements.txt (Push this version!)
+# requirements.txt
 # Discord Bot Requirements
 discord.py==2.3.2
 PyNaCl==1.5.0 # Required for voice
-# Database
-supabase==2.3.4
+# Database (ALLOW PIP TO CHOOSE LATEST FIXES)
+supabase
 # Environment Variables
 python-dotenv==1.0.0
-# HTTP Requests
-requests==2.31.0
+# HTTP Requests (requests is fine, but remove the httpx pin to allow it to upgrade)
+requests==2.31.0 
 # Date/Time Utilities
 python-dateutil==2.8.2
-# HTTP Requests (Satisfies supabase's requirement of <0.26)
-httpx==0.25.2
