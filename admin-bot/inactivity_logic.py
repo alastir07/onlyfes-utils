@@ -4,6 +4,14 @@ import time
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from supabase import create_client, Client
+import logging
+# Ensure this line is placed early in your bot.py
+logging.basicConfig(level=logging.INFO, 
+                    format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S')
+
+# Initialize the logger for your bot's custom messages
+log = logging.getLogger('ClanBot') # Give your bot a specific name
 
 # Load environment variables
 load_dotenv()
@@ -30,7 +38,7 @@ def get_active_members_with_snapshots(supabase: Client) -> list:
     Returns:
         list: List of dicts with member_id, rsn, rank_name, rank_id, latest_xp, date_joined
     """
-    print("Fetching active members with snapshots...")
+    log.info("Fetching active members with snapshots...")
     
     try:
         # Try to use RPC function first (more efficient)
@@ -60,11 +68,11 @@ def get_active_members_with_snapshots(supabase: Client) -> list:
             member['rsn'] = rsn_map.get(member['member_id'], 'Unknown')
             member['rank_name'] = rank_map.get(member['rank_id'], 'Unknown')
         
-        print(f"Found {len(members)} active members.")
+        log.info(f"Found {len(members)} active members.")
         return members
         
     except Exception as e:
-        print(f"Error fetching active members: {e}")
+        log.error(f"Error fetching active members: {e}")
         return []
 
 
@@ -102,7 +110,7 @@ def get_historical_snapshot(supabase: Client, member_id: str, days_ago: int, max
             if response.data:
                 return response.data[0]
         except Exception as e:
-            print(f"  Error querying snapshot for member {member_id}: {e}")
+            log.error(f"  Error querying snapshot for member {member_id}: {e}")
             continue
     
     return None
@@ -121,7 +129,7 @@ def find_last_activity_from_wom(rsn: str, baseline_xp: int, lookback_days: int =
     Returns:
         int: Days since last XP gain, or -1 if not found (meaning >lookback_days)
     """
-    print(f"  Checking WOM API for last activity of {rsn}...")
+    log.info(f"  Checking WOM API for last activity of {rsn}...")
     
     # Use snapshots endpoint with pagination
     end_date = datetime.now(timezone.utc)
@@ -175,7 +183,7 @@ def find_last_activity_from_wom(rsn: str, baseline_xp: int, lookback_days: int =
             time.sleep(0.1)  # Small delay between paginated requests
             
         except Exception as e:
-            print(f"  Error querying WOM API for {rsn}: {e}")
+            log.error(f"  Error querying WOM API for {rsn}: {e}")
             return -1
 
 
@@ -194,7 +202,7 @@ def check_inactivity(supabase: Client, members: list) -> dict:
     Returns:
         dict: {'inactive': [...], 'at_risk': [...]}
     """
-    print("\nChecking for inactive members...")
+    log.info("\nChecking for inactive members...")
     inactive_members = []
     at_risk_members = []
     request_count = 0
@@ -209,7 +217,7 @@ def check_inactivity(supabase: Client, members: list) -> dict:
         days_threshold = 30 if rank_name in SHORT_PERIOD_RANKS else 60
         at_risk_threshold = days_threshold - 5  # 5 days before threshold
         
-        print(f"[{idx}/{len(members)}] Checking {rsn} ({rank_name}, {days_threshold}-day threshold)...")
+        log.info(f"[{idx}/{len(members)}] Checking {rsn} ({rank_name}, {days_threshold}-day threshold)...")
         
         # Get most recent 5 snapshots for this member
         try:
@@ -223,7 +231,7 @@ def check_inactivity(supabase: Client, members: list) -> dict:
             snapshots = snapshots_response.data
             
             if not snapshots:
-                print(f"  No snapshots found for {rsn}, skipping.")
+                log.warning(f"  No snapshots found for {rsn}, skipping.")
                 continue
             
             needs_wom_verification = False
@@ -252,14 +260,14 @@ def check_inactivity(supabase: Client, members: list) -> dict:
             
             # If flagged, verify with WOM API
             if needs_wom_verification:
-                print(f"  ⚠️ {rsn} flagged for WOM verification ({reason})")
+                log.warning(f"  ⚠️ {rsn} flagged for WOM verification ({reason})")
                 
                 # Rate limiting
                 if request_count >= MAX_REQUESTS_PER_MINUTE:
                     elapsed = time.time() - start_time
                     if elapsed < REQUEST_WINDOW_SECONDS:
                         wait_time = REQUEST_WINDOW_SECONDS - elapsed + 1
-                        print(f"\n⏳ Rate limit reached. Sleeping for {wait_time:.1f} seconds...")
+                        log.info(f"\n⏳ Rate limit reached. Sleeping for {wait_time:.1f} seconds...")
                         time.sleep(wait_time)
                     request_count = 0
                     start_time = time.time()
@@ -286,22 +294,22 @@ def check_inactivity(supabase: Client, members: list) -> dict:
                 # Categorize as inactive or at-risk
                 if isinstance(days_inactive, str):  # ">X" format
                     inactive_members.append(member_data)
-                    print(f"  ⚠️ Confirmed inactive: {days_inactive} days")
+                    log.info(f"  ⚠️ Confirmed inactive: {days_inactive} days")
                 elif days_inactive >= days_threshold:  # Changed to >= to include threshold
                     inactive_members.append(member_data)
-                    print(f"  ⚠️ Confirmed inactive: {days_inactive} days")
+                    log.info(f"  ⚠️ Confirmed inactive: {days_inactive} days")
                 elif days_inactive >= at_risk_threshold:
                     at_risk_members.append(member_data)
-                    print(f"  ⚠️ At risk: {days_inactive} days")
+                    log.info(f"  ⚠️ At risk: {days_inactive} days")
                 else:
-                    print(f"  ✓ WOM check shows recent activity ({days_inactive} days ago)")
+                    log.info(f"  ✓ WOM check shows recent activity ({days_inactive} days ago)")
                 
                 time.sleep(0.1)
             else:
-                print(f"  ✓ {rsn} has recent snapshots, active")
+                log.info(f"  ✓ {rsn} has recent snapshots, active")
                 
         except Exception as e:
-            print(f"  Error checking {rsn}: {e}")
+            log.error(f"  Error checking {rsn}: {e}")
             continue
     
     return {'inactive': inactive_members, 'at_risk': at_risk_members}
@@ -390,7 +398,7 @@ def run_inactivity_check(supabase: Client) -> str:
     Returns:
         str: Formatted report text
     """
-    print("Starting inactivity check...")
+    log.info("Starting inactivity check...")
     
     # Step 1: Get all active members with their snapshots
     members = get_active_members_with_snapshots(supabase)
@@ -404,30 +412,29 @@ def run_inactivity_check(supabase: Client) -> str:
     # Step 3: Generate report
     report = generate_inactivity_report(result)
     
-    print("\nInactivity check complete!")
+    log.info("\nInactivity check complete!")
     return report
 
 
 # --- Standalone execution for testing ---
 if __name__ == "__main__":
-    print("Running inactivity check in standalone mode...\n")
+    log.info("Running inactivity check in standalone mode...\n")
     
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY")
     
     if not all([SUPABASE_URL, SUPABASE_KEY, WOM_API_KEY]):
-        print("Error: Missing required environment variables.")
-        print("Required: SUPABASE_URL, SUPABASE_KEY, WOM_API_KEY")
+        log.error("Error: Missing required environment variables.")
+        log.error("Required: SUPABASE_URL, SUPABASE_KEY, WOM_API_KEY")
         exit(1)
     
     try:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print("✓ Connected to Supabase\n")
+        log.info("✓ Connected to Supabase\n")
         
         report = run_inactivity_check(supabase)
-        print("\n" + report)
+        log.info("\n" + report)
         
     except Exception as e:
-        print(f"Error: {e}")
         import traceback
-        traceback.print_exc()
+        log.error(traceback.format_exc())

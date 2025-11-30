@@ -8,6 +8,14 @@ from io import StringIO
 import traceback
 from datetime import datetime
 import functools
+import logging
+# Ensure this line is placed early in your bot.py
+logging.basicConfig(level=logging.INFO, 
+                    format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S')
+
+# Initialize the logger for your bot's custom messages
+log = logging.getLogger('ClanBot') # Give your bot a specific name
 
 # --- Import your logic module ---
 import clan_sync_logic
@@ -21,7 +29,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 if not all([DISCORD_TOKEN, SUPABASE_URL, SUPABASE_KEY]):
-    print("Error: Missing one or more .env variables!")
+    log.error("Missing one or more .env variables!")
     exit()
 
 # Connect to Supabase
@@ -39,7 +47,7 @@ def get_staff_member_id(interaction: discord.Interaction) -> str | None:
         if response.data:
             return response.data[0]['id']
     except Exception as e:
-        print(f"Warning: Could not find member_id for staff {interaction.user}: {e}")
+        log.warning(f"Could not find member_id for staff {interaction.user}: {e}")
     return None
 
 # --- Role-Based Permission System ---
@@ -94,17 +102,17 @@ async def on_ready():
     # Check if we've already synced. This prevents re-syncing on disconnects.
     if not client.synced_on_startup:
         try:
-            print(f"--- Attempting to SYNC commands GLOBALLY ---")
+            log.info("--- Attempting to SYNC commands GLOBALLY ---")
             # guild=None means we are syncing all commands globally
             await client.tree.sync(guild=None) 
-            print(f"--- Global command sync complete ---")
+            log.info("--- Global command sync complete ---")
         except Exception as e:
-            print(f"CRITICAL ERROR during global on_ready sync: {e}")
+            log.error(f"CRITICAL ERROR during global on_ready sync: {e}")
         
         client.synced_on_startup = True 
 
-    print(f'Logged in as {client.user} (ID: {client.user.id})')
-    print('Bot is ready and online.')
+    log.info(f'Logged in as {client.user} (ID: {client.user.id})')
+    log.info('Bot is ready and online.')
 
 # --- 3. /HELP COMMAND ---
 @client.tree.command(name="help", description="Shows a list of all available commands.")
@@ -112,7 +120,7 @@ async def on_ready():
 async def help(interaction: discord.Interaction, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /help publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /help publish={publish} used by {interaction.user}")
     
     embed = discord.Embed(
         title="IronAssistant Help",
@@ -162,7 +170,7 @@ async def help(interaction: discord.Interaction, publish: bool = False):
 async def member_info(interaction: discord.Interaction, rsn: str, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /memberinfo rsn='{rsn}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /memberinfo rsn='{rsn}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral) 
@@ -202,7 +210,7 @@ async def member_info(interaction: discord.Interaction, rsn: str, publish: bool 
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
 
     except Exception as e:
-        print(f"Error in /memberinfo command: {e}")
+        log.error(f"Error in /memberinfo command: {e}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
         
                 
@@ -216,7 +224,7 @@ async def member_info(interaction: discord.Interaction, rsn: str, publish: bool 
 async def rankhistory(interaction: discord.Interaction, rsn: str, num_changes: int = 3, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /rankhistory rsn='{rsn}' num_changes={num_changes} publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /rankhistory rsn='{rsn}' num_changes={num_changes} publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral) 
@@ -244,7 +252,7 @@ async def rankhistory(interaction: discord.Interaction, rsn: str, num_changes: i
             )
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
     except Exception as e:
-        print(f"Error in /rankhistory command: {e}\n{traceback.format_exc()}")
+        log.error(f"Error in /rankhistory command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 # --- 6. /SYNC-CLAN COMMAND ---
@@ -263,7 +271,7 @@ async def sync_clan(
 ):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /syncclan dry_run={dry_run} force_run={force_run} publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /syncclan dry_run={dry_run} force_run={force_run} publish={publish} used by {interaction.user}")
     is_ephemeral = not publish 
     await interaction.response.defer(ephemeral=is_ephemeral)
     if force_run and dry_run:
@@ -276,7 +284,7 @@ async def sync_clan(
             dry_run=dry_run, 
             force_run=force_run
         )
-        print("Sync function complete. Sending report.")
+        log.info("Sync function complete. Sending report.")
         if len(report_string) > 1900:
             await interaction.followup.send(
                 "Sync complete. The report is too long, so it's attached as a file.",
@@ -289,8 +297,7 @@ async def sync_clan(
                 ephemeral=is_ephemeral
             )
     except Exception as e:
-        print(f"CRITICAL Error in /sync-clan command:")
-        traceback.print_exc() 
+        log.error(f"CRITICAL Error in /sync-clan command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
 
 # --- 7. /PURGE-MEMBER COMMAND ---
@@ -309,11 +316,11 @@ class ConfirmPurgeView(ui.View):
     async def on_timeout(self):
         for item in self.children:
             item.disabled = True
-        print(f"Purge command for {self.rsn} timed out.")
+        log.info(f"Purge command for {self.rsn} timed out.")
     @ui.button(label="Yes, Purge This Member", style=discord.ButtonStyle.danger, emoji="🔥")
     async def confirm_button(self, interaction: discord.Interaction, button: ui.Button):
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        print(f"[{timestamp}] /purge-member CONFIRMED for rsn='{self.rsn}' by {interaction.user}")
+        log.info(f"[{timestamp}] /purge-member CONFIRMED for rsn='{self.rsn}' by {interaction.user}")
         for item in self.children:
             item.disabled = True
         await interaction.response.edit_message(view=self)
@@ -322,11 +329,11 @@ class ConfirmPurgeView(ui.View):
             if not data.data:
                 await interaction.followup.send(f"Error: Could not find member with ID {self.member_id} to delete.", ephemeral=True)
                 return
-            print(f"Member {self.rsn} (ID: {self.member_id}) was purged by {self.original_author}.")
+            log.info(f"Member {self.rsn} (ID: {self.member_id}) was purged by {self.original_author}.")
             embed = discord.Embed(title="🔥 Purge Complete", description=f"Successfully purged **{self.rsn}** and all their associated data from the database.", color=discord.Color.dark_red())
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
-            print(f"Error during purge: {e}")
+            log.error(f"Error during purge: {e}")
             await interaction.followup.send(f"An error occurred during the purge: `{e}`", ephemeral=True)
     @ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
     async def cancel_button(self, interaction: discord.Interaction, button: ui.Button):
@@ -340,7 +347,7 @@ class ConfirmPurgeView(ui.View):
 async def purge_member(interaction: discord.Interaction, rsn: str):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /purgemember rsn='{rsn}' used by {interaction.user}")
+    log.info(f"[{timestamp}] /purgemember rsn='{rsn}' used by {interaction.user}")
     await interaction.response.defer(ephemeral=True)
     try:
         response = supabase.table('member_rsns').select('member_id, members(date_joined)').eq('rsn', rsn).limit(1).execute()
@@ -361,7 +368,7 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
         view = ConfirmPurgeView(member_id=member_id, original_author=interaction.user, rsn=rsn, join_date=join_date)
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
     except Exception as e:
-        print(f"Error in /purge-member command: {e}\n{traceback.format_exc()}")
+        log.error(f"Error in /purge-member command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 # --- 8. /RANKUP COMMAND ---
@@ -375,7 +382,7 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
 async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -424,7 +431,7 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         await interaction.followup.send(f"✅ Success! `{member_rsn}`'s rank has been updated to **{new_rank_name}**.", ephemeral=is_ephemeral)
 
     except Exception as e:
-        print(f"Error in /rankup command: {e}\n{traceback.format_exc()}")
+        log.error(f"Error in /rankup command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
@@ -439,7 +446,7 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
 async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -458,7 +465,7 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         new_rank_id = new_rank['id']
         new_rank_name = new_rank['name']
 
-        print("Building RSN map for bulk rankup...")
+        log.info("Building RSN map for bulk rankup...")
         rsns_res = supabase.table('member_rsns') \
             .select('rsn, member_id, members(current_rank_id)') \
             .execute()
@@ -471,7 +478,7 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                     "original_rsn": item['rsn'],
                     "old_rank_id": item['members']['current_rank_id']
                 }
-        print("RSN map built.")
+        log.info("RSN map built.")
 
         rsns_to_process = [r.strip() for r in rsn_list.split(',')]
         
@@ -505,12 +512,12 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
             report_success.append(member_data['original_rsn'])
 
         if member_ids_to_update:
-            print(f"Updating {len(member_ids_to_update)} members to rank {new_rank_name}...")
+            log.info(f"Updating {len(member_ids_to_update)} members to rank {new_rank_name}...")
             supabase.table('members').update({'current_rank_id': new_rank_id}).in_('id', member_ids_to_update).execute()
             supabase.table('rank_history').insert(history_payload).execute()
-            print("Batch update complete.")
+            log.info("Batch update complete.")
         else:
-            print("No members valid for update.")
+            log.info("No members valid for update.")
 
         embed = discord.Embed(
             title=f"Bulk Rank Update to '{new_rank_name}' Complete",
@@ -530,7 +537,7 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
 
     except Exception as e:
-        print(f"Error in /bulkrankup command: {e}\n{traceback.format_exc()}")
+        log.error(f"Error in /bulkrankup command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 # --- 10. /LINK-RSN COMMAND ---
@@ -544,7 +551,7 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
 async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Member, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /linkrsn rsn='{rsn}' user='{user}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /linkrsn rsn='{rsn}' user='{user}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -580,7 +587,7 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
         await interaction.followup.send(f"✅ Success! `{member_rsn}` is now linked to {user.mention}.", ephemeral=is_ephemeral)
 
     except Exception as e:
-        print(f"Error in /link-rsn command: {e}\n{traceback.format_exc()}")
+        log.error(f"Error in /link-rsn command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
@@ -596,7 +603,7 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
 async def add_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /addpoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /addpoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -646,7 +653,7 @@ async def add_points(interaction: discord.Interaction, rsn: str, points: int, re
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
 
     except Exception as e:
-        print(f"Error in /addpoints command: {e}\n{traceback.format_exc()}")
+        log.error(f"Error in /addpoints command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
@@ -662,7 +669,7 @@ async def add_points(interaction: discord.Interaction, rsn: str, points: int, re
 async def remove_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /removepoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /removepoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -712,7 +719,7 @@ async def remove_points(interaction: discord.Interaction, rsn: str, points: int,
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
 
     except Exception as e:
-        print(f"Error in /remove-points command: {e}\n{traceback.format_exc()}")
+        log.error(f"Error in /remove-points command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
@@ -728,7 +735,7 @@ async def remove_points(interaction: discord.Interaction, rsn: str, points: int,
 async def bulk_add_points(interaction: discord.Interaction, points: int, reason: str, rsn_list: str, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /bulkaddpoints points={points} reason='{reason}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /bulkaddpoints points={points} reason='{reason}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -746,7 +753,7 @@ async def bulk_add_points(interaction: discord.Interaction, points: int, reason:
 
         # 2. Build RSN Map (Optimization: Fetch all members once)
         # We need to resolve RSN -> Member ID
-        print("Building RSN map for bulk add points...")
+        log.info("Building RSN map for bulk add points...")
         all_rsns_res = supabase.table('member_rsns').select('rsn, member_id').execute()
         
         rsn_map = {}
@@ -794,7 +801,7 @@ async def bulk_add_points(interaction: discord.Interaction, points: int, reason:
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
 
     except Exception as e:
-        print(f"Error in /bulkaddpoints command: {e}\n{traceback.format_exc()}")
+        log.error(f"Error in /bulkaddpoints command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
@@ -818,7 +825,7 @@ async def process_competition_points(
     current_month = datetime.now().strftime('%B %Y') # e.g., "November 2025"
     full_reason = f"{reason_prefix} {current_month}"
     
-    print(f"[{timestamp}] Competition command ({reason_prefix}) used by {interaction.user}")
+    log.info(f"[{timestamp}] Competition command ({reason_prefix}) used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -894,7 +901,7 @@ async def process_competition_points(
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
 
     except Exception as e:
-        print(f"Error in competition command: {e}\n{traceback.format_exc()}")
+        log.error(f"Error in competition command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
@@ -950,7 +957,7 @@ async def add_points_bigbooty(interaction: discord.Interaction, first: str, seco
 async def check_inactives(interaction: discord.Interaction, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] /checkinactives publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /checkinactives publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -961,7 +968,7 @@ async def check_inactives(interaction: discord.Interaction, publish: bool = Fals
             supabase
         )
         
-        print("Inactivity check complete. Sending report.")
+        log.info("Inactivity check complete. Sending report.")
         
         if len(report_string) > 1900:
             await interaction.followup.send(
@@ -975,8 +982,7 @@ async def check_inactives(interaction: discord.Interaction, publish: bool = Fals
                 ephemeral=is_ephemeral
             )
     except Exception as e:
-        print(f"CRITICAL Error in /check-inactives command:")
-        traceback.print_exc()
+        log.error(f"CRITICAL Error in /check-inactives command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
 
 # --- 16. RUN THE BOT ---

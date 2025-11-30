@@ -7,9 +7,17 @@ from supabase import create_client, Client
 from datetime import datetime, timezone
 from dateutil.parser import parse
 import sys
+import logging
+# Ensure this line is placed early in your bot.py
+logging.basicConfig(level=logging.INFO, 
+                    format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S')
+
+# Initialize the logger for your bot's custom messages
+log = logging.getLogger('ClanBot') # Give your bot a specific name
 
 # --- 1. LOAD ENVIRONMENT & CONNECT ---
-print("Loading environment and connecting to clients...")
+log.info("Loading environment and connecting to clients...")
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -22,7 +30,7 @@ MISMATCH_THRESHOLD = 15
 # This check is only for when running this file directly
 if __name__ == "__main__":
     if not all([SUPABASE_URL, SUPABASE_KEY, WOM_GROUP_ID, WOM_API_KEY]):
-        print("Error: Missing .env variables. Make sure all are set.")
+        log.error("Error: Missing .env variables. Make sure all are set.")
         exit()
 
 # --- 2. NORMALIZATION FUNCTION ---
@@ -34,7 +42,7 @@ def normalize_string(s: str) -> str:
 # --- 3. DATA FETCHING FUNCTIONS ---
 
 def fetch_wom_members() -> tuple:
-    print(f"Fetching group data from WOM Group ID: {WOM_GROUP_ID}...")
+    log.info(f"Fetching group data from WOM Group ID: {WOM_GROUP_ID}...")
     url = f"https://api.wiseoldman.net/v2/groups/{WOM_GROUP_ID}"
     headers = {"User-Agent": "OnlyFEs-Clan-Bot-v1.0", "x-api-key": WOM_API_KEY}
     try:
@@ -53,14 +61,14 @@ def fetch_wom_members() -> tuple:
                     "stale_exp": player.get("exp"),
                     "latest_snapshot": None
                 }
-        print(f"Found {len(wom_members)} members on WOM.")
+        log.info(f"Found {len(wom_members)} members on WOM.")
         return wom_members, group_data
     except Exception as e:
-        print(f"Error fetching from WOM API: {e}")
+        log.error(f"Error fetching from WOM API: {e}")
         return None, None
 
 def fetch_db_ranks_and_rsns(supabase: Client) -> (dict, dict, dict):
-    print("Fetching ranks and RSN map from Supabase DB...")
+    log.info("Fetching ranks and RSN map from Supabase DB...")
     try:
         ranks_res = supabase.table('ranks').select('id, name').execute()
         ranks_map_normalized = {}
@@ -78,14 +86,14 @@ def fetch_db_ranks_and_rsns(supabase: Client) -> (dict, dict, dict):
                 "original_rsn": item['rsn']
             }
         
-        print(f"Found {len(ranks_map_normalized)} ranks and {len(db_rsn_map_normalized)} total RSNs in DB.")
+        log.info(f"Found {len(ranks_map_normalized)} ranks and {len(db_rsn_map_normalized)} total RSNs in DB.")
         return ranks_map_normalized, ranks_map_by_id, db_rsn_map_normalized
     except Exception as e:
-        print(f"Error fetching from Supabase: {e}")
+        log.error(f"Error fetching from Supabase: {e}")
         return None, None, None
 
 def fetch_db_member_data(supabase: Client) -> dict:
-    print("Fetching active members and latest snapshots from DB...")
+    log.info("Fetching active members and latest snapshots from DB...")
     try:
         response = supabase.rpc('get_active_member_snapshots').execute()
         db_member_data = {}
@@ -96,15 +104,15 @@ def fetch_db_member_data(supabase: Client) -> dict:
                 "current_rank_id": member['current_rank_id'],
                 "latest_db_xp": member['latest_db_xp']
             }
-        print(f"Found {len(db_member_data)} active members in DB.")
+        log.info(f"Found {len(db_member_data)} active members in DB.")
         return db_member_data
     except Exception as e:
-        print(f"Error fetching active member snapshots: {e}")
+        log.error(f"Error fetching active member snapshots: {e}")
         return None
 
 def fetch_all_db_members(supabase: Client) -> dict:
     """Fetch ALL members (active and inactive) for detecting returning members"""
-    print("Fetching all members from DB (including inactive)...")
+    log.info("Fetching all members from DB (including inactive)...")
     try:
         response = supabase.table('members').select('id, current_rank_id, status').execute()
         all_members = {}
@@ -114,14 +122,14 @@ def fetch_all_db_members(supabase: Client) -> dict:
                 "current_rank_id": member['current_rank_id'],
                 "status": member['status']
             }
-        print(f"Found {len(all_members)} total members in DB.")
+        log.info(f"Found {len(all_members)} total members in DB.")
         return all_members
     except Exception as e:
-        print(f"Error fetching all members: {e}")
+        log.error(f"Error fetching all members: {e}")
         return None
 
 def fetch_player_snapshots(supabase: Client, wom_members: dict, db_member_data: dict, db_rsn_map_normalized: dict, dry_run: bool):
-    print("Enriching snapshots...")
+    log.info("Enriching snapshots...")
     headers = {"User-Agent": "OnlyFEs-Clan-Bot-v1.0", "x-api-key": WOM_API_KEY}
     request_count = 0
     start_time = time.time()
@@ -146,7 +154,7 @@ def fetch_player_snapshots(supabase: Client, wom_members: dict, db_member_data: 
                 continue 
         
         if dry_run:
-            print(f"  [DRY RUN] Would fetch snapshot for: {username}")
+            log.info(f"  [DRY RUN] Would fetch snapshot for: {username}")
             dry_run_skip_count += 1
             continue
 
@@ -154,7 +162,7 @@ def fetch_player_snapshots(supabase: Client, wom_members: dict, db_member_data: 
             elapsed = time.time() - start_time
             if elapsed < 60:
                 wait_time = 60.1 - elapsed
-                print(f"Rate limit hit. Sleeping for {wait_time:.1f} seconds...")
+                log.info(f"Rate limit hit. Sleeping for {wait_time:.1f} seconds...")
                 time.sleep(wait_time)
             request_count = 0
             start_time = time.time()
@@ -169,21 +177,21 @@ def fetch_player_snapshots(supabase: Client, wom_members: dict, db_member_data: 
             
             if player_data.get('latestSnapshot'):
                 wom_member['latest_snapshot'] = player_data['latestSnapshot']
-                print(f"Successfully fetched snapshot for {wom_member['rsn']}")
+                log.info(f"Successfully fetched snapshot for {wom_member['rsn']}")
             else:
                 wom_member['latest_snapshot'] = None
         except Exception as e:
-            print(f"Warning: Could not fetch snapshot for {wom_member['rsn']}. {e}")
+            log.warning(f"Warning: Could not fetch snapshot for {wom_member['rsn']}. {e}")
             wom_member['latest_snapshot'] = None
             
-    print(f"Snapshot enrichment complete. Skipped {skipped_count} unchanged players.")
+    log.info(f"Snapshot enrichment complete. Skipped {skipped_count} unchanged players.")
     if dry_run_skip_count > 0:
-        print(f"  [DRY RUN] Skipped fetching snapshots for {dry_run_skip_count} players.")
+        log.info(f"  [DRY RUN] Skipped fetching snapshots for {dry_run_skip_count} players.")
 
 # --- 4. NAME CHANGE FUNCTION ---
 
 def fetch_and_process_name_changes(supabase: Client, db_rsn_map_normalized: dict, dry_run: bool, report_lines: list) -> (dict, list):
-    print("Fetching group name changes from WOM...")
+    log.info("Fetching group name changes from WOM...")
     url = f"https://api.wiseoldman.net/v2/groups/{WOM_GROUP_ID}/name-changes"
     headers = {"User-Agent": "OnlyFEs-Clan-Bot-v1.0", "x-api-key": WOM_API_KEY}
     
@@ -193,7 +201,7 @@ def fetch_and_process_name_changes(supabase: Client, db_rsn_map_normalized: dict
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         name_changes = response.json()
-        print(f"Found {len(name_changes)} name changes to process.")
+        log.info(f"Found {len(name_changes)} name changes to process.")
         
         if not name_changes:
             return db_rsn_map_normalized, report_name_changes
@@ -212,7 +220,7 @@ def fetch_and_process_name_changes(supabase: Client, db_rsn_map_normalized: dict
                 if new_norm in db_rsn_map_normalized:
                     existing_member_id = db_rsn_map_normalized[new_norm]['member_id']
                     if existing_member_id == member_id:
-                        print(f"Skipping name change {old_name} -> {new_name} (Already processed).")
+                        log.warning(f"Skipping name change {old_name} -> {new_name} (Already processed).")
                         continue
                 # ---------------------------------------------------------------
 
@@ -284,11 +292,11 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                 supabase.table('group_snapshots').insert({
                     'snapshot_data': group_snapshot_data
                 }).execute()
-                print("Group snapshot inserted successfully.")
+                log.info("Group snapshot inserted successfully.")
             except Exception as e:
                 report_lines.append(f"Warning: Failed to insert group snapshot: {e}")
         else:
-            print("[DRY RUN] Would insert group snapshot.")
+            log.info("[DRY RUN] Would insert group snapshot.")
 
     # 2. PROCESS NAME CHANGES
     db_rsn_map_normalized, report_name_changes = fetch_and_process_name_changes(
@@ -611,10 +619,10 @@ if __name__ == "__main__":
 
     try:
         supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print("Supabase connection successful for manual run.")
+        log.info("Supabase connection successful for manual run.")
         
         report = run_sync(supabase_client, dry_run=is_dry_run, force_run=is_force_run)
-        print(report)
+        log.info(report)
         
     except Exception as e:
-        print(f"Error initializing Supabase: {e}")
+        log.error(f"Error initializing Supabase: {e}")
