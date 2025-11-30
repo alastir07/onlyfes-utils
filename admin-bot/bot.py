@@ -8,6 +8,7 @@ from io import StringIO
 import traceback
 from datetime import datetime
 import functools
+import logging
 import sys # <-- Import sys
 
 # Initialize the logger for your bot's custom messages

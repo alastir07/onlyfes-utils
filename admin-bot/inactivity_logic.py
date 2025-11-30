@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import sys # <-- Import sys
+import logging
 
 # Initialize the logger for your bot's custom messages
 log = logging.getLogger('ClanBot') 

@@ -7,7 +7,7 @@ from supabase import create_client, Client
 from datetime import datetime, timezone
 from dateutil.parser import parse
 import sys
-import sys # <-- Import sys
+import logging
 
 # Initialize the logger for your bot's custom messages
 log = logging.getLogger('ClanBot') 
