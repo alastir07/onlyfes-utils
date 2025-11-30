@@ -11,6 +11,7 @@ import functools
 
 # --- Import your logic module ---
 import clan_sync_logic
+import inactivity_logic
 
 # --- 1. LOAD SECRETS & CONNECT ---
 load_dotenv()
@@ -140,6 +141,8 @@ async def help(interaction: discord.Interaction, publish: bool = False):
               "Adds Event Points for a member.\n\n" \
               "`/remove-points <rsn> <points> <reason> [publish]`\n" \
               "Removes Event Points for a member.\n\n" \
+              "`/check-inactives [publish]`\n" \
+              "Checks for members with 0 XP gain in 30/60 days (based on rank).\n\n" \
               "`/bulk-add-points <points> <reason> <rsn_list> [publish]`\n" \
               "Adds Event Points to multiple members at once.\n\n" \
               "--- *DANGER ZONE* ---\n" \
@@ -937,6 +940,45 @@ async def add_points_bigbooty(interaction: discord.Interaction, first: str, seco
     await process_competition_points(interaction, first, second, third, participants, points, "big booty", publish)
 
 
-# --- 15. RUN THE BOT ---
+# --- 15. /CHECK-INACTIVES COMMAND ---
+
+@client.tree.command(name="checkinactives", description="Check for members with 0 XP gain in their check period.")
+@app_commands.describe(
+    publish="False (default). True to post the report publicly."
+)
+@check_staff_role("Captain")
+async def check_inactives(interaction: discord.Interaction, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"[{timestamp}] /checkinactives publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        report_string = await asyncio.to_thread(
+            inactivity_logic.run_inactivity_check,
+            supabase
+        )
+        
+        print("Inactivity check complete. Sending report.")
+        
+        if len(report_string) > 1900:
+            await interaction.followup.send(
+                "Inactivity check complete. The report is too long, so it's attached as a file.",
+                file=discord.File(StringIO(report_string), "inactivity_report.txt"),
+                ephemeral=is_ephemeral
+            )
+        else:
+            await interaction.followup.send(
+                f"Inactivity check complete.\n```\n{report_string}\n```",
+                ephemeral=is_ephemeral
+            )
+    except Exception as e:
+        print(f"CRITICAL Error in /check-inactives command:")
+        traceback.print_exc()
+        await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
+
+# --- 16. RUN THE BOT ---
 
 client.run(DISCORD_TOKEN)
