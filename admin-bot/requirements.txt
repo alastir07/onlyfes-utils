@@ -13,3 +13,6 @@ requests==2.31.0
 
 # Date/Time Utilities
 python-dateutil==2.8.2
+
+# HTTP Requests
+httpx==0.27.0
