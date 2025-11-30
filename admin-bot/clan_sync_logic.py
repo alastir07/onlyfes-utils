@@ -7,14 +7,29 @@ from supabase import create_client, Client
 from datetime import datetime, timezone
 from dateutil.parser import parse
 import sys
-import logging
-# Ensure this line is placed early in your bot.py
-logging.basicConfig(level=logging.INFO, 
-                    format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S')
+import sys # <-- Import sys
 
 # Initialize the logger for your bot's custom messages
-log = logging.getLogger('ClanBot') # Give your bot a specific name
+log = logging.getLogger('ClanBot') 
+log.setLevel(logging.INFO) # Set the minimum level for your custom logs
+
+# Create a handler that sends output to sys.stdout
+handler = logging.StreamHandler(sys.stdout)
+
+# Set the desired format, which includes the levelname and timestamp
+formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(name)s: %(message)s', 
+                              datefmt='%Y-%m-%d %H:%M:%S')
+
+handler.setFormatter(formatter)
+
+# Add the handler to the root logger or your specific logger
+# Using the root logger is usually best for a uniform output
+root = logging.getLogger()
+# Clear existing handlers to prevent duplicate logs
+if root.hasHandlers():
+    root.handlers.clear()
+root.addHandler(handler)
+root.setLevel(logging.INFO) # Set the minimum level for all logs
 
 # --- 1. LOAD ENVIRONMENT & CONNECT ---
 log.info("Loading environment and connecting to clients...")
