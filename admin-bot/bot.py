@@ -1,12 +1,13 @@
 import os
 import discord
 from discord import app_commands, ui, Interaction
+from discord.ext import tasks
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import asyncio
 from io import StringIO
 import traceback
-from datetime import datetime
+from datetime import datetime, time
 import functools
 import logging
 import sys # <-- Import sys
@@ -43,6 +44,9 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SYNC_REPORT_CHANNEL_ID = os.getenv("SYNC_REPORT_CHANNEL_ID")
+INACTIVITY_REPORT_CHANNEL_ID = os.getenv("INACTIVITY_REPORT_CHANNEL_ID")
+INACTIVITY_REPORT_THREAD_ID = os.getenv("INACTIVITY_REPORT_THREAD_ID")
 
 if not all([DISCORD_TOKEN, SUPABASE_URL, SUPABASE_KEY]):
     log.error("Missing one or more .env variables!")
@@ -1001,6 +1005,169 @@ async def check_inactives(interaction: discord.Interaction, publish: bool = Fals
         log.error(f"CRITICAL Error in /check-inactives command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
 
-# --- 16. RUN THE BOT ---
+# --- 16. MANUAL TRIGGER COMMANDS FOR SCHEDULED TASKS ---
+@client.tree.command(name="triggersync", description="[TESTING] Manually trigger the scheduled clan sync task.")
+@check_staff_role("Captain")
+async def trigger_sync(interaction: discord.Interaction):
+    """Manually trigger the scheduled clan sync for testing"""
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /triggersync used by {interaction.user}")
+    
+    await interaction.response.send_message("🔧 Manually triggering scheduled clan sync...", ephemeral=True)
+    
+    try:
+        # Call the scheduled task function directly
+        await scheduled_clan_sync()
+        await interaction.followup.send("✅ Scheduled clan sync completed! Check the sync report channel.", ephemeral=True)
+    except Exception as e:
+        log.error(f"Error in manual sync trigger: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"❌ Error triggering sync: `{e}`", ephemeral=True)
+@client.tree.command(name="triggerinactivity", description="[TESTING] Manually trigger the scheduled inactivity check task.")
+@check_staff_role("Captain")
+async def trigger_inactivity(interaction: discord.Interaction):
+    """Manually trigger the scheduled inactivity check for testing"""
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /triggerinactivity used by {interaction.user}")
+    
+    await interaction.response.send_message("🔧 Manually triggering scheduled inactivity check...", ephemeral=True)
+    
+    try:
+        # Call the scheduled task function directly
+        await scheduled_inactivity_check()
+        await interaction.followup.send("✅ Scheduled inactivity check completed! Check the inactivity report channel/thread.", ephemeral=True)
+    except Exception as e:
+        log.error(f"Error in manual inactivity trigger: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"❌ Error triggering inactivity check: `{e}`", ephemeral=True)
+
+
+# --- 17. SCHEDULED TASKS ---
+@tasks.loop(time=[time(hour=0, minute=0), time(hour=12, minute=0)])
+async def scheduled_clan_sync():
+    """Runs clan sync twice daily at 00:00 and 12:00 UTC"""
+    log.info("=== Starting scheduled clan sync ===")
+    
+    try:
+        # Get the sync report channel
+        if not SYNC_REPORT_CHANNEL_ID:
+            log.error("SYNC_REPORT_CHANNEL_ID not configured. Skipping scheduled sync.")
+            return
+        
+        channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+        if not channel:
+            log.error(f"Could not find channel with ID {SYNC_REPORT_CHANNEL_ID}")
+            return
+        
+        # Run the sync (live run, no force)
+        report_string = await asyncio.to_thread(
+            clan_sync_logic.run_sync,
+            supabase,
+            dry_run=False,
+            force_run=False
+        )
+        
+        log.info("Scheduled sync complete. Posting report to channel.")
+        
+        # Post the report
+        if len(report_string) > 1900:
+            await channel.send(
+                "🤖 **Automated Clan Sync Complete**\nThe report is too long, so it's attached as a file.",
+                file=discord.File(StringIO(report_string), f"sync_report_{datetime.now().strftime('%Y%m%d_%H%M')}.txt")
+            )
+        else:
+            await channel.send(f"🤖 **Automated Clan Sync Complete**\n```\n{report_string}\n```")
+        
+        log.info("Scheduled sync report posted successfully.")
+        
+    except Exception as e:
+        log.error(f"ERROR in scheduled_clan_sync: {e}\n{traceback.format_exc()}")
+        # Try to post error to channel
+        try:
+            if SYNC_REPORT_CHANNEL_ID:
+                channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+                if channel:
+                    await channel.send(f"⚠️ **Automated Clan Sync Failed**\nError: `{e}`\nCheck bot logs for details.")
+        except:
+            pass  # If we can't post the error, just log it
+@tasks.loop(time=[time(hour=14, minute=0)])
+async def scheduled_inactivity_check():
+    """Runs inactivity check daily at 14:00 UTC"""
+    log.info("=== Starting scheduled inactivity check ===")
+    
+    try:
+        # Get the inactivity report channel and thread
+        if not INACTIVITY_REPORT_CHANNEL_ID:
+            log.error("INACTIVITY_REPORT_CHANNEL_ID not configured. Skipping scheduled inactivity check.")
+            return
+        
+        channel = client.get_channel(int(INACTIVITY_REPORT_CHANNEL_ID))
+        if not channel:
+            log.error(f"Could not find channel with ID {INACTIVITY_REPORT_CHANNEL_ID}")
+            return
+        
+        # If thread ID is provided, try to get the thread
+        target = channel
+        if INACTIVITY_REPORT_THREAD_ID:
+            try:
+                thread = channel.get_thread(int(INACTIVITY_REPORT_THREAD_ID))
+                if thread:
+                    target = thread
+                    log.info(f"Posting to thread: {thread.name}")
+                else:
+                    # Try fetching archived threads
+                    log.info("Thread not in cache, attempting to fetch...")
+                    thread = await channel.fetch_channel(int(INACTIVITY_REPORT_THREAD_ID))
+                    if thread:
+                        target = thread
+                        log.info(f"Found thread: {thread.name}")
+            except Exception as e:
+                log.warning(f"Could not find thread {INACTIVITY_REPORT_THREAD_ID}, posting to channel instead: {e}")
+        
+        # Run the inactivity check
+        report_string = await asyncio.to_thread(
+            inactivity_logic.run_inactivity_check,
+            supabase
+        )
+        
+        log.info("Scheduled inactivity check complete. Posting report.")
+        
+        # Post the report
+        if len(report_string) > 1900:
+            await target.send(
+                "🤖 **Automated Inactivity Check Complete**\nThe report is too long, so it's attached as a file.",
+                file=discord.File(StringIO(report_string), f"inactivity_report_{datetime.now().strftime('%Y%m%d_%H%M')}.txt")
+            )
+        else:
+            await target.send(f"🤖 **Automated Inactivity Check Complete**\n```\n{report_string}\n```")
+        
+        log.info("Scheduled inactivity report posted successfully.")
+        
+    except Exception as e:
+        log.error(f"ERROR in scheduled_inactivity_check: {e}\n{traceback.format_exc()}")
+        # Try to post error to channel
+        try:
+            if INACTIVITY_REPORT_CHANNEL_ID:
+                channel = client.get_channel(int(INACTIVITY_REPORT_CHANNEL_ID))
+                if channel:
+                    await channel.send(f"⚠️ **Automated Inactivity Check Failed**\nError: `{e}`\nCheck bot logs for details.")
+        except:
+            pass  # If we can't post the error, just log it
+@scheduled_clan_sync.before_loop
+async def before_scheduled_clan_sync():
+    """Wait for bot to be ready before starting the sync task"""
+    await client.wait_until_ready()
+    log.info("Bot is ready. Starting scheduled clan sync task.")
+@scheduled_inactivity_check.before_loop
+async def before_scheduled_inactivity_check():
+    """Wait for bot to be ready before starting the inactivity check task"""
+    await client.wait_until_ready()
+    log.info("Bot is ready. Starting scheduled inactivity check task.")
+# --- 18. RUN THE BOT ---
+# Start scheduled tasks
+scheduled_clan_sync.start()
+scheduled_inactivity_check.start()
+log.info("Scheduled tasks started: clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC)")
+
+
+# --- 19. RUN THE BOT ---
 
 client.run(DISCORD_TOKEN)
