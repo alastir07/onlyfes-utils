@@ -28,7 +28,7 @@ def get_active_members_with_snapshots(supabase: Client) -> list:
     Uses a database function for efficiency if available, otherwise falls back to manual query.
     
     Returns:
-        list: List of dicts with member_id, rsn, rank_name, rank_id, latest_xp, joined_at
+        list: List of dicts with member_id, rsn, rank_name, rank_id, latest_xp, date_joined
     """
     print("Fetching active members with snapshots...")
     
@@ -44,7 +44,7 @@ def get_active_members_with_snapshots(supabase: Client) -> list:
                 'rank_id': member['current_rank_id'],
                 'rank_name': None,  # Will be fetched separately
                 'latest_xp': member.get('latest_db_xp', 0),
-                'joined_at': member.get('joined_at')  # Fetch join date
+                'date_joined': member.get('date_joined')  # Already in RPC response!
             })
         
         # Fetch RSNs
@@ -279,7 +279,7 @@ def check_inactivity(supabase: Client, members: list) -> dict:
                     'rank_name': member['rank_name'],
                     'days_inactive': days_inactive,
                     'latest_xp': current_xp,
-                    'joined_at': member.get('joined_at'),
+                    'date_joined': member.get('date_joined'),
                     'days_threshold': days_threshold
                 }
                 
@@ -287,7 +287,7 @@ def check_inactivity(supabase: Client, members: list) -> dict:
                 if isinstance(days_inactive, str):  # ">X" format
                     inactive_members.append(member_data)
                     print(f"  ⚠️ Confirmed inactive: {days_inactive} days")
-                elif days_inactive > days_threshold:
+                elif days_inactive >= days_threshold:  # Changed to >= to include threshold
                     inactive_members.append(member_data)
                     print(f"  ⚠️ Confirmed inactive: {days_inactive} days")
                 elif days_inactive >= at_risk_threshold:
@@ -320,6 +320,17 @@ def generate_inactivity_report(result: dict) -> str:
     inactive_members = result['inactive']
     at_risk_members = result['at_risk']
     
+    # Sort function to handle both numeric and ">X" string values
+    def sort_key(member):
+        days = member['days_inactive']
+        if isinstance(days, str) and days.startswith('>'):
+            return 9999  # Put ">X" values at the top (most inactive)
+        return days
+    
+    # Sort both lists by days inactive (descending - most inactive first)
+    inactive_members = sorted(inactive_members, key=sort_key, reverse=True)
+    at_risk_members = sorted(at_risk_members, key=sort_key, reverse=True)
+    
     report_lines = []
     report_lines.append("Inactive Members Report")
     report_lines.append("")
@@ -333,8 +344,8 @@ def generate_inactivity_report(result: dict) -> str:
             days_inactive = member['days_inactive']
             
             # Calculate days in clan
-            if member.get('joined_at'):
-                joined_date = datetime.fromisoformat(member['joined_at'].replace('Z', '+00:00'))
+            if member.get('date_joined'):
+                joined_date = datetime.fromisoformat(member['date_joined'].replace('Z', '+00:00'))
                 days_in_clan = (datetime.now(timezone.utc) - joined_date).days
             else:
                 days_in_clan = "?"
@@ -353,8 +364,8 @@ def generate_inactivity_report(result: dict) -> str:
             days_inactive = member['days_inactive']
             
             # Calculate days in clan
-            if member.get('joined_at'):
-                joined_date = datetime.fromisoformat(member['joined_at'].replace('Z', '+00:00'))
+            if member.get('date_joined'):
+                joined_date = datetime.fromisoformat(member['date_joined'].replace('Z', '+00:00'))
                 days_in_clan = (datetime.now(timezone.utc) - joined_date).days
             else:
                 days_in_clan = "?"
