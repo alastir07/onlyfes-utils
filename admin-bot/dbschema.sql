@@ -15,12 +15,6 @@ CREATE TABLE public.clan_bank_transactions (
   CONSTRAINT clan_bank_transactions_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id),
   CONSTRAINT clan_bank_transactions_recorded_by_member_id_fkey FOREIGN KEY (recorded_by_member_id) REFERENCES public.members(id)
 );
-CREATE TABLE public.group_snapshots (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  snapshot_data jsonb NOT NULL,
-  timestamp timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT group_snapshots_pkey PRIMARY KEY (id)
-);
 CREATE TABLE public.discipline_records (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   member_id uuid NOT NULL,
@@ -43,6 +37,23 @@ CREATE TABLE public.event_point_transactions (
   CONSTRAINT event_point_transactions_pkey PRIMARY KEY (id),
   CONSTRAINT event_point_transactions_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id),
   CONSTRAINT event_point_transactions_enacted_by_member_id_fkey FOREIGN KEY (enacted_by_member_id) REFERENCES public.members(id)
+);
+CREATE TABLE public.group_snapshots (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  snapshot_data jsonb NOT NULL,
+  timestamp timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT group_snapshots_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.inactivity_exemptions (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  member_id uuid NOT NULL,
+  granted_date timestamp with time zone NOT NULL DEFAULT now(),
+  expiration_date timestamp with time zone NOT NULL,
+  granted_by_member_id uuid,
+  reason text,
+  CONSTRAINT inactivity_exemptions_pkey PRIMARY KEY (id),
+  CONSTRAINT inactivity_exemptions_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id),
+  CONSTRAINT inactivity_exemptions_granted_by_member_id_fkey FOREIGN KEY (granted_by_member_id) REFERENCES public.members(id)
 );
 CREATE TABLE public.member_rsns (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,

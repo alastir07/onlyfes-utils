@@ -43,7 +43,11 @@ MAX_REQUESTS_PER_MINUTE = 90
 REQUEST_WINDOW_SECONDS = 60
 
 # Rank tiers that get 30-day check (others get 60-day)
-SHORT_PERIOD_RANKS = ['sapphire', 'emerald', 'ruby']
+SHORT_PERIOD_RANKS = ['emerald', 'ruby']
+
+# Ranks that are exempt from inactivity checks
+# Sapphire ranks will never reach inactivity due to the rankup process
+EXEMPT_RANKS = ['sapphire', 'administrator']
 
 
 def get_active_members_with_snapshots(supabase: Client) -> list:
@@ -211,6 +215,10 @@ def check_inactivity(supabase: Client, members: list) -> dict:
     2. Checking if latest snapshot is >30/60 days old
     3. Checking if XP hasn't changed across recent snapshots (data issue)
     
+    Members are skipped if:
+    - Their rank is in EXEMPT_RANKS (e.g., Sapphire)
+    - They have an active manual exemption (granted via /addexempt)
+    
     Args:
         supabase: Supabase client
         members: List of member dicts from get_active_members_with_snapshots()
@@ -224,10 +232,36 @@ def check_inactivity(supabase: Client, members: list) -> dict:
     request_count = 0
     start_time = time.time()
     
+    # Fetch all active manual exemptions (not expired)
+    try:
+        exemptions_response = supabase.table('inactivity_exemptions') \
+            .select('member_id, expiration_date') \
+            .gte('expiration_date', datetime.now(timezone.utc).isoformat()) \
+            .execute()
+        
+        # Create a map of member_id -> expiration_date for quick lookup
+        exemption_map = {item['member_id']: item['expiration_date'] for item in exemptions_response.data}
+        log.info(f"Found {len(exemption_map)} active manual exemptions.")
+    except Exception as e:
+        log.warning(f"Could not fetch exemptions (table may not exist yet): {e}")
+        exemption_map = {}
+    
     for idx, member in enumerate(members, 1):
         rsn = member['rsn']
         rank_name = member['rank_name'].lower()
         current_xp = member['latest_xp']
+        member_id = member['member_id']
+        
+        # Check if rank is exempt
+        if rank_name in EXEMPT_RANKS:
+            log.info(f"[{idx}/{len(members)}] ⏭️ Skipping {rsn} - Rank exempt: {rank_name}")
+            continue
+        
+        # Check if member has active manual exemption
+        if member_id in exemption_map:
+            expiration_date = exemption_map[member_id]
+            log.info(f"[{idx}/{len(members)}] ⏭️ Skipping {rsn} - Manual exemption until {expiration_date}")
+            continue
         
         # Determine lookback period based on rank
         days_threshold = 30 if rank_name in SHORT_PERIOD_RANKS else 60

@@ -177,6 +177,8 @@ async def help(interaction: discord.Interaction, publish: bool = False):
               "Checks for members with 0 XP gain in 30/60 days (based on rank).\n\n" \
               "`/bulk-add-points <points> <reason> <rsn_list> [publish]`\n" \
               "Adds Event Points to multiple members at once.\n\n" \
+              "`/addexempt <rsn> <reason> [publish]`\n" \
+              "Grants a member 3-month immunity from inactivity tracking.\n\n" \
               "--- *DANGER ZONE* ---\n" \
               "`/purge-member <rsn>`\n" \
               "**IRREVERSIBLE.** Deletes a member and all their associated data from the database.",
@@ -829,7 +831,87 @@ async def bulk_add_points(interaction: discord.Interaction, points: int, reason:
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
-# --- 14. COMPETITION POINT COMMANDS ---
+# --- 14. /ADDEXEMPT COMMAND ---
+@client.tree.command(name="addexempt", description="Grant a member 3-month immunity from inactivity tracking.")
+@app_commands.describe(
+    rsn="The member's RSN (current or past).",
+    reason="The reason for this exemption (e.g., 'Taking a break from the game').",
+    publish="True to post the confirmation publicly."
+)
+@check_staff_role("Captain")
+async def add_exempt(interaction: discord.Interaction, rsn: str, reason: str, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /addexempt rsn='{rsn}' reason='{reason}' publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        # 1. Find the member by RSN
+        member_res = supabase.table('member_rsns') \
+            .select('member_id, rsn') \
+            .ilike('rsn', rsn) \
+            .limit(1) \
+            .execute()
+        if not member_res.data:
+            await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
+            return
+        member_id = member_res.data[0]['member_id']
+        member_rsn = member_res.data[0]['rsn']
+        
+        # 2. Check if they already have an active exemption
+        existing_exemption = supabase.table('inactivity_exemptions') \
+            .select('id, expiration_date') \
+            .eq('member_id', member_id) \
+            .gte('expiration_date', datetime.now().isoformat()) \
+            .execute()
+        
+        if existing_exemption.data:
+            existing_exp = existing_exemption.data[0]['expiration_date']
+            exp_date_obj = discord.utils.parse_time(existing_exp)
+            formatted_exp = f"<t:{int(exp_date_obj.timestamp())}:D>"
+            await interaction.followup.send(
+                f"ℹ️ `{member_rsn}` already has an active exemption until {formatted_exp}.\n"
+                f"If you need to extend it, please remove the old exemption first.",
+                ephemeral=True
+            )
+            return
+        
+        # 3. Get staff member ID
+        staff_member_id = get_staff_member_id(interaction)
+        
+        # 4. Calculate expiration date (3 months from now)
+        from dateutil.relativedelta import relativedelta
+        expiration_date = datetime.now() + relativedelta(months=3)
+        
+        # 5. Insert exemption
+        supabase.table('inactivity_exemptions').insert({
+            'member_id': member_id,
+            'expiration_date': expiration_date.isoformat(),
+            'granted_by_member_id': staff_member_id,
+            'reason': reason
+        }).execute()
+        
+        # 6. Send confirmation
+        exp_date_obj = discord.utils.parse_time(expiration_date.isoformat())
+        formatted_exp = f"<t:{int(exp_date_obj.timestamp())}:D>"
+        
+        embed = discord.Embed(
+            title="✅ Inactivity Exemption Granted",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Member", value=member_rsn, inline=True)
+        embed.add_field(name="Expires", value=formatted_exp, inline=True)
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.set_footer(text="This member will be skipped in inactivity checks until the expiration date.")
+        
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+    except Exception as e:
+        log.error(f"Error in /addexempt command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+# --- 15. COMPETITION POINT COMMANDS ---
 
 async def process_competition_points(
     interaction: discord.Interaction, 
@@ -971,7 +1053,7 @@ async def add_points_bigbooty(interaction: discord.Interaction, first: str, seco
     await process_competition_points(interaction, first, second, third, participants, points, "big booty", publish)
 
 
-# --- 15. /CHECK-INACTIVES COMMAND ---
+# --- 16. /CHECK-INACTIVES COMMAND ---
 
 @client.tree.command(name="checkinactives", description="Check for members with 0 XP gain in their check period.")
 @app_commands.describe(
@@ -1009,7 +1091,7 @@ async def check_inactives(interaction: discord.Interaction, publish: bool = Fals
         log.error(f"CRITICAL Error in /check-inactives command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
 
-# --- 16. MANUAL TRIGGER COMMANDS FOR SCHEDULED TASKS ---
+# --- 17. MANUAL TRIGGER COMMANDS FOR SCHEDULED TASKS ---
 @client.tree.command(name="triggersync", description="[TESTING] Manually trigger the scheduled clan sync task.")
 @check_staff_role("Captain")
 async def trigger_sync(interaction: discord.Interaction):
@@ -1044,7 +1126,7 @@ async def trigger_inactivity(interaction: discord.Interaction):
         await interaction.followup.send(f"❌ Error triggering inactivity check: `{e}`", ephemeral=True)
 
 
-# --- 17. SCHEDULED TASKS ---
+# --- 18. SCHEDULED TASKS ---
 @tasks.loop(time=[time(hour=0, minute=0), time(hour=12, minute=0)])
 async def scheduled_clan_sync():
     """Runs clan sync twice daily at 00:00 and 12:00 UTC"""
