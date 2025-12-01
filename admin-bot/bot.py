@@ -1194,9 +1194,9 @@ async def update_ep_leaderboard_command(interaction: discord.Interaction, publis
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 # --- 18. SCHEDULED TASKS ---
-@tasks.loop(hours=1)
+@tasks.loop(time=[time(hour=0, minute=15), time(hour=12, minute=15)])
 async def scheduled_ep_leaderboard():
-    """Runs EP leaderboard update hourly"""
+    """Runs EP leaderboard update daily at 00:15 and 12:15 UTC"""
     log.info("=== Starting scheduled EP leaderboard update ===")
     
     try:
