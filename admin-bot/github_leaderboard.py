@@ -206,12 +206,14 @@ def update_leaderboard(supabase, github_token):
         log.info("Fetching Lifetime leaderboard data...")
         
         # Fetch all positive transactions for active members
+        # Use the specific relationship name to avoid ambiguity
         lifetime_transactions = supabase.table('event_point_transactions') \
-            .select('member_id, modification, members!inner(status, current_rank_id, member_rsns!inner(rsn, is_primary), ranks!current_rank_id(id, name))') \
+            .select('member_id, modification, members!event_point_transactions_member_id_fkey(status, current_rank_id, member_rsns!inner(rsn, is_primary), ranks!current_rank_id(id, name))') \
             .eq('members.status', 'Active') \
             .eq('members.member_rsns.is_primary', True) \
             .gt('modification', 0) \
             .execute()
+
 
         
         # Aggregate lifetime EP by member
@@ -238,11 +240,12 @@ def update_leaderboard(supabase, github_token):
         # Fetch Big Spender Leaderboard data (sum of negative modifications, excluding test)
         log.info("Fetching Big Spender leaderboard data...")
         big_spender_transactions = supabase.table('event_point_transactions') \
-            .select('member_id, modification, reason, members!inner(status, current_rank_id, member_rsns!inner(rsn, is_primary), ranks!current_rank_id(id, name))') \
+            .select('member_id, modification, reason, members!event_point_transactions_member_id_fkey(status, current_rank_id, member_rsns!inner(rsn, is_primary), ranks!current_rank_id(id, name))') \
             .eq('members.status', 'Active') \
             .eq('members.member_rsns.is_primary', True) \
             .lt('modification', 0) \
             .execute()
+
         
         # Aggregate big spender EP by member (excluding test transactions)
         big_spender_dict = {}
