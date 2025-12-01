@@ -1173,7 +1173,7 @@ def save_ep_leaderboard_message_ids(message_ids):
     except Exception as e:
         log.error(f"Error saving EP leaderboard message IDs: {e}")
 
-# --- 17.5. /UPDATE-EP-LEADERBOARD COMMAND ---
+# --- 17. /UPDATE-EP-LEADERBOARD COMMAND ---
 @client.tree.command(name="updateepleaderboard", description="Manually update the EP leaderboard.")
 @app_commands.describe(
     publish="False (default). True to post the confirmation publicly."
