@@ -1350,7 +1350,7 @@ async def scheduled_ep_leaderboard():
                 lines.append(f"{rsn} - {ep:,}")
             
             lines.append("```")
-            message_content = "\\n".join(lines)
+            message_content = "\n".join(lines)
             
             # Send or edit message
             try:
