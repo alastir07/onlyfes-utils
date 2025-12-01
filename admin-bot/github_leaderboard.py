@@ -204,29 +204,6 @@ def update_leaderboard(supabase, github_token):
         
         # Fetch Lifetime Leaderboard data (sum of positive modifications)
         log.info("Fetching Lifetime leaderboard data...")
-        lifetime_query = """
-            SELECT 
-                m.id,
-                mr.rsn,
-                SUM(ept.modification) as lifetime_ep,
-                m.current_rank_id as rank_id,
-                r.name as rank_name
-            FROM members m
-            INNER JOIN member_rsns mr ON m.id = mr.member_id AND mr.is_primary = true
-            INNER JOIN event_point_transactions ept ON m.id = ept.member_id
-            LEFT JOIN ranks r ON m.current_rank_id = r.id
-            WHERE m.status = 'Active' AND ept.modification > 0
-            GROUP BY m.id, mr.rsn, m.current_rank_id, r.id, r.name
-            HAVING SUM(ept.modification) > 0
-            ORDER BY lifetime_ep DESC
-        """
-        
-        lifetime_response = supabase.rpc('exec_sql', {'query': lifetime_query}).execute()
-        
-        # Check if we need to use a different approach (Supabase might not have exec_sql RPC)
-        # Let's use the postgrest query builder with a more complex approach
-        # Actually, we need to create a custom RPC function or use a different approach
-        # For now, let's fetch all transactions and aggregate in Python
         
         # Fetch all positive transactions for active members
         lifetime_transactions = supabase.table('event_point_transactions') \
@@ -235,6 +212,7 @@ def update_leaderboard(supabase, github_token):
             .eq('members.member_rsns.is_primary', True) \
             .gt('modification', 0) \
             .execute()
+
         
         # Aggregate lifetime EP by member
         lifetime_dict = {}
