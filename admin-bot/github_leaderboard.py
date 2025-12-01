@@ -75,7 +75,7 @@ def generate_leaderboard_html(lifetime_data, big_spender_data, template_path='le
     # Replace placeholders
     last_updated = datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
     html = template.replace('{{LAST_UPDATED}}', last_updated)
-    html = html.replace('{{PAGE_TITLE}}', '⚔️ OnlyFEs All-Time Event Points Leaderboard ⚔️')
+    html = html.replace('{{PAGE_TITLE}}', '🏆 All-Time Event Points Leaderboard 🏆')
     html = html.replace('{{LIFETIME_ROWS}}', lifetime_rows)
     html = html.replace('{{BIGSPENDER_ROWS}}', big_spender_rows)
     
