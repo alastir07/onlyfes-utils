@@ -1000,9 +1000,18 @@ async def process_competition_points(
     # For simplicity, we'll process them as a list of transactions.
     
     targets = []
-    if first: targets.append({'rsn': first.strip(), 'points': points_map['1st'], 'rank': '1st Place'})
-    if second: targets.append({'rsn': second.strip(), 'points': points_map['2nd'], 'rank': '2nd Place'})
-    if third: targets.append({'rsn': third.strip(), 'points': points_map['3rd'], 'rank': '3rd Place'})
+    if first:
+        first_list = [r.strip() for r in first.split(',') if r.strip()]
+        for f in first_list:
+            targets.append({'rsn': f, 'points': points_map['1st'], 'rank': '1st Place'})
+    if second:
+        second_list = [r.strip() for r in second.split(',') if r.strip()]
+        for s in second_list:
+            targets.append({'rsn': s, 'points': points_map['2nd'], 'rank': '2nd Place'})
+    if third:
+        third_list = [r.strip() for r in third.split(',') if r.strip()]
+        for t in third_list:
+            targets.append({'rsn': t, 'points': points_map['3rd'], 'rank': '3rd Place'})
     
     if participants:
         part_list = [p.strip() for p in participants.split(',') if p.strip()]
@@ -1071,9 +1080,9 @@ async def process_competition_points(
 
 @client.tree.command(name="addpointsbotm", description="Add points for Boss of the Month.")
 @app_commands.describe(
-    first="RSN of 1st place (12 pts)",
-    second="RSN of 2nd place (7 pts)",
-    third="RSN of 3rd place (5 pts)",
+    first="Comma-separated list of 1st place RSNs (12 pts each)",
+    second="Comma-separated list of 2nd place RSNs (7 pts each)",
+    third="Comma-separated list of 3rd place RSNs (5 pts each)",
     participants="Comma-separated list of other participants (3 pts each)",
     publish="True to post publicly"
 )
@@ -1085,9 +1094,9 @@ async def add_points_botm(interaction: discord.Interaction, first: str, second: 
 
 @client.tree.command(name="addpointssotm", description="Add points for Skill of the Month.")
 @app_commands.describe(
-    first="RSN of 1st place (12 pts)",
-    second="RSN of 2nd place (7 pts)",
-    third="RSN of 3rd place (5 pts)",
+    first="Comma-separated list of 1st place RSNs (12 pts each)",
+    second="Comma-separated list of 2nd place RSNs (7 pts each)",
+    third="Comma-separated list of 3rd place RSNs (5 pts each)",
     participants="Comma-separated list of other participants (3 pts each)",
     publish="True to post publicly"
 )
@@ -1099,9 +1108,9 @@ async def add_points_sotm(interaction: discord.Interaction, first: str, second: 
 
 @client.tree.command(name="addpointsbigbooty", description="Add points for Big Booty (Clue of the Month).")
 @app_commands.describe(
-    first="RSN of 1st place (20 pts)",
-    second="RSN of 2nd place (15 pts)",
-    third="RSN of 3rd place (10 pts)",
+    first="Comma-separated list of 1st place RSNs (20 pts each)",
+    second="Comma-separated list of 2nd place RSNs (15 pts each)",
+    third="Comma-separated list of 3rd place RSNs (10 pts each)",
     participants="Comma-separated list of other participants (5 pts each)",
     publish="True to post publicly"
 )
