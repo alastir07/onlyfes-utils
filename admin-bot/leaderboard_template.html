@@ -312,8 +312,10 @@
         });
       }
 
-      // Initialize with rank sort
-      sortTable(0);
+      // Table is already sorted by rank ascending (1, 2, 3...) from the server
+      // Just set the visual indicator
+      const headers = document.querySelectorAll('th');
+      headers[0].classList.add('sort-asc');
     </script>
   </body>
 </html>
