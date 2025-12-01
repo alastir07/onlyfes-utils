@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OnlyFEs Event Points Leaderboard</title>
+    <style>
+      @font-face {
+        font-family: "RuneScape";
+        src: url("runescape_bold.ttf") format("truetype");
+        font-weight: normal;
+        font-style: normal;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "RuneScape", "Courier New", monospace;
+        background: #000;
+        color: #000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+        position: relative;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 910px;
+        height: 100%;
+        background: url("bg2.jpg") repeat-y center;
+        z-index: -1;
+      }
+
+      .scroll-container {
+        width: 100%;
+        max-width: 600px;
+        position: relative;
+      }
+
+      .scroll-top {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      .scroll-middle {
+        width: 100%;
+        background: url("scroll_middle.gif") repeat-y;
+        background-size: 100% auto;
+        padding: 20px 40px;
+      }
+
+      .scroll-bottom {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      h1 {
+        text-align: center;
+        font-size: 24px;
+        margin-bottom: 5px;
+        color: #000;
+        text-shadow: 1px 1px 0px rgba(255, 255, 255, 0.3);
+      }
+
+      .last-updated {
+        text-align: center;
+        font-size: 12px;
+        margin-bottom: 15px;
+        color: #333;
+      }
+
+      .search-box {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 15px;
+        border: 2px solid #8b4513;
+        background: #f5deb3;
+        font-family: "RuneScape", "Courier New", monospace;
+        font-size: 14px;
+        color: #000;
+      }
+
+      .search-box:focus {
+        outline: none;
+        border-color: #654321;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: rgba(245, 222, 179, 0.9);
+      }
+
+      thead {
+        background: rgba(139, 69, 19, 0.3);
+      }
+
+      th {
+        padding: 10px;
+        text-align: left;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+        border-bottom: 2px solid #8b4513;
+      }
+
+      th:hover {
+        background: rgba(139, 69, 19, 0.5);
+      }
+
+      th::after {
+        content: " ⇅";
+        opacity: 0.3;
+      }
+
+      th.sort-asc::after {
+        content: " ↑";
+        opacity: 1;
+      }
+
+      th.sort-desc::after {
+        content: " ↓";
+        opacity: 1;
+      }
+
+      td {
+        padding: 8px 10px;
+        font-size: 13px;
+        border-bottom: 1px solid rgba(139, 69, 19, 0.2);
+      }
+
+      tr:nth-child(even) {
+        background: rgba(222, 184, 135, 0.3);
+      }
+
+      tr:hover {
+        background: rgba(255, 215, 0, 0.2);
+      }
+
+      .rank-cell {
+        font-weight: bold;
+        text-align: center;
+        width: 60px;
+      }
+
+      .name-cell {
+        font-weight: bold;
+      }
+
+      .ep-cell {
+        text-align: right;
+        font-weight: bold;
+        width: 120px;
+      }
+
+      .no-results {
+        text-align: center;
+        padding: 20px;
+        font-size: 14px;
+        color: #666;
+      }
+
+      @media (max-width: 768px) {
+        .scroll-middle {
+          padding: 15px 20px;
+        }
+
+        h1 {
+          font-size: 20px;
+        }
+
+        th,
+        td {
+          font-size: 12px;
+          padding: 6px 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="scroll-container">
+      <img src="scroll_top.gif" alt="Scroll Top" class="scroll-top" />
+
+      <div class="scroll-middle">
+        <h1>⚔️ OnlyFEs Event Points Leaderboard ⚔️</h1>
+        <div class="last-updated">Last Updated: {{LAST_UPDATED}}</div>
+
+        <input
+          type="text"
+          class="search-box"
+          id="searchBox"
+          placeholder="Search by RSN..."
+        />
+
+        <table id="leaderboardTable">
+          <thead>
+            <tr>
+              <th class="rank-cell" onclick="sortTable(0)">Rank</th>
+              <th class="name-cell" onclick="sortTable(1)">Name</th>
+              <th class="ep-cell" onclick="sortTable(2)">Event Points</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            {{LEADERBOARD_ROWS}}
+          </tbody>
+        </table>
+      </div>
+
+      <img src="scroll_bottom.gif" alt="Scroll Bottom" class="scroll-bottom" />
+    </div>
+
+    <script>
+      // Search functionality
+      const searchBox = document.getElementById("searchBox");
+      const tableBody = document.getElementById("tableBody");
+      const allRows = Array.from(tableBody.getElementsByTagName("tr"));
+
+      searchBox.addEventListener("input", function () {
+        const searchTerm = this.value.toLowerCase();
+
+        allRows.forEach((row) => {
+          const name = row.cells[1].textContent.toLowerCase();
+          if (name.includes(searchTerm)) {
+            row.style.display = "";
+          } else {
+            row.style.display = "none";
+          }
+        });
+
+        // Show "no results" message if needed
+        const visibleRows = allRows.filter(
+          (row) => row.style.display !== "none"
+        );
+        if (visibleRows.length === 0 && searchTerm !== "") {
+          if (!document.getElementById("noResults")) {
+            const noResults = document.createElement("tr");
+            noResults.id = "noResults";
+            noResults.innerHTML =
+              '<td colspan="3" class="no-results">No members found matching "' +
+              searchTerm +
+              '"</td>';
+            tableBody.appendChild(noResults);
+          }
+        } else {
+          const noResults = document.getElementById("noResults");
+          if (noResults) {
+            noResults.remove();
+          }
+        }
+      });
+
+      // Sort functionality
+      let currentSort = { column: 0, direction: "asc" };
+
+      function sortTable(columnIndex) {
+        const table = document.getElementById("leaderboardTable");
+        const tbody = table.querySelector("tbody");
+        const rows = Array.from(tbody.querySelectorAll("tr:not(#noResults)"));
+
+        // Determine sort direction
+        if (currentSort.column === columnIndex) {
+          currentSort.direction =
+            currentSort.direction === "asc" ? "desc" : "asc";
+        } else {
+          currentSort.column = columnIndex;
+          currentSort.direction = "asc";
+        }
+
+        // Sort rows
+        rows.sort((a, b) => {
+          let aVal = a.cells[columnIndex].textContent;
+          let bVal = b.cells[columnIndex].textContent;
+
+          // Convert to numbers for rank and EP columns
+          if (columnIndex === 0 || columnIndex === 2) {
+            aVal = parseInt(aVal.replace(/,/g, ""));
+            bVal = parseInt(bVal.replace(/,/g, ""));
+          }
+
+          if (currentSort.direction === "asc") {
+            return aVal > bVal ? 1 : -1;
+          } else {
+            return aVal < bVal ? 1 : -1;
+          }
+        });
+
+        // Update table
+        rows.forEach((row) => tbody.appendChild(row));
+
+        // Update header indicators
+        const headers = table.querySelectorAll("th");
+        headers.forEach((header, index) => {
+          header.classList.remove("sort-asc", "sort-desc");
+          if (index === columnIndex) {
+            header.classList.add(
+              currentSort.direction === "asc" ? "sort-asc" : "sort-desc"
+            );
+          }
+        });
+      }
+
+      // Initialize with rank sort
+      sortTable(0);
+    </script>
+  </body>
+</html>
