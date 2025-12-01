@@ -263,6 +263,49 @@
           font-size: 14px;
         }
       }
+
+      .tooltip {
+        position: relative;
+        display: inline-block;
+        cursor: help;
+        color: #8b4513;
+        font-weight: bold;
+      }
+
+      .tooltip .tooltiptext {
+        visibility: hidden;
+        width: 280px;
+        background-color: rgba(139, 69, 19, 0.95);
+        color: #fff;
+        text-align: center;
+        border-radius: 6px;
+        padding: 8px;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        margin-left: -140px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        font-size: 14px;
+        line-height: 1.4;
+      }
+
+      .tooltip .tooltiptext::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: rgba(139, 69, 19, 0.95) transparent transparent transparent;
+      }
+
+      .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+      }
     </style>
   </head>
   <body>
@@ -284,7 +327,7 @@
         <!-- Lifetime Tab -->
         <div id="lifetime-tab" class="tab-content active">
           <div class="info-text">
-            This leaderboard shows all-time Event Points earned by members,
+            This leaderboard shows all-time<span class="tooltip">*<span class="tooltiptext">Event Points earned and spent before 15/11/2025 may not be captured</span></span> Event Points earned by members,
             without deductions.<br />
             To check your currently spendable EP, use
             <strong>/memberinfo &lt;your rsn&gt;</strong> in Discord!
