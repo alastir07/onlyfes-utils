@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OnlyFEs Event Points Leaderboard</title>
+    <title>⚔️ OnlyFEs All-Time Event Points Leaderboard ⚔️</title>
     <style>
       @font-face {
         font-family: "RuneScape";
@@ -70,16 +70,62 @@
       h1 {
         text-align: center;
         font-size: 40px;
-        margin-bottom: 5px;
+        margin-bottom: 10px;
         color: #000;
         text-shadow: 1px 1px 0px rgba(255, 255, 255, 0.3);
       }
 
-      .last-updated {
+      .info-text {
         text-align: center;
-        font-size: 18px;
+        font-size: 16px;
         margin-bottom: 15px;
         color: #333;
+        line-height: 1.5;
+      }
+
+      .info-text a {
+        color: #8b4513;
+        text-decoration: underline;
+      }
+
+      .info-text a:hover {
+        color: #654321;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        justify-content: center;
+      }
+
+      .tab-button {
+        padding: 10px 20px;
+        border: 2px solid #8b4513;
+        background: rgba(245, 222, 179, 0.7);
+        font-family: "RuneScape", "Courier New", monospace;
+        font-size: 18px;
+        color: #000;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .tab-button:hover {
+        background: rgba(222, 184, 135, 0.8);
+      }
+
+      .tab-button.active {
+        background: rgba(139, 69, 19, 0.5);
+        font-weight: bold;
+        border-color: #654321;
+      }
+
+      .tab-content {
+        display: none;
+      }
+
+      .tab-content.active {
+        display: block;
       }
 
       .search-box {
@@ -180,19 +226,41 @@
         color: #666;
       }
 
+      .footer {
+        text-align: center;
+        font-size: 16px;
+        margin-top: 15px;
+        padding-top: 10px;
+        border-top: 2px solid rgba(139, 69, 19, 0.3);
+        color: #333;
+      }
+
       @media (max-width: 768px) {
         .scroll-middle {
           padding: 15px 20px;
         }
 
         h1 {
-          font-size: 20px;
+          font-size: 24px;
+        }
+
+        .tab-button {
+          font-size: 14px;
+          padding: 8px 15px;
+        }
+
+        .info-text {
+          font-size: 14px;
         }
 
         th,
         td {
           font-size: 12px;
           padding: 6px 8px;
+        }
+
+        .footer {
+          font-size: 14px;
         }
       }
     </style>
@@ -202,26 +270,49 @@
       <img src="scroll_top.gif" alt="Scroll Top" class="scroll-top" />
 
       <div class="scroll-middle">
-        <h1>⚔️ OnlyFEs Event Points Leaderboard ⚔️</h1>
-        <div class="last-updated">Last Updated: 2025-12-01 15:36:31 UTC</div>
+        <h1 id="pageTitle">⚔️ OnlyFEs All-Time Event Points Leaderboard ⚔️</h1>
 
-        <input
-          type="text"
-          class="search-box"
-          id="searchBox"
-          placeholder="Search by RSN..."
-        />
+        <div class="tabs">
+          <button class="tab-button active" onclick="switchTab('lifetime')">
+            Lifetime
+          </button>
+          <button class="tab-button" onclick="switchTab('bigspender')">
+            Big Spender
+          </button>
+        </div>
 
-        <table id="leaderboardTable">
-          <thead>
-            <tr>
-              <th class="rank-cell" onclick="sortTable(0)">Rank</th>
-              <th class="name-cell" onclick="sortTable(1)">Name</th>
-              <th class="ep-cell" onclick="sortTable(2)">Event Points</th>
-            </tr>
-          </thead>
-          <tbody id="tableBody">
-                                <tr>
+        <!-- Lifetime Tab -->
+        <div id="lifetime-tab" class="tab-content active">
+          <div class="info-text">
+            This leaderboard shows all-time Event Points earned by members,
+            without deductions.<br />
+            To check your currently spendable EP, use
+            <strong>/memberinfo &lt;your rsn&gt;</strong> in Discord!
+          </div>
+
+          <input
+            type="text"
+            class="search-box"
+            id="searchBoxLifetime"
+            placeholder="Search by RSN..."
+          />
+
+          <table id="lifetimeTable">
+            <thead>
+              <tr>
+                <th class="rank-cell" onclick="sortTable('lifetime', 0)">
+                  Rank
+                </th>
+                <th class="name-cell" onclick="sortTable('lifetime', 1)">
+                  Name
+                </th>
+                <th class="ep-cell" onclick="sortTable('lifetime', 2)">
+                  Lifetime EP
+                </th>
+              </tr>
+            </thead>
+            <tbody id="lifetimeBody">
+                                  <tr>
                         <td class="rank-cell">1</td>
                         <td class="name-cell"><img src="clan-rank-icons/23 - Merchant.png" alt="Merchant" class="rank-icon">DodgersBRUV</td>
                         <td class="ep-cell">548</td>
@@ -234,7 +325,7 @@
                     <tr>
                         <td class="rank-cell">3</td>
                         <td class="name-cell"><img src="clan-rank-icons/31 - Owner.png" alt="Owner" class="rank-icon">CorvidsNest</td>
-                        <td class="ep-cell">405</td>
+                        <td class="ep-cell">434</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">4</td>
@@ -264,12 +355,12 @@
                     <tr>
                         <td class="rank-cell">9</td>
                         <td class="name-cell"><img src="clan-rank-icons/18 - TzKal.png" alt="TzKal" class="rank-icon">Bradge</td>
-                        <td class="ep-cell">231</td>
+                        <td class="ep-cell">241</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">10</td>
                         <td class="name-cell"><img src="clan-rank-icons/28 - General.png" alt="General" class="rank-icon">Xmassy Eve</td>
-                        <td class="ep-cell">224</td>
+                        <td class="ep-cell">234</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">11</td>
@@ -278,13 +369,13 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">12</td>
-                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">Bayek of RS</td>
-                        <td class="ep-cell">209</td>
+                        <td class="name-cell"><img src="clan-rank-icons/28 - General.png" alt="General" class="rank-icon">Bristle Pig</td>
+                        <td class="ep-cell">217</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">13</td>
-                        <td class="name-cell"><img src="clan-rank-icons/28 - General.png" alt="General" class="rank-icon">Bristle Pig</td>
-                        <td class="ep-cell">207</td>
+                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">Bayek of RS</td>
+                        <td class="ep-cell">209</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">14</td>
@@ -328,12 +419,12 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">22</td>
-                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">SplashOnRat</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">MaybeMax</td>
                         <td class="ep-cell">165</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">23</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">MaybeMax</td>
+                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">SplashOnRat</td>
                         <td class="ep-cell">165</td>
                     </tr>
                     <tr>
@@ -343,32 +434,32 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">25</td>
-                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">MaKows</td>
-                        <td class="ep-cell">151</td>
+                        <td class="name-cell"><img src="clan-rank-icons/29 - Colonel.png" alt="Colonel" class="rank-icon">Whyte Tree</td>
+                        <td class="ep-cell">159</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">26</td>
+                        <td class="name-cell"><img src="clan-rank-icons/30 - Deputy owner.png" alt="Deputy Owner" class="rank-icon">Zaoirse</td>
+                        <td class="ep-cell">159</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">27</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">BD Kraggor</td>
                         <td class="ep-cell">151</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">27</td>
+                        <td class="rank-cell">28</td>
+                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">MaKows</td>
+                        <td class="ep-cell">151</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">29</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Lost Boobs</td>
                         <td class="ep-cell">150</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">28</td>
-                        <td class="name-cell"><img src="clan-rank-icons/29 - Colonel.png" alt="Colonel" class="rank-icon">Whyte Tree</td>
-                        <td class="ep-cell">149</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">29</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Tinelf</td>
-                        <td class="ep-cell">149</td>
-                    </tr>
-                    <tr>
                         <td class="rank-cell">30</td>
-                        <td class="name-cell"><img src="clan-rank-icons/30 - Deputy owner.png" alt="Deputy Owner" class="rank-icon">Zaoirse</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Tinelf</td>
                         <td class="ep-cell">149</td>
                     </tr>
                     <tr>
@@ -383,12 +474,12 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">33</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Peachn Cream</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">KnotMatt</td>
                         <td class="ep-cell">136</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">34</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">KnotMatt</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Peachn Cream</td>
                         <td class="ep-cell">136</td>
                     </tr>
                     <tr>
@@ -418,52 +509,52 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">40</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Smunch</td>
-                        <td class="ep-cell">127</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">41</td>
                         <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">IronAnon1606</td>
                         <td class="ep-cell">127</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">42</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Nico Iron</td>
-                        <td class="ep-cell">125</td>
+                        <td class="rank-cell">41</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Smunch</td>
+                        <td class="ep-cell">127</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">43</td>
+                        <td class="rank-cell">42</td>
                         <td class="name-cell"><img src="clan-rank-icons/28 - General.png" alt="General" class="rank-icon">El Dad Bod</td>
                         <td class="ep-cell">125</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">44</td>
-                        <td class="name-cell"><img src="clan-rank-icons/29 - Colonel.png" alt="Colonel" class="rank-icon">Peets Eggnog</td>
-                        <td class="ep-cell">121</td>
+                        <td class="rank-cell">43</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Nico Iron</td>
+                        <td class="ep-cell">125</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">45</td>
+                        <td class="rank-cell">44</td>
                         <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">Boataku</td>
                         <td class="ep-cell">121</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">46</td>
-                        <td class="name-cell"><img src="clan-rank-icons/21 - Gamer.png" alt="Gamer" class="rank-icon">Jern Bear</td>
-                        <td class="ep-cell">120</td>
+                        <td class="rank-cell">45</td>
+                        <td class="name-cell"><img src="clan-rank-icons/29 - Colonel.png" alt="Colonel" class="rank-icon">Peets Eggnog</td>
+                        <td class="ep-cell">121</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">47</td>
+                        <td class="rank-cell">46</td>
                         <td class="name-cell"><img src="clan-rank-icons/18 - TzKal.png" alt="TzKal" class="rank-icon">Greedent</td>
                         <td class="ep-cell">120</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">47</td>
+                        <td class="name-cell"><img src="clan-rank-icons/21 - Gamer.png" alt="Gamer" class="rank-icon">Jern Bear</td>
+                        <td class="ep-cell">120</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">48</td>
-                        <td class="name-cell"><img src="clan-rank-icons/21 - Gamer.png" alt="Gamer" class="rank-icon">Mrs Sawij</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Adoluk</td>
                         <td class="ep-cell">114</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">49</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Adoluk</td>
+                        <td class="name-cell"><img src="clan-rank-icons/21 - Gamer.png" alt="Gamer" class="rank-icon">Mrs Sawij</td>
                         <td class="ep-cell">114</td>
                     </tr>
                     <tr>
@@ -483,22 +574,22 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">53</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Spoz btw</td>
-                        <td class="ep-cell">107</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">54</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">C-ploeg</td>
                         <td class="ep-cell">107</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">54</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Spoz btw</td>
+                        <td class="ep-cell">107</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">55</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IExhaustedI</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Fe Milk</td>
                         <td class="ep-cell">103</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">56</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Fe Milk</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IExhaustedI</td>
                         <td class="ep-cell">103</td>
                     </tr>
                     <tr>
@@ -558,12 +649,12 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">68</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Iron Sorcom</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">faithi2</td>
                         <td class="ep-cell">82</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">69</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">faithi2</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Iron Sorcom</td>
                         <td class="ep-cell">82</td>
                     </tr>
                     <tr>
@@ -583,83 +674,83 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">73</td>
+                        <td class="name-cell"><img src="clan-rank-icons/25 - Skiller.png" alt="Skiller" class="rank-icon">HNO 3</td>
+                        <td class="ep-cell">78</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">74</td>
+                        <td class="name-cell"><img src="clan-rank-icons/25 - Skiller.png" alt="Skiller" class="rank-icon">John Muskrat</td>
+                        <td class="ep-cell">77</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">75</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Iron Toms</td>
                         <td class="ep-cell">74</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">74</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Fe Idne</td>
-                        <td class="ep-cell">73</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">75</td>
+                        <td class="rank-cell">76</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Bello Sailor</td>
                         <td class="ep-cell">73</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">76</td>
+                        <td class="rank-cell">77</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Fe Idne</td>
+                        <td class="ep-cell">73</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">78</td>
                         <td class="name-cell"><img src="clan-rank-icons/18 - TzKal.png" alt="TzKal" class="rank-icon">BTW JJ</td>
                         <td class="ep-cell">72</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">77</td>
+                        <td class="rank-cell">79</td>
                         <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">Miss Kora</td>
                         <td class="ep-cell">72</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">78</td>
+                        <td class="rank-cell">80</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">NaCl Idiot</td>
+                        <td class="ep-cell">72</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">81</td>
                         <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">15W40</td>
                         <td class="ep-cell">71</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">79</td>
+                        <td class="rank-cell">82</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Friggof</td>
                         <td class="ep-cell">71</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">80</td>
+                        <td class="rank-cell">83</td>
                         <td class="name-cell"><img src="clan-rank-icons/18 - TzKal.png" alt="TzKal" class="rank-icon">Tom Sailing</td>
                         <td class="ep-cell">71</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">81</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Leet</td>
-                        <td class="ep-cell">70</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">82</td>
+                        <td class="rank-cell">84</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">BeatinItSolo</td>
                         <td class="ep-cell">70</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">83</td>
+                        <td class="rank-cell">85</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Leet</td>
+                        <td class="ep-cell">70</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">86</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Noticer</td>
                         <td class="ep-cell">69</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">84</td>
-                        <td class="name-cell"><img src="clan-rank-icons/25 - Skiller.png" alt="Skiller" class="rank-icon">HNO 3</td>
-                        <td class="ep-cell">68</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">85</td>
+                        <td class="rank-cell">87</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Smulbox</td>
                         <td class="ep-cell">68</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">86</td>
+                        <td class="rank-cell">88</td>
                         <td class="name-cell"><img src="clan-rank-icons/18 - TzKal.png" alt="TzKal" class="rank-icon">Zero Saber</td>
                         <td class="ep-cell">67</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">87</td>
-                        <td class="name-cell"><img src="clan-rank-icons/25 - Skiller.png" alt="Skiller" class="rank-icon">John Muskrat</td>
-                        <td class="ep-cell">67</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">88</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">TzKal-Dan</td>
-                        <td class="ep-cell">66</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">89</td>
@@ -668,138 +759,138 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">90</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">TzKal-Dan</td>
+                        <td class="ep-cell">66</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">91</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">w1ntersfin</td>
                         <td class="ep-cell">65</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">91</td>
+                        <td class="rank-cell">92</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Keeltyfus</td>
                         <td class="ep-cell">64</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">92</td>
+                        <td class="rank-cell">93</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Santa Logged</td>
+                        <td class="ep-cell">64</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">94</td>
                         <td class="name-cell"><img src="clan-rank-icons/23 - Merchant.png" alt="Merchant" class="rank-icon">Iron4Once</td>
                         <td class="ep-cell">62</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">93</td>
+                        <td class="rank-cell">95</td>
                         <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">Mike Saylor</td>
                         <td class="ep-cell">61</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">94</td>
+                        <td class="rank-cell">96</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">IronQunii</td>
                         <td class="ep-cell">60</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">95</td>
+                        <td class="rank-cell">97</td>
                         <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Faerdhi</td>
                         <td class="ep-cell">59</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">96</td>
-                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">Gragitha</td>
-                        <td class="ep-cell">58</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">97</td>
+                        <td class="rank-cell">98</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Bitcoim</td>
                         <td class="ep-cell">58</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">98</td>
+                        <td class="rank-cell">99</td>
+                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">Gragitha</td>
+                        <td class="ep-cell">58</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">100</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Maystine</td>
                         <td class="ep-cell">57</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">99</td>
+                        <td class="rank-cell">101</td>
                         <td class="name-cell"><img src="clan-rank-icons/20 - Adventurer.png" alt="Adventurer" class="rank-icon">ChaozAngel7</td>
                         <td class="ep-cell">55</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">100</td>
+                        <td class="rank-cell">102</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">IM MiniMars</td>
+                        <td class="ep-cell">55</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">103</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Dig For FE</td>
                         <td class="ep-cell">54</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">101</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Santa Logged</td>
-                        <td class="ep-cell">54</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">102</td>
+                        <td class="rank-cell">104</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Needletick</td>
                         <td class="ep-cell">53</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">103</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">UltSurrender</td>
-                        <td class="ep-cell">52</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">104</td>
+                        <td class="rank-cell">105</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Clipzie</td>
                         <td class="ep-cell">52</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">105</td>
-                        <td class="name-cell"><img src="clan-rank-icons/18 - TzKal.png" alt="TzKal" class="rank-icon">Yetzne</td>
-                        <td class="ep-cell">51</td>
+                        <td class="rank-cell">106</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">UltSurrender</td>
+                        <td class="ep-cell">52</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">106</td>
+                        <td class="rank-cell">107</td>
                         <td class="name-cell"><img src="clan-rank-icons/24 - Beast.png" alt="Beast" class="rank-icon">Eisen Berg</td>
                         <td class="ep-cell">51</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">107</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">ThugWorkout</td>
-                        <td class="ep-cell">47</td>
+                        <td class="rank-cell">108</td>
+                        <td class="name-cell"><img src="clan-rank-icons/18 - TzKal.png" alt="TzKal" class="rank-icon">Yetzne</td>
+                        <td class="ep-cell">51</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">108</td>
+                        <td class="rank-cell">109</td>
                         <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Razzberrry</td>
                         <td class="ep-cell">47</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">109</td>
+                        <td class="rank-cell">110</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">ThugWorkout</td>
+                        <td class="ep-cell">47</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">111</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">301 redirect</td>
                         <td class="ep-cell">46</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">110</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Crabimov</td>
-                        <td class="ep-cell">46</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">111</td>
+                        <td class="rank-cell">112</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Bogsand</td>
                         <td class="ep-cell">46</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">112</td>
-                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Nataliano_IM</td>
-                        <td class="ep-cell">46</td>
-                    </tr>
-                    <tr>
                         <td class="rank-cell">113</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Iron L Chaim</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Crabimov</td>
                         <td class="ep-cell">46</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">114</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Skint Stick</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Iron L Chaim</td>
                         <td class="ep-cell">46</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">115</td>
-                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">IM MiniMars</td>
-                        <td class="ep-cell">45</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Skint Stick</td>
+                        <td class="ep-cell">46</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">116</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">ItsMyIronman</td>
-                        <td class="ep-cell">44</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Nataliano_IM</td>
+                        <td class="ep-cell">46</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">117</td>
@@ -808,8 +899,8 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">118</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Moldead</td>
-                        <td class="ep-cell">43</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">ItsMyIronman</td>
+                        <td class="ep-cell">44</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">119</td>
@@ -818,13 +909,13 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">120</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Iohron</td>
-                        <td class="ep-cell">42</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Moldead</td>
+                        <td class="ep-cell">43</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">121</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Phishermann</td>
-                        <td class="ep-cell">41</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Iohron</td>
+                        <td class="ep-cell">42</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">122</td>
@@ -833,47 +924,47 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">123</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Phishermann</td>
+                        <td class="ep-cell">41</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">124</td>
                         <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Phyeron</td>
                         <td class="ep-cell">40</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">124</td>
+                        <td class="rank-cell">125</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">they need me</td>
                         <td class="ep-cell">40</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">125</td>
+                        <td class="rank-cell">126</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">1TickNoose</td>
                         <td class="ep-cell">39</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">126</td>
+                        <td class="rank-cell">127</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Skaidi</td>
                         <td class="ep-cell">38</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">127</td>
+                        <td class="rank-cell">128</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Iron Outlaw</td>
                         <td class="ep-cell">37</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">128</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Edt1</td>
-                        <td class="ep-cell">36</td>
-                    </tr>
-                    <tr>
                         <td class="rank-cell">129</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Iron tribore</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">BD Shmombo</td>
                         <td class="ep-cell">36</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">130</td>
-                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">Mr Slappy</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Edt1</td>
                         <td class="ep-cell">36</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">131</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">BD Shmombo</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Iron tribore</td>
                         <td class="ep-cell">36</td>
                     </tr>
                     <tr>
@@ -883,8 +974,8 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">133</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">GIRhiven</td>
-                        <td class="ep-cell">35</td>
+                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">Mr Slappy</td>
+                        <td class="ep-cell">36</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">134</td>
@@ -893,18 +984,18 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">135</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">GIRhiven</td>
+                        <td class="ep-cell">35</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">136</td>
                         <td class="name-cell"><img src="clan-rank-icons/24 - Beast.png" alt="Beast" class="rank-icon">G Kuriso</td>
                         <td class="ep-cell">34</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">136</td>
+                        <td class="rank-cell">137</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Thus Spake</td>
                         <td class="ep-cell">34</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">137</td>
-                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Pod Racer</td>
-                        <td class="ep-cell">33</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">138</td>
@@ -913,12 +1004,12 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">139</td>
-                        <td class="name-cell"><img src="clan-rank-icons/23 - Merchant.png" alt="Merchant" class="rank-icon">Dancing Grid</td>
-                        <td class="ep-cell">32</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Pod Racer</td>
+                        <td class="ep-cell">33</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">140</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Kristov X</td>
+                        <td class="name-cell"><img src="clan-rank-icons/23 - Merchant.png" alt="Merchant" class="rank-icon">Dancing Grid</td>
                         <td class="ep-cell">32</td>
                     </tr>
                     <tr>
@@ -928,8 +1019,8 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">142</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Monksif</td>
-                        <td class="ep-cell">31</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Kristov X</td>
+                        <td class="ep-cell">32</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">143</td>
@@ -938,27 +1029,27 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">144</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Monksif</td>
+                        <td class="ep-cell">31</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">145</td>
                         <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">A be</td>
                         <td class="ep-cell">30</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">145</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Dherax</td>
-                        <td class="ep-cell">30</td>
-                    </tr>
-                    <tr>
                         <td class="rank-cell">146</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">disc gbln93</td>
-                        <td class="ep-cell">30</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">147</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">BigMoons127</td>
                         <td class="ep-cell">30</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">147</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">disc gbln93</td>
+                        <td class="ep-cell">30</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">148</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">NaCl Idiot</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Dherax</td>
                         <td class="ep-cell">30</td>
                     </tr>
                     <tr>
@@ -973,7 +1064,7 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">151</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Rescue Juan</td>
+                        <td class="name-cell"><img src="clan-rank-icons/21 - Gamer.png" alt="Gamer" class="rank-icon">OSFeMale</td>
                         <td class="ep-cell">27</td>
                     </tr>
                     <tr>
@@ -983,7 +1074,7 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">153</td>
-                        <td class="name-cell"><img src="clan-rank-icons/21 - Gamer.png" alt="Gamer" class="rank-icon">OSFeMale</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Rescue Juan</td>
                         <td class="ep-cell">27</td>
                     </tr>
                     <tr>
@@ -993,22 +1084,22 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">155</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">paciron</td>
-                        <td class="ep-cell">26</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">156</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">FE bby pleez</td>
                         <td class="ep-cell">26</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">156</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">paciron</td>
+                        <td class="ep-cell">26</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">157</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Ludshake</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">kamerat</td>
                         <td class="ep-cell">25</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">158</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Sgt Nikolai</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Ludshake</td>
                         <td class="ep-cell">25</td>
                     </tr>
                     <tr>
@@ -1018,17 +1109,17 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">160</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">kamerat</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Sgt Nikolai</td>
                         <td class="ep-cell">25</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">161</td>
-                        <td class="name-cell">GIM Raptoid</td>
-                        <td class="ep-cell">24</td>
+                        <td class="name-cell"><img src="clan-rank-icons/24 - Beast.png" alt="Beast" class="rank-icon">Iron Strifey</td>
+                        <td class="ep-cell">25</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">162</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Me pie</td>
+                        <td class="name-cell">GIM Raptoid</td>
                         <td class="ep-cell">24</td>
                     </tr>
                     <tr>
@@ -1038,62 +1129,62 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">164</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Pourkay</td>
-                        <td class="ep-cell">23</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Me pie</td>
+                        <td class="ep-cell">24</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">165</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">TeaSee</td>
-                        <td class="ep-cell">23</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">166</td>
                         <td class="name-cell"><img src="clan-rank-icons/25 - Skiller.png" alt="Skiller" class="rank-icon">Iron Tzariel</td>
                         <td class="ep-cell">23</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">166</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Pourkay</td>
+                        <td class="ep-cell">23</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">167</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">TeaSee</td>
+                        <td class="ep-cell">23</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">168</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">AyDHD</td>
                         <td class="ep-cell">22</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">168</td>
+                        <td class="rank-cell">169</td>
                         <td class="name-cell"><img src="clan-rank-icons/27 - Captain.png" alt="Captain" class="rank-icon">Grey Bags</td>
                         <td class="ep-cell">22</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">169</td>
+                        <td class="rank-cell">170</td>
                         <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Lico Doss</td>
                         <td class="ep-cell">22</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">170</td>
+                        <td class="rank-cell">171</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Maxed Lonely</td>
                         <td class="ep-cell">22</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">171</td>
+                        <td class="rank-cell">172</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Why they say</td>
                         <td class="ep-cell">21</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">172</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">MonkePilot</td>
-                        <td class="ep-cell">20</td>
-                    </tr>
-                    <tr>
                         <td class="rank-cell">173</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Isshi</td>
+                        <td class="name-cell"><img src="clan-rank-icons/23 - Merchant.png" alt="Merchant" class="rank-icon">BigOinker</td>
                         <td class="ep-cell">20</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">174</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Iron Osi</td>
+                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">F1ask</td>
                         <td class="ep-cell">20</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">175</td>
-                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">F1ask</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Iron Osi</td>
                         <td class="ep-cell">20</td>
                     </tr>
                     <tr>
@@ -1103,73 +1194,73 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">177</td>
-                        <td class="name-cell"><img src="clan-rank-icons/23 - Merchant.png" alt="Merchant" class="rank-icon">BigOinker</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Isshi</td>
                         <td class="ep-cell">20</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">178</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">MonkePilot</td>
+                        <td class="ep-cell">20</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">179</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Angel Ke</td>
                         <td class="ep-cell">19</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">179</td>
+                        <td class="rank-cell">180</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Godson</td>
                         <td class="ep-cell">19</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">180</td>
+                        <td class="rank-cell">181</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron XPLimit</td>
                         <td class="ep-cell">19</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">181</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">FreshhPepp</td>
-                        <td class="ep-cell">18</td>
-                    </tr>
-                    <tr>
                         <td class="rank-cell">182</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">R7ptor</td>
-                        <td class="ep-cell">18</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">183</td>
                         <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">buua</td>
                         <td class="ep-cell">18</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">183</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">FreshhPepp</td>
+                        <td class="ep-cell">18</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">184</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IMToby1889</td>
-                        <td class="ep-cell">17</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">R7ptor</td>
+                        <td class="ep-cell">18</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">185</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Must Be Lim</td>
-                        <td class="ep-cell">17</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">186</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Lordfistquad</td>
-                        <td class="ep-cell">17</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">187</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Lost Baby</td>
-                        <td class="ep-cell">17</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">188</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Dice</td>
-                        <td class="ep-cell">17</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">189</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">I Feed Ducks</td>
                         <td class="ep-cell">17</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">186</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IMToby1889</td>
+                        <td class="ep-cell">17</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">187</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Dice</td>
+                        <td class="ep-cell">17</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">188</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Lordfistquad</td>
+                        <td class="ep-cell">17</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">189</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Lost Baby</td>
+                        <td class="ep-cell">17</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">190</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Magical Bald</td>
-                        <td class="ep-cell">16</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Must Be Lim</td>
+                        <td class="ep-cell">17</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">191</td>
@@ -1178,43 +1269,43 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">192</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">GlM Fox</td>
-                        <td class="ep-cell">15</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Magical Bald</td>
+                        <td class="ep-cell">16</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">193</td>
-                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">SpunkRifle</td>
-                        <td class="ep-cell">15</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">194</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Astarral</td>
                         <td class="ep-cell">15</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">194</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">GlM Fox</td>
+                        <td class="ep-cell">15</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">195</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Smrta xD</td>
-                        <td class="ep-cell">14</td>
+                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">SpunkRifle</td>
+                        <td class="ep-cell">15</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">196</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">RelicBv</td>
-                        <td class="ep-cell">14</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">197</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">BigDaniel21</td>
                         <td class="ep-cell">14</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">198</td>
+                        <td class="rank-cell">197</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Papps</td>
                         <td class="ep-cell">14</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">198</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">RelicBv</td>
+                        <td class="ep-cell">14</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">199</td>
-                        <td class="name-cell"><img src="clan-rank-icons/24 - Beast.png" alt="Beast" class="rank-icon">Iron Strifey</td>
-                        <td class="ep-cell">13</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Smrta xD</td>
+                        <td class="ep-cell">14</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">200</td>
@@ -1228,47 +1319,47 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">202</td>
-                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">TellUrNan</td>
-                        <td class="ep-cell">12</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">203</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">GoobyGangs</td>
-                        <td class="ep-cell">12</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">204</td>
                         <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">fletchy</td>
                         <td class="ep-cell">12</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">205</td>
+                        <td class="rank-cell">203</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Angelcage</td>
                         <td class="ep-cell">12</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">206</td>
+                        <td class="rank-cell">204</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">BennyIM</td>
                         <td class="ep-cell">12</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">207</td>
+                        <td class="rank-cell">205</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">CunhaIron</td>
                         <td class="ep-cell">12</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">208</td>
+                        <td class="rank-cell">206</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Fe Nibzscape</td>
                         <td class="ep-cell">12</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">209</td>
+                        <td class="rank-cell">207</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">GoobyGangs</td>
+                        <td class="ep-cell">12</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">208</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Koop Fe</td>
                         <td class="ep-cell">12</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">209</td>
+                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">TellUrNan</td>
+                        <td class="ep-cell">12</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">210</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Clart Kenk</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Action II</td>
                         <td class="ep-cell">11</td>
                     </tr>
                     <tr>
@@ -1278,37 +1369,37 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">212</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Action II</td>
-                        <td class="ep-cell">11</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">213</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Hermanita</td>
                         <td class="ep-cell">11</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">213</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Clart Kenk</td>
+                        <td class="ep-cell">11</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">214</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">GIM KingOfW</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">8oon</td>
                         <td class="ep-cell">10</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">215</td>
-                        <td class="name-cell"><img src="clan-rank-icons/24 - Beast.png" alt="Beast" class="rank-icon">October 11</td>
+                        <td class="name-cell"><img src="clan-rank-icons/25 - Skiller.png" alt="Skiller" class="rank-icon">CrunchBruv</td>
                         <td class="ep-cell">10</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">216</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">TomcosFE</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Esper Prime</td>
                         <td class="ep-cell">10</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">217</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Hardish</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">GIM KingOfW</td>
                         <td class="ep-cell">10</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">218</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">zodai</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Hardish</td>
                         <td class="ep-cell">10</td>
                     </tr>
                     <tr>
@@ -1318,32 +1409,32 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">220</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Zafaragax</td>
-                        <td class="ep-cell">10</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">221</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">8oon</td>
-                        <td class="ep-cell">10</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">222</td>
-                        <td class="name-cell"><img src="clan-rank-icons/25 - Skiller.png" alt="Skiller" class="rank-icon">CrunchBruv</td>
-                        <td class="ep-cell">10</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">223</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">RedDryGuy</td>
-                        <td class="ep-cell">10</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">224</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">MetalMorris</td>
                         <td class="ep-cell">10</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">221</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">RedDryGuy</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">222</td>
+                        <td class="name-cell"><img src="clan-rank-icons/24 - Beast.png" alt="Beast" class="rank-icon">October 11</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">223</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">TomcosFE</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">224</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">YWdill</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">225</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Esper Prime</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Zafaragax</td>
                         <td class="ep-cell">10</td>
                     </tr>
                     <tr>
@@ -1353,12 +1444,12 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">227</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">YWdill</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">zodai</td>
                         <td class="ep-cell">10</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">228</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Bayaz</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">BearlyIronic</td>
                         <td class="ep-cell">9</td>
                     </tr>
                     <tr>
@@ -1368,62 +1459,62 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">230</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IronyBroad</td>
-                        <td class="ep-cell">9</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">231</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">BearlyIronic</td>
-                        <td class="ep-cell">9</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">232</td>
-                        <td class="name-cell"><img src="clan-rank-icons/25 - Skiller.png" alt="Skiller" class="rank-icon">Nathan STG</td>
-                        <td class="ep-cell">9</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">233</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Drew7</td>
-                        <td class="ep-cell">9</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">234</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Papito Gabe</td>
-                        <td class="ep-cell">9</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">235</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">kinky gim</td>
-                        <td class="ep-cell">9</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">236</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">FaymisPaymis</td>
                         <td class="ep-cell">9</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">237</td>
+                        <td class="rank-cell">231</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">FORBIDD3N</td>
                         <td class="ep-cell">9</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">238</td>
+                        <td class="rank-cell">232</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Givr Budd</td>
                         <td class="ep-cell">9</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">239</td>
+                        <td class="rank-cell">233</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">ILola</td>
                         <td class="ep-cell">9</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">240</td>
+                        <td class="rank-cell">234</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Bayaz</td>
+                        <td class="ep-cell">9</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">235</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Drew7</td>
+                        <td class="ep-cell">9</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">236</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IronyBroad</td>
+                        <td class="ep-cell">9</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">237</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">kinky gim</td>
+                        <td class="ep-cell">9</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">238</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Luka LaMoon</td>
                         <td class="ep-cell">9</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">239</td>
+                        <td class="name-cell"><img src="clan-rank-icons/25 - Skiller.png" alt="Skiller" class="rank-icon">Nathan STG</td>
+                        <td class="ep-cell">9</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">240</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Papito Gabe</td>
+                        <td class="ep-cell">9</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">241</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Iron JuJuice</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Asavi</td>
                         <td class="ep-cell">8</td>
                     </tr>
                     <tr>
@@ -1433,27 +1524,27 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">243</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Marie 0_0</td>
-                        <td class="ep-cell">8</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">244</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">FishSashimi</td>
                         <td class="ep-cell">8</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">244</td>
+                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">HCIM Jord</td>
+                        <td class="ep-cell">8</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">245</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">panhandling</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Iron JuJuice</td>
                         <td class="ep-cell">8</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">246</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Asavi</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Marie 0_0</td>
                         <td class="ep-cell">8</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">247</td>
-                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">HCIM Jord</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">panhandling</td>
                         <td class="ep-cell">8</td>
                     </tr>
                     <tr>
@@ -1473,37 +1564,37 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">251</td>
-                        <td class="name-cell"><img src="clan-rank-icons/24 - Beast.png" alt="Beast" class="rank-icon">Goat Pusher</td>
-                        <td class="ep-cell">7</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">252</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Ing Mapache</td>
-                        <td class="ep-cell">7</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">253</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">fooby</td>
-                        <td class="ep-cell">7</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">254</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">salamitomy69</td>
-                        <td class="ep-cell">7</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">255</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Nuro</td>
-                        <td class="ep-cell">7</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">256</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Elite God</td>
                         <td class="ep-cell">7</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">257</td>
+                        <td class="rank-cell">252</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">fooby</td>
+                        <td class="ep-cell">7</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">253</td>
+                        <td class="name-cell"><img src="clan-rank-icons/24 - Beast.png" alt="Beast" class="rank-icon">Goat Pusher</td>
+                        <td class="ep-cell">7</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">254</td>
                         <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Hardspoony</td>
+                        <td class="ep-cell">7</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">255</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Ing Mapache</td>
+                        <td class="ep-cell">7</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">256</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Nuro</td>
+                        <td class="ep-cell">7</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">257</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">salamitomy69</td>
                         <td class="ep-cell">7</td>
                     </tr>
                     <tr>
@@ -1513,7 +1604,7 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">259</td>
-                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Tiny Penith</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">bong withard</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
@@ -1523,42 +1614,42 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">261</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Miss Vanjie</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Construct 7</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">262</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">bong withard</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Da Big Slap</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">263</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Power0fchaos</td>
-                        <td class="ep-cell">6</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">264</td>
-                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Puddle Water</td>
-                        <td class="ep-cell">6</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">265</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">Dry On Life</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">266</td>
+                        <td class="rank-cell">264</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">I Punish Cox</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">267</td>
+                        <td class="rank-cell">265</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Im Phantoom</td>
+                        <td class="ep-cell">6</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">266</td>
                         <td class="name-cell"><img src="clan-rank-icons/18 - TzKal.png" alt="TzKal" class="rank-icon">Iron Shane</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">267</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">IronCreatine</td>
+                        <td class="ep-cell">6</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">268</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Im Phantoom</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IronRaycules</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
@@ -1568,17 +1659,17 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">270</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IronRaycules</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Miss Vanjie</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">271</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">IronCreatine</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Power0fchaos</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">272</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Da Big Slap</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Puddle Water</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
@@ -1588,22 +1679,22 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">274</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Yuschy</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Tiny Penith</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">275</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Construct 7</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Yuschy</td>
                         <td class="ep-cell">6</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">276</td>
-                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">Kamlito</td>
+                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">b1oodraven23</td>
                         <td class="ep-cell">5</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">277</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">J Afslagje</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">BigRimm</td>
                         <td class="ep-cell">5</td>
                     </tr>
                     <tr>
@@ -1618,32 +1709,32 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">280</td>
-                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">sShallan</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Ir0n Bilbo</td>
                         <td class="ep-cell">5</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">281</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">BigRimm</td>
-                        <td class="ep-cell">5</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">282</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Shaners</td>
                         <td class="ep-cell">5</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">282</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">J Afslagje</td>
+                        <td class="ep-cell">5</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">283</td>
-                        <td class="name-cell"><img src="clan-rank-icons/16 - Zenyte.png" alt="Zenyte" class="rank-icon">b1oodraven23</td>
+                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">Kamlito</td>
                         <td class="ep-cell">5</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">284</td>
-                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">FreeMeFromCg</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">lno</td>
                         <td class="ep-cell">5</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">285</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Im unironic</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">sShallan</td>
                         <td class="ep-cell">5</td>
                     </tr>
                     <tr>
@@ -1653,42 +1744,42 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">287</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">lno</td>
-                        <td class="ep-cell">5</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">288</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Ir0n Bilbo</td>
-                        <td class="ep-cell">5</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">289</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">TiniestDoggy</td>
                         <td class="ep-cell">5</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">288</td>
+                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">FreeMeFromCg</td>
+                        <td class="ep-cell">5</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">289</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Im unironic</td>
+                        <td class="ep-cell">5</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">290</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">G e ck o</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Baazi</td>
                         <td class="ep-cell">4</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">291</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Jads cumrag</td>
-                        <td class="ep-cell">4</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">292</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">KeyItem</td>
-                        <td class="ep-cell">4</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">293</td>
                         <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">BubbaChrist</td>
                         <td class="ep-cell">4</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">294</td>
+                        <td class="rank-cell">292</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">DzTok-Nuts</td>
+                        <td class="ep-cell">4</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">293</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Fe Gimble</td>
+                        <td class="ep-cell">4</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">294</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">G e ck o</td>
                         <td class="ep-cell">4</td>
                     </tr>
                     <tr>
@@ -1698,22 +1789,22 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">296</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Last Skrimp</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Hyrulepanda</td>
                         <td class="ep-cell">4</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">297</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">DzTok-Nuts</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Jads cumrag</td>
                         <td class="ep-cell">4</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">298</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Baazi</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Jord C</td>
                         <td class="ep-cell">4</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">299</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Rautamies3</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">KeyItem</td>
                         <td class="ep-cell">4</td>
                     </tr>
                     <tr>
@@ -1723,297 +1814,297 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">301</td>
-                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">RickIceBerg</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Rautamies3</td>
                         <td class="ep-cell">4</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">302</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Hyrulepanda</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Last Skrimp</td>
                         <td class="ep-cell">4</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">303</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Jord C</td>
+                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">RickIceBerg</td>
                         <td class="ep-cell">4</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">304</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Pure Progek</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">305</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Torkulf</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">306</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Tumeken Toby</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">307</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">UIM Melany</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">308</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Vigdisxx</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">309</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Willisnator</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">310</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IronBarrey</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">311</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Get Perki</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">312</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Gender Mint</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">313</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">OSRSalsBeruf</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">314</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Fe Vylan</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">315</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Perform Well</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">316</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Oysx</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">317</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">YWBlake</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">318</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Very Sooon</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">319</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">khai khai</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">320</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">deepsuckm3</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">321</td>
-                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">PhatBatti</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">322</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">C R F</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">323</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IM Fennec</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">324</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Katun Uchiha</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">325</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">EscapeRopes</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">326</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Rig Rat</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">327</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Rspct7ife</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">328</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Reavzz</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">329</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IRON TOUCH</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">330</td>
-                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">SLAP YA MAMA</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">331</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">milbv</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">332</td>
-                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Fake Names</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">333</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Brb Dead</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">334</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">hanghee1</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">335</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">birdgang16</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">336</td>
-                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">Favr</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">337</td>
-                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">IB M</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">338</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Hoddantt</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">339</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">MARQUlSE</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">340</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Awful Mild</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">341</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Stays Hard</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">342</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Ankle Deep</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">343</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">S E F F Y</td>
-                        <td class="ep-cell">3</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">344</td>
                         <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">an-ti</td>
                         <td class="ep-cell">3</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">345</td>
+                        <td class="rank-cell">305</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Awful Mild</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">306</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">birdgang16</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">307</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Brb Dead</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">308</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">deepsuckm3</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">309</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">EscapeRopes</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">310</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Fake Names</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">311</td>
+                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">Favr</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">312</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Fe Vylan</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">313</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Gender Mint</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">314</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Get Perki</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">315</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">hanghee1</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">316</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Hoddantt</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">317</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">IB M</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">318</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IM Fennec</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">319</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IRON TOUCH</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">320</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IronBarrey</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">321</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Katun Uchiha</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">322</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">khai khai</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">323</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">MARQUlSE</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">324</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">milbv</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">325</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Oysx</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">326</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">PhatBatti</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">327</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Pure Progek</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">328</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Rig Rat</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">329</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Rspct7ife</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">330</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">S E F F Y</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">331</td>
+                        <td class="name-cell"><img src="clan-rank-icons/15 - Onyx.png" alt="Onyx" class="rank-icon">SLAP YA MAMA</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">332</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Stays Hard</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">333</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">TheFlammers</td>
                         <td class="ep-cell">3</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">334</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Torkulf</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">335</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Tumeken Toby</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">336</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">UIM Melany</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">337</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Vigdisxx</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">338</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Willisnator</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">339</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Ankle Deep</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">340</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">C R F</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">341</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">OSRSalsBeruf</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">342</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Perform Well</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">343</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Reavzz</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">344</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Very Sooon</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">345</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">YWBlake</td>
+                        <td class="ep-cell">3</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">346</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Rusty Nutss</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">4Town</td>
                         <td class="ep-cell">2</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">347</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">ironcladlad2</td>
-                        <td class="ep-cell">2</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">348</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">MajestcJoint</td>
-                        <td class="ep-cell">2</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">349</td>
-                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">IM 1715</td>
-                        <td class="ep-cell">2</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">350</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">GlM Crox</td>
-                        <td class="ep-cell">2</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">351</td>
-                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">LordGoomy</td>
-                        <td class="ep-cell">2</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">352</td>
-                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">NoSplitz</td>
-                        <td class="ep-cell">2</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">353</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Enjoy Scapin</td>
-                        <td class="ep-cell">2</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">354</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">BasquiatsVis</td>
-                        <td class="ep-cell">2</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">355</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Ryuashee</td>
-                        <td class="ep-cell">2</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">356</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Kaisen Curse</td>
-                        <td class="ep-cell">2</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">357</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Barrel Pleas</td>
-                        <td class="ep-cell">2</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">358</td>
                         <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">BabaYaga_24</td>
                         <td class="ep-cell">2</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">348</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Barrel Pleas</td>
+                        <td class="ep-cell">2</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">349</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">GlM Crox</td>
+                        <td class="ep-cell">2</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">350</td>
+                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">LordGoomy</td>
+                        <td class="ep-cell">2</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">351</td>
+                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">IM 1715</td>
+                        <td class="ep-cell">2</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">352</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Iron Brez</td>
+                        <td class="ep-cell">2</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">353</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">iron kocic</td>
+                        <td class="ep-cell">2</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">354</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">ironcladlad2</td>
+                        <td class="ep-cell">2</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">355</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Kaisen Curse</td>
+                        <td class="ep-cell">2</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">356</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">NoSplitz</td>
+                        <td class="ep-cell">2</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">357</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Rusty Nutss</td>
+                        <td class="ep-cell">2</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">358</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Ryuashee</td>
+                        <td class="ep-cell">2</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">359</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">4Town</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">MajestcJoint</td>
                         <td class="ep-cell">2</td>
                     </tr>
                     <tr>
@@ -2023,7 +2114,7 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">361</td>
-                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">IM Pyroz</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">BasquiatsVis</td>
                         <td class="ep-cell">2</td>
                     </tr>
                     <tr>
@@ -2033,27 +2124,27 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">363</td>
-                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">Iron Brez</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Enjoy Scapin</td>
                         <td class="ep-cell">2</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">364</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">iron kocic</td>
+                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">IM Pyroz</td>
                         <td class="ep-cell">2</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">365</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Phigg Newton</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">1 Dead Fe</td>
                         <td class="ep-cell">1</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">366</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">ChemistHajo</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">CAT6NZ</td>
                         <td class="ep-cell">1</td>
                     </tr>
                     <tr>
                         <td class="rank-cell">367</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Untrad3able</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">ChemistHajo</td>
                         <td class="ep-cell">1</td>
                     </tr>
                     <tr>
@@ -2063,112 +2154,112 @@
                     </tr>
                     <tr>
                         <td class="rank-cell">369</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Ironpissman</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">370</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Skib Shane</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">371</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">ledskii</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">372</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Scion Fe</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">373</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Elisha</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">374</td>
-                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">dead b4 rfd</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">375</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">CAT6NZ</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">376</td>
-                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Oafish_Brute</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">377</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">No Not Me</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">378</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Not Clemency</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">379</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Daltron</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">380</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">FEs Tikle</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">381</td>
                         <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">Fe Nomadic</td>
                         <td class="ep-cell">1</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">382</td>
+                        <td class="rank-cell">370</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">FEs Tikle</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">371</td>
                         <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">goose punter</td>
                         <td class="ep-cell">1</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">383</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IronRezz</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">384</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">lostmytempor</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">385</td>
+                        <td class="rank-cell">372</td>
                         <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">guidjo</td>
                         <td class="ep-cell">1</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">386</td>
-                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Gim Wansalot</td>
-                        <td class="ep-cell">1</td>
-                    </tr>
-                    <tr>
-                        <td class="rank-cell">387</td>
+                        <td class="rank-cell">373</td>
                         <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Honey Iron</td>
                         <td class="ep-cell">1</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">388</td>
+                        <td class="rank-cell">374</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Iron Daltron</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">375</td>
                         <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Iron theDude</td>
                         <td class="ep-cell">1</td>
                     </tr>
                     <tr>
-                        <td class="rank-cell">389</td>
+                        <td class="rank-cell">376</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Ironpissman</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">377</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">IronRezz</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">378</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">ledskii</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">379</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">lostmytempor</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">380</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">No Not Me</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">381</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Not Clemency</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">382</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Phigg Newton</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">383</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Scion Fe</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">384</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Skib Shane</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">385</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Untrad3able</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">386</td>
                         <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Zlyphts</td>
                         <td class="ep-cell">1</td>
                     </tr>
                     <tr>
+                        <td class="rank-cell">387</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Elisha</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">388</td>
+                        <td class="name-cell"><img src="clan-rank-icons/14 - Dragonstone.png" alt="Dragonstone" class="rank-icon">Oafish_Brute</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">389</td>
+                        <td class="name-cell"><img src="clan-rank-icons/11 - Emerald.png" alt="Emerald" class="rank-icon">Gim Wansalot</td>
+                        <td class="ep-cell">1</td>
+                    </tr>
+                    <tr>
                         <td class="rank-cell">390</td>
-                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">1 Dead Fe</td>
+                        <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">dead b4 rfd</td>
                         <td class="ep-cell">1</td>
                     </tr>
                     <tr>
@@ -2176,68 +2267,199 @@
                         <td class="name-cell"><img src="clan-rank-icons/10 - Sapphire.png" alt="Sapphire" class="rank-icon">whathehelli</td>
                         <td class="ep-cell">1</td>
                     </tr>
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Big Spender Tab -->
+        <div id="bigspender-tab" class="tab-content">
+          <div class="info-text">
+            This leaderboard shows members who have spent the most on rewards
+            from our
+            <a
+              href="https://discord.com/channels/1054602579197300867/1180624461360267264/1375393237862187091"
+              target="_blank"
+              >event shop</a
+            >.
+          </div>
+
+          <input
+            type="text"
+            class="search-box"
+            id="searchBoxBigSpender"
+            placeholder="Search by RSN..."
+          />
+
+          <table id="bigspenderTable">
+            <thead>
+              <tr>
+                <th class="rank-cell" onclick="sortTable('bigspender', 0)">
+                  Rank
+                </th>
+                <th class="name-cell" onclick="sortTable('bigspender', 1)">
+                  Name
+                </th>
+                <th class="ep-cell" onclick="sortTable('bigspender', 2)">
+                  Total Spent
+                </th>
+              </tr>
+            </thead>
+            <tbody id="bigspenderBody">
+                                  <tr>
+                        <td class="rank-cell">1</td>
+                        <td class="name-cell"><img src="clan-rank-icons/31 - Owner.png" alt="Owner" class="rank-icon">CorvidsNest</td>
+                        <td class="ep-cell">20</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">2</td>
+                        <td class="name-cell"><img src="clan-rank-icons/12 - Ruby.png" alt="Ruby" class="rank-icon">Santa Logged</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">3</td>
+                        <td class="name-cell"><img src="clan-rank-icons/25 - Skiller.png" alt="Skiller" class="rank-icon">John Muskrat</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">4</td>
+                        <td class="name-cell"><img src="clan-rank-icons/18 - TzKal.png" alt="TzKal" class="rank-icon">Bradge</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">5</td>
+                        <td class="name-cell"><img src="clan-rank-icons/28 - General.png" alt="General" class="rank-icon">Bristle Pig</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">6</td>
+                        <td class="name-cell"><img src="clan-rank-icons/30 - Deputy owner.png" alt="Deputy Owner" class="rank-icon">Zaoirse</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">7</td>
+                        <td class="name-cell"><img src="clan-rank-icons/29 - Colonel.png" alt="Colonel" class="rank-icon">Whyte Tree</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">8</td>
+                        <td class="name-cell"><img src="clan-rank-icons/13 - Diamond.png" alt="Diamond" class="rank-icon">IM MiniMars</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">9</td>
+                        <td class="name-cell"><img src="clan-rank-icons/28 - General.png" alt="General" class="rank-icon">Xmassy Eve</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+                    <tr>
+                        <td class="rank-cell">10</td>
+                        <td class="name-cell"><img src="clan-rank-icons/25 - Skiller.png" alt="Skiller" class="rank-icon">HNO 3</td>
+                        <td class="ep-cell">10</td>
+                    </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="footer">
+          Last Updated: 2025-12-01 16:36:55 UTC - Maintained by Corvid -
+          <a href="https://discord.gg/onlyfes">discord.gg/onlyfes</a>
+        </div>
       </div>
 
       <img src="scroll_bottom.gif" alt="Scroll Bottom" class="scroll-bottom" />
     </div>
 
     <script>
-      // Search functionality
-      const searchBox = document.getElementById("searchBox");
-      const tableBody = document.getElementById("tableBody");
-      const allRows = Array.from(tableBody.getElementsByTagName("tr"));
-
-      searchBox.addEventListener("input", function () {
-        const searchTerm = this.value.toLowerCase();
-
-        allRows.forEach((row) => {
-          const name = row.cells[1].textContent.toLowerCase();
-          if (name.includes(searchTerm)) {
-            row.style.display = "";
-          } else {
-            row.style.display = "none";
-          }
+      // Tab switching
+      function switchTab(tabName) {
+        // Hide all tabs
+        document.querySelectorAll(".tab-content").forEach((tab) => {
+          tab.classList.remove("active");
         });
 
-        // Show "no results" message if needed
-        const visibleRows = allRows.filter(
-          (row) => row.style.display !== "none"
-        );
-        if (visibleRows.length === 0 && searchTerm !== "") {
-          if (!document.getElementById("noResults")) {
-            const noResults = document.createElement("tr");
-            noResults.id = "noResults";
-            noResults.innerHTML =
-              '<td colspan="3" class="no-results">No members found matching "' +
-              searchTerm +
-              '"</td>';
-            tableBody.appendChild(noResults);
+        // Remove active from all buttons
+        document.querySelectorAll(".tab-button").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+
+        // Show selected tab
+        document.getElementById(tabName + "-tab").classList.add("active");
+
+        // Activate button
+        event.target.classList.add("active");
+
+        // Update page title
+        const titles = {
+          lifetime: "🏆 All-Time Event Points Leaderboard 🏆",
+          bigspender: "💎 Big Spender Leaderboard 💎",
+        };
+        document.getElementById("pageTitle").textContent = titles[tabName];
+        document.title = titles[tabName];
+      }
+
+      // Search functionality for both tables
+      function setupSearch(searchBoxId, tableBodyId) {
+        const searchBox = document.getElementById(searchBoxId);
+        const tableBody = document.getElementById(tableBodyId);
+        const allRows = Array.from(tableBody.getElementsByTagName("tr"));
+
+        searchBox.addEventListener("input", function () {
+          const searchTerm = this.value.toLowerCase();
+
+          allRows.forEach((row) => {
+            const name = row.cells[1].textContent.toLowerCase();
+            if (name.includes(searchTerm)) {
+              row.style.display = "";
+            } else {
+              row.style.display = "none";
+            }
+          });
+
+          // Show "no results" message if needed
+          const visibleRows = allRows.filter(
+            (row) => row.style.display !== "none"
+          );
+          const noResultsId = "noResults-" + tableBodyId;
+          if (visibleRows.length === 0 && searchTerm !== "") {
+            if (!document.getElementById(noResultsId)) {
+              const noResults = document.createElement("tr");
+              noResults.id = noResultsId;
+              noResults.innerHTML =
+                '<td colspan="3" class="no-results">No members found matching "' +
+                searchTerm +
+                '"</td>';
+              tableBody.appendChild(noResults);
+            }
+          } else {
+            const noResults = document.getElementById(noResultsId);
+            if (noResults) {
+              noResults.remove();
+            }
           }
-        } else {
-          const noResults = document.getElementById("noResults");
-          if (noResults) {
-            noResults.remove();
-          }
-        }
-      });
+        });
+      }
+
+      setupSearch("searchBoxLifetime", "lifetimeBody");
+      setupSearch("searchBoxBigSpender", "bigspenderBody");
 
       // Sort functionality
-      let currentSort = { column: 0, direction: "asc" };
+      let currentSort = {
+        lifetime: { column: 0, direction: "asc" },
+        bigspender: { column: 0, direction: "asc" },
+      };
 
-      function sortTable(columnIndex) {
-        const table = document.getElementById("leaderboardTable");
+      function sortTable(tableType, columnIndex) {
+        const tableId = tableType === "lifetime" ? "lifetimeTable" : "bigspenderTable";
+        const table = document.getElementById(tableId);
         const tbody = table.querySelector("tbody");
-        const rows = Array.from(tbody.querySelectorAll("tr:not(#noResults)"));
+        const rows = Array.from(tbody.querySelectorAll("tr:not([id^='noResults'])"));
 
         // Determine sort direction
-        if (currentSort.column === columnIndex) {
-          currentSort.direction =
-            currentSort.direction === "asc" ? "desc" : "asc";
+        if (currentSort[tableType].column === columnIndex) {
+          currentSort[tableType].direction =
+            currentSort[tableType].direction === "asc" ? "desc" : "asc";
         } else {
-          currentSort.column = columnIndex;
-          currentSort.direction = "asc";
+          currentSort[tableType].column = columnIndex;
+          currentSort[tableType].direction = "asc";
         }
 
         // Sort rows
@@ -2251,7 +2473,7 @@
             bVal = parseInt(bVal.replace(/,/g, ""));
           }
 
-          if (currentSort.direction === "asc") {
+          if (currentSort[tableType].direction === "asc") {
             return aVal > bVal ? 1 : -1;
           } else {
             return aVal < bVal ? 1 : -1;
@@ -2267,16 +2489,15 @@
           header.classList.remove("sort-asc", "sort-desc");
           if (index === columnIndex) {
             header.classList.add(
-              currentSort.direction === "asc" ? "sort-asc" : "sort-desc"
+              currentSort[tableType].direction === "asc" ? "sort-asc" : "sort-desc"
             );
           }
         });
       }
 
-      // Table is already sorted by rank ascending (1, 2, 3...) from the server
-      // Just set the visual indicator
-      const headers = document.querySelectorAll('th');
-      headers[0].classList.add('sort-asc');
+      // Set initial sort indicators (both tables sorted by rank ascending)
+      document.querySelector("#lifetimeTable th").classList.add("sort-asc");
+      document.querySelector("#bigspenderTable th").classList.add("sort-asc");
     </script>
   </body>
 </html>
