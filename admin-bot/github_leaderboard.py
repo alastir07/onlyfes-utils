@@ -128,10 +128,14 @@ def deploy_to_github_pages(html_content, github_token, repo_owner='alastir07', r
                     shutil.copy(source_path, dest_path)
                     log.info(f"Copied {asset} to gh-pages")
             
-            # Copy rank icons directory
+            # Copy rank icons directory (always refresh to ensure new icons are deployed)
             rank_icons_source = assets_source / 'clan-rank-icons'
             rank_icons_dest = Path(temp_dir) / 'clan-rank-icons'
-            if rank_icons_source.exists() and not rank_icons_dest.exists():
+            if rank_icons_source.exists():
+                # Remove existing directory if present
+                if rank_icons_dest.exists():
+                    shutil.rmtree(rank_icons_dest)
+                # Copy fresh
                 shutil.copytree(rank_icons_source, rank_icons_dest)
                 log.info(f"Copied clan-rank-icons directory to gh-pages")
             
