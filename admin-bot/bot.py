@@ -1215,7 +1215,7 @@ async def update_ep_leaderboard_command(interaction: discord.Interaction, publis
             return
         
         # Pagination
-        members_per_page = 80
+        members_per_page = 60
         total_pages = (len(members) + members_per_page - 1) // members_per_page
         
         # Get stored message IDs
@@ -1335,8 +1335,8 @@ async def scheduled_ep_leaderboard():
             log.info("No members with event points found. Skipping leaderboard update.")
             return
         
-        # Pagination: 80 members per message
-        members_per_page = 80
+        # Pagination:
+        members_per_page = 60
         total_pages = (len(members) + members_per_page - 1) // members_per_page
         
         # Get stored message IDs
