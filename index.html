@@ -196,7 +196,7 @@
 
       <div class="scroll-middle">
         <h1>⚔️ OnlyFEs Event Points Leaderboard ⚔️</h1>
-        <div class="last-updated">Last Updated: 2025-12-01 03:33:44 UTC</div>
+        <div class="last-updated">Last Updated: 2025-12-01 03:41:00 UTC</div>
 
         <input
           type="text"
@@ -2261,8 +2261,10 @@
         });
       }
 
-      // Initialize with rank sort
-      sortTable(0);
+      // Table is already sorted by rank ascending (1, 2, 3...) from the server
+      // Just set the visual indicator
+      const headers = document.querySelectorAll('th');
+      headers[0].classList.add('sort-asc');
     </script>
   </body>
 </html>
