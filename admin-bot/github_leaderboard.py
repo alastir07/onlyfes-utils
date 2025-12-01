@@ -105,16 +105,17 @@ def deploy_to_github_pages(html_content, github_token, repo_owner='alastir07', r
             
             # If gh-pages doesn't exist, create it
             if result.returncode != 0:
-                log.info("gh-pages branch doesn't exist, creating it")
+                log.warning(f"Failed to clone gh-pages branch. Error: {result.stderr}")
+                log.info("Attempting to create gh-pages branch from scratch")
                 subprocess.run(['git', 'clone', repo_url, temp_dir], check=True, timeout=30)
-                os.chdir(temp_dir)
-                subprocess.run(['git', 'checkout', '--orphan', 'gh-pages'], check=True)
-                subprocess.run(['git', 'rm', '-rf', '.'], check=True)
+                subprocess.run(['git', 'checkout', '--orphan', 'gh-pages'], cwd=temp_dir, check=True)
+                subprocess.run(['git', 'rm', '-rf', '.'], cwd=temp_dir, check=True)
             else:
-                os.chdir(temp_dir)
+                log.info("Successfully cloned gh-pages branch")
             
             # Write HTML file
-            with open('event-points-leaderboard.html', 'w', encoding='utf-8') as f:
+            html_path = Path(temp_dir) / 'event-points-leaderboard.html'
+            with open(html_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
             
             # Copy assets if they don't exist
@@ -140,26 +141,28 @@ def deploy_to_github_pages(html_content, github_token, repo_owner='alastir07', r
                 log.info(f"Copied clan-rank-icons directory to gh-pages")
             
             # Configure Git user (required for commits)
-            subprocess.run(['git', 'config', 'user.email', 'bot@onlyfes.com'], check=True)
-            subprocess.run(['git', 'config', 'user.name', 'OnlyFEs Bot'], check=True)
+            subprocess.run(['git', 'config', 'user.email', 'bot@onlyfes.com'], cwd=temp_dir, check=True)
+            subprocess.run(['git', 'config', 'user.name', 'OnlyFEs Bot'], cwd=temp_dir, check=True)
             
             # Git operations
-            subprocess.run(['git', 'add', '.'], check=True)
+            subprocess.run(['git', 'add', '.'], cwd=temp_dir, check=True)
             
             # Check if there are changes to commit
             status = subprocess.run(
                 ['git', 'status', '--porcelain'],
                 capture_output=True,
                 text=True,
+                cwd=temp_dir,
                 check=True
             )
             
             if status.stdout.strip():
                 subprocess.run(
                     ['git', 'commit', '-m', f'Update leaderboard - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'],
+                    cwd=temp_dir,
                     check=True
                 )
-                subprocess.run(['git', 'push', 'origin', 'gh-pages', '--force'], check=True, timeout=30)
+                subprocess.run(['git', 'push', 'origin', 'gh-pages', '--force'], cwd=temp_dir, check=True, timeout=30)
                 log.info("Successfully deployed to GitHub Pages")
                 return True
             else:
