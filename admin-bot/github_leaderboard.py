@@ -90,7 +90,7 @@ def deploy_to_github_pages(html_content, github_token, repo_owner='alastir07', r
                 os.chdir(temp_dir)
             
             # Write HTML file
-            with open('index.html', 'w', encoding='utf-8') as f:
+            with open('event-points-leaderboard.html', 'w', encoding='utf-8') as f:
                 f.write(html_content)
             
             # Copy assets if they don't exist
