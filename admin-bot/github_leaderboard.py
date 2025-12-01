@@ -14,12 +14,13 @@ import logging
 log = logging.getLogger('ClanBot')
 
 
-def generate_leaderboard_html(members_data, template_path='leaderboard_template.html'):
+def generate_leaderboard_html(lifetime_data, big_spender_data, template_path='leaderboard_template.html'):
     """
     Generate HTML for the leaderboard from member data
     
     Args:
-        members_data: List of dicts with 'rsn', 'total_ep', 'rank_id', and 'rank_name' keys
+        lifetime_data: List of dicts with 'rsn', 'lifetime_ep', 'rank_id', and 'rank_name' keys
+        big_spender_data: List of dicts with 'rsn', 'total_spent', 'rank_id', and 'rank_name' keys
         template_path: Path to the HTML template file
     
     Returns:
@@ -32,47 +33,54 @@ def generate_leaderboard_html(members_data, template_path='leaderboard_template.
     # Get the directory containing rank icons
     rank_icons_dir = Path(template_path).parent / 'clan-rank-icons'
     
-    # Generate table rows
-    rows = []
-    for rank, member in enumerate(members_data, start=1):
-        rsn = member['rsn']
-        ep = member['total_ep']
-        rank_id = member.get('rank_id', '')
-        rank_name = member.get('rank_name', '')
-        
-        # Build rank icon HTML if rank info exists AND icon file exists
-        rank_icon_html = ''
-        if rank_id and rank_name:
-            # Try to find the icon file (case-insensitive)
-            icon_pattern = f"{rank_id} - {rank_name}.png"
-            icon_path = rank_icons_dir / icon_pattern
+    def generate_rows(members_data, ep_key):
+        """Helper function to generate table rows"""
+        rows = []
+        for rank, member in enumerate(members_data, start=1):
+            rsn = member['rsn']
+            ep = member[ep_key]
+            rank_id = member.get('rank_id', '')
+            rank_name = member.get('rank_name', '')
             
-            # If exact match doesn't exist, try case-insensitive search
-            if not icon_path.exists() and rank_icons_dir.exists():
-                for file in rank_icons_dir.iterdir():
-                    if file.name.lower() == icon_pattern.lower():
-                        icon_pattern = file.name  # Use the actual filename
-                        icon_path = file
-                        break
+            # Build rank icon HTML if rank info exists AND icon file exists
+            rank_icon_html = ''
+            if rank_id and rank_name:
+                # Try to find the icon file (case-insensitive)
+                icon_pattern = f"{rank_id} - {rank_name}.png"
+                icon_path = rank_icons_dir / icon_pattern
+                
+                # If exact match doesn't exist, try case-insensitive search
+                if not icon_path.exists() and rank_icons_dir.exists():
+                    for file in rank_icons_dir.iterdir():
+                        if file.name.lower() == icon_pattern.lower():
+                            icon_pattern = file.name  # Use the actual filename
+                            icon_path = file
+                            break
+                
+                if icon_path.exists():
+                    rank_icon_html = f'<img src="clan-rank-icons/{icon_pattern}" alt="{rank_name}" class="rank-icon">'
             
-            if icon_path.exists():
-                rank_icon_html = f'<img src="clan-rank-icons/{icon_pattern}" alt="{rank_name}" class="rank-icon">'
-        
-        row = f'''                    <tr>
+            row = f'''                    <tr>
                         <td class="rank-cell">{rank}</td>
                         <td class="name-cell">{rank_icon_html}{rsn}</td>
                         <td class="ep-cell">{ep:,}</td>
                     </tr>'''
-        rows.append(row)
+            rows.append(row)
+        return '\n'.join(rows)
     
-    leaderboard_rows = '\n'.join(rows)
+    # Generate rows for both leaderboards
+    lifetime_rows = generate_rows(lifetime_data, 'lifetime_ep')
+    big_spender_rows = generate_rows(big_spender_data, 'total_spent')
     
     # Replace placeholders
     last_updated = datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
     html = template.replace('{{LAST_UPDATED}}', last_updated)
-    html = html.replace('{{LEADERBOARD_ROWS}}', leaderboard_rows)
+    html = html.replace('{{PAGE_TITLE}}', '⚔️ OnlyFEs All-Time Event Points Leaderboard ⚔️')
+    html = html.replace('{{LIFETIME_ROWS}}', lifetime_rows)
+    html = html.replace('{{BIGSPENDER_ROWS}}', big_spender_rows)
     
     return html
+
 
 
 def deploy_to_github_pages(html_content, github_token, repo_owner='alastir07', repo_name='onlyfes-utils'):
@@ -192,44 +200,108 @@ def update_leaderboard(supabase, github_token):
         tuple: (success: bool, message: str)
     """
     try:
-        # Fetch EP data with rank information
-        log.info("Fetching EP leaderboard data...")
-        response = supabase.table('members') \
-            .select('total_ep, current_rank_id, member_rsns!inner(rsn, is_primary), ranks!current_rank_id(id, name)') \
-            .eq('status', 'Active') \
-            .gt('total_ep', 0) \
-            .eq('member_rsns.is_primary', True) \
-            .order('total_ep', desc=True) \
+        log.info("Fetching leaderboard data...")
+        
+        # Fetch Lifetime Leaderboard data (sum of positive modifications)
+        log.info("Fetching Lifetime leaderboard data...")
+        lifetime_query = """
+            SELECT 
+                m.id,
+                mr.rsn,
+                SUM(ept.modification) as lifetime_ep,
+                m.current_rank_id as rank_id,
+                r.name as rank_name
+            FROM members m
+            INNER JOIN member_rsns mr ON m.id = mr.member_id AND mr.is_primary = true
+            INNER JOIN event_point_transactions ept ON m.id = ept.member_id
+            LEFT JOIN ranks r ON m.current_rank_id = r.id
+            WHERE m.status = 'Active' AND ept.modification > 0
+            GROUP BY m.id, mr.rsn, m.current_rank_id, r.id, r.name
+            HAVING SUM(ept.modification) > 0
+            ORDER BY lifetime_ep DESC
+        """
+        
+        lifetime_response = supabase.rpc('exec_sql', {'query': lifetime_query}).execute()
+        
+        # Check if we need to use a different approach (Supabase might not have exec_sql RPC)
+        # Let's use the postgrest query builder with a more complex approach
+        # Actually, we need to create a custom RPC function or use a different approach
+        # For now, let's fetch all transactions and aggregate in Python
+        
+        # Fetch all positive transactions for active members
+        lifetime_transactions = supabase.table('event_point_transactions') \
+            .select('member_id, modification, members!inner(status, current_rank_id, member_rsns!inner(rsn, is_primary), ranks!current_rank_id(id, name))') \
+            .eq('members.status', 'Active') \
+            .eq('members.member_rsns.is_primary', True) \
+            .gt('modification', 0) \
             .execute()
         
-        members = response.data
+        # Aggregate lifetime EP by member
+        lifetime_dict = {}
+        for txn in lifetime_transactions.data:
+            member_id = txn['member_id']
+            if member_id not in lifetime_dict:
+                member_data = txn['members']
+                rsn = member_data['member_rsns'][0]['rsn'] if member_data.get('member_rsns') else 'Unknown'
+                rank_info = member_data.get('ranks', {}) if member_data.get('ranks') else {}
+                
+                lifetime_dict[member_id] = {
+                    'rsn': rsn,
+                    'lifetime_ep': 0,
+                    'rank_id': rank_info.get('id', '') if rank_info else '',
+                    'rank_name': rank_info.get('name', '') if rank_info else ''
+                }
+            lifetime_dict[member_id]['lifetime_ep'] += txn['modification']
         
-        if not members:
-            log.warning("No members with event points found")
-            return (False, "No members with event points found")
+        # Convert to list and sort
+        lifetime_data = sorted(lifetime_dict.values(), key=lambda x: x['lifetime_ep'], reverse=True)
+        log.info(f"Found {len(lifetime_data)} members for Lifetime leaderboard")
         
-        # Transform data for template
-        members_data = [
-            {
-                'rsn': member['member_rsns'][0]['rsn'],
-                'total_ep': member['total_ep'],
-                'rank_id': member.get('ranks', {}).get('id', '') if member.get('ranks') else '',
-                'rank_name': member.get('ranks', {}).get('name', '') if member.get('ranks') else ''
-            }
-            for member in members
-        ]
+        # Fetch Big Spender Leaderboard data (sum of negative modifications, excluding test)
+        log.info("Fetching Big Spender leaderboard data...")
+        big_spender_transactions = supabase.table('event_point_transactions') \
+            .select('member_id, modification, reason, members!inner(status, current_rank_id, member_rsns!inner(rsn, is_primary), ranks!current_rank_id(id, name))') \
+            .eq('members.status', 'Active') \
+            .eq('members.member_rsns.is_primary', True) \
+            .lt('modification', 0) \
+            .execute()
         
-        log.info(f"Found {len(members_data)} members with event points")
+        # Aggregate big spender EP by member (excluding test transactions)
+        big_spender_dict = {}
+        for txn in big_spender_transactions.data:
+            # Skip if reason contains "test" (case-insensitive)
+            reason = txn.get('reason', '') or ''
+            if 'test' in reason.lower():
+                continue
+            
+            member_id = txn['member_id']
+            if member_id not in big_spender_dict:
+                member_data = txn['members']
+                rsn = member_data['member_rsns'][0]['rsn'] if member_data.get('member_rsns') else 'Unknown'
+                rank_info = member_data.get('ranks', {}) if member_data.get('ranks') else {}
+                
+                big_spender_dict[member_id] = {
+                    'rsn': rsn,
+                    'total_spent': 0,
+                    'rank_id': rank_info.get('id', '') if rank_info else '',
+                    'rank_name': rank_info.get('name', '') if rank_info else ''
+                }
+            # Add absolute value (convert negative to positive for display)
+            big_spender_dict[member_id]['total_spent'] += abs(txn['modification'])
+        
+        # Convert to list and sort
+        big_spender_data = sorted(big_spender_dict.values(), key=lambda x: x['total_spent'], reverse=True)
+        log.info(f"Found {len(big_spender_data)} members for Big Spender leaderboard")
         
         # Generate HTML
         template_path = Path(__file__).parent / 'leaderboard_template.html'
-        html = generate_leaderboard_html(members_data, template_path)
+        html = generate_leaderboard_html(lifetime_data, big_spender_data, template_path)
         
         # Deploy to GitHub Pages
         success = deploy_to_github_pages(html, github_token)
         
         if success:
-            url = "https://alastir07.github.io/onlyfes-utils/"
+            url = "https://alastir07.github.io/onlyfes-utils/event-points-leaderboard.html"
             return (True, f"Leaderboard updated successfully! View at: {url}")
         else:
             return (False, "Failed to deploy to GitHub Pages")
@@ -237,3 +309,4 @@ def update_leaderboard(supabase, github_token):
     except Exception as e:
         log.error(f"Error updating leaderboard: {e}")
         return (False, f"Error: {str(e)}")
+

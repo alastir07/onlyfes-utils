@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OnlyFEs Event Points Leaderboard</title>
+    <title>{{PAGE_TITLE}}</title>
     <style>
       @font-face {
         font-family: "RuneScape";
@@ -70,16 +70,62 @@
       h1 {
         text-align: center;
         font-size: 40px;
-        margin-bottom: 5px;
+        margin-bottom: 10px;
         color: #000;
         text-shadow: 1px 1px 0px rgba(255, 255, 255, 0.3);
       }
 
-      .last-updated {
+      .info-text {
         text-align: center;
-        font-size: 18px;
+        font-size: 16px;
         margin-bottom: 15px;
         color: #333;
+        line-height: 1.5;
+      }
+
+      .info-text a {
+        color: #8b4513;
+        text-decoration: underline;
+      }
+
+      .info-text a:hover {
+        color: #654321;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        justify-content: center;
+      }
+
+      .tab-button {
+        padding: 10px 20px;
+        border: 2px solid #8b4513;
+        background: rgba(245, 222, 179, 0.7);
+        font-family: "RuneScape", "Courier New", monospace;
+        font-size: 18px;
+        color: #000;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .tab-button:hover {
+        background: rgba(222, 184, 135, 0.8);
+      }
+
+      .tab-button.active {
+        background: rgba(139, 69, 19, 0.5);
+        font-weight: bold;
+        border-color: #654321;
+      }
+
+      .tab-content {
+        display: none;
+      }
+
+      .tab-content.active {
+        display: block;
       }
 
       .search-box {
@@ -180,19 +226,41 @@
         color: #666;
       }
 
+      .footer {
+        text-align: center;
+        font-size: 16px;
+        margin-top: 15px;
+        padding-top: 10px;
+        border-top: 2px solid rgba(139, 69, 19, 0.3);
+        color: #333;
+      }
+
       @media (max-width: 768px) {
         .scroll-middle {
           padding: 15px 20px;
         }
 
         h1 {
-          font-size: 20px;
+          font-size: 24px;
+        }
+
+        .tab-button {
+          font-size: 14px;
+          padding: 8px 15px;
+        }
+
+        .info-text {
+          font-size: 14px;
         }
 
         th,
         td {
           font-size: 12px;
           padding: 6px 8px;
+        }
+
+        .footer {
+          font-size: 14px;
         }
       }
     </style>
@@ -202,88 +270,193 @@
       <img src="scroll_top.gif" alt="Scroll Top" class="scroll-top" />
 
       <div class="scroll-middle">
-        <h1>⚔️ OnlyFEs Event Points Leaderboard ⚔️</h1>
-        <div class="last-updated">Last Updated: {{LAST_UPDATED}}</div>
+        <h1 id="pageTitle">{{PAGE_TITLE}}</h1>
 
-        <input
-          type="text"
-          class="search-box"
-          id="searchBox"
-          placeholder="Search by RSN..."
-        />
+        <div class="tabs">
+          <button class="tab-button active" onclick="switchTab('lifetime')">
+            Lifetime
+          </button>
+          <button class="tab-button" onclick="switchTab('bigspender')">
+            Big Spender
+          </button>
+        </div>
 
-        <table id="leaderboardTable">
-          <thead>
-            <tr>
-              <th class="rank-cell" onclick="sortTable(0)">Rank</th>
-              <th class="name-cell" onclick="sortTable(1)">Name</th>
-              <th class="ep-cell" onclick="sortTable(2)">Event Points</th>
-            </tr>
-          </thead>
-          <tbody id="tableBody">
-            {{LEADERBOARD_ROWS}}
-          </tbody>
-        </table>
+        <!-- Lifetime Tab -->
+        <div id="lifetime-tab" class="tab-content active">
+          <div class="info-text">
+            This leaderboard shows all-time Event Points earned by members,
+            without deductions.<br />
+            To check your currently spendable EP, use
+            <strong>/memberinfo &lt;your rsn&gt;</strong> in Discord!
+          </div>
+
+          <input
+            type="text"
+            class="search-box"
+            id="searchBoxLifetime"
+            placeholder="Search by RSN..."
+          />
+
+          <table id="lifetimeTable">
+            <thead>
+              <tr>
+                <th class="rank-cell" onclick="sortTable('lifetime', 0)">
+                  Rank
+                </th>
+                <th class="name-cell" onclick="sortTable('lifetime', 1)">
+                  Name
+                </th>
+                <th class="ep-cell" onclick="sortTable('lifetime', 2)">
+                  Lifetime EP
+                </th>
+              </tr>
+            </thead>
+            <tbody id="lifetimeBody">
+              {{LIFETIME_ROWS}}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Big Spender Tab -->
+        <div id="bigspender-tab" class="tab-content">
+          <div class="info-text">
+            This leaderboard shows members who have spent the most on rewards
+            from our
+            <a
+              href="https://discord.com/channels/1054602579197300867/1180624461360267264/1375393237862187091"
+              target="_blank"
+              >event shop</a
+            >.
+          </div>
+
+          <input
+            type="text"
+            class="search-box"
+            id="searchBoxBigSpender"
+            placeholder="Search by RSN..."
+          />
+
+          <table id="bigspenderTable">
+            <thead>
+              <tr>
+                <th class="rank-cell" onclick="sortTable('bigspender', 0)">
+                  Rank
+                </th>
+                <th class="name-cell" onclick="sortTable('bigspender', 1)">
+                  Name
+                </th>
+                <th class="ep-cell" onclick="sortTable('bigspender', 2)">
+                  Total Spent
+                </th>
+              </tr>
+            </thead>
+            <tbody id="bigspenderBody">
+              {{BIGSPENDER_ROWS}}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="footer">
+          Last Updated: {{LAST_UPDATED}} - Maintained by Corvid -
+          <a href="https://discord.gg/onlyfes">discord.gg/onlyfes</a>
+        </div>
       </div>
 
       <img src="scroll_bottom.gif" alt="Scroll Bottom" class="scroll-bottom" />
     </div>
 
     <script>
-      // Search functionality
-      const searchBox = document.getElementById("searchBox");
-      const tableBody = document.getElementById("tableBody");
-      const allRows = Array.from(tableBody.getElementsByTagName("tr"));
-
-      searchBox.addEventListener("input", function () {
-        const searchTerm = this.value.toLowerCase();
-
-        allRows.forEach((row) => {
-          const name = row.cells[1].textContent.toLowerCase();
-          if (name.includes(searchTerm)) {
-            row.style.display = "";
-          } else {
-            row.style.display = "none";
-          }
+      // Tab switching
+      function switchTab(tabName) {
+        // Hide all tabs
+        document.querySelectorAll(".tab-content").forEach((tab) => {
+          tab.classList.remove("active");
         });
 
-        // Show "no results" message if needed
-        const visibleRows = allRows.filter(
-          (row) => row.style.display !== "none"
-        );
-        if (visibleRows.length === 0 && searchTerm !== "") {
-          if (!document.getElementById("noResults")) {
-            const noResults = document.createElement("tr");
-            noResults.id = "noResults";
-            noResults.innerHTML =
-              '<td colspan="3" class="no-results">No members found matching "' +
-              searchTerm +
-              '"</td>';
-            tableBody.appendChild(noResults);
+        // Remove active from all buttons
+        document.querySelectorAll(".tab-button").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+
+        // Show selected tab
+        document.getElementById(tabName + "-tab").classList.add("active");
+
+        // Activate button
+        event.target.classList.add("active");
+
+        // Update page title
+        const titles = {
+          lifetime: "🏆 All-Time Event Points Leaderboard 🏆",
+          bigspender: "💎 Big Spender Leaderboard 💎",
+        };
+        document.getElementById("pageTitle").textContent = titles[tabName];
+        document.title = titles[tabName];
+      }
+
+      // Search functionality for both tables
+      function setupSearch(searchBoxId, tableBodyId) {
+        const searchBox = document.getElementById(searchBoxId);
+        const tableBody = document.getElementById(tableBodyId);
+        const allRows = Array.from(tableBody.getElementsByTagName("tr"));
+
+        searchBox.addEventListener("input", function () {
+          const searchTerm = this.value.toLowerCase();
+
+          allRows.forEach((row) => {
+            const name = row.cells[1].textContent.toLowerCase();
+            if (name.includes(searchTerm)) {
+              row.style.display = "";
+            } else {
+              row.style.display = "none";
+            }
+          });
+
+          // Show "no results" message if needed
+          const visibleRows = allRows.filter(
+            (row) => row.style.display !== "none"
+          );
+          const noResultsId = "noResults-" + tableBodyId;
+          if (visibleRows.length === 0 && searchTerm !== "") {
+            if (!document.getElementById(noResultsId)) {
+              const noResults = document.createElement("tr");
+              noResults.id = noResultsId;
+              noResults.innerHTML =
+                '<td colspan="3" class="no-results">No members found matching "' +
+                searchTerm +
+                '"</td>';
+              tableBody.appendChild(noResults);
+            }
+          } else {
+            const noResults = document.getElementById(noResultsId);
+            if (noResults) {
+              noResults.remove();
+            }
           }
-        } else {
-          const noResults = document.getElementById("noResults");
-          if (noResults) {
-            noResults.remove();
-          }
-        }
-      });
+        });
+      }
+
+      setupSearch("searchBoxLifetime", "lifetimeBody");
+      setupSearch("searchBoxBigSpender", "bigspenderBody");
 
       // Sort functionality
-      let currentSort = { column: 0, direction: "asc" };
+      let currentSort = {
+        lifetime: { column: 0, direction: "asc" },
+        bigspender: { column: 0, direction: "asc" },
+      };
 
-      function sortTable(columnIndex) {
-        const table = document.getElementById("leaderboardTable");
+      function sortTable(tableType, columnIndex) {
+        const tableId = tableType === "lifetime" ? "lifetimeTable" : "bigspenderTable";
+        const table = document.getElementById(tableId);
         const tbody = table.querySelector("tbody");
-        const rows = Array.from(tbody.querySelectorAll("tr:not(#noResults)"));
+        const rows = Array.from(tbody.querySelectorAll("tr:not([id^='noResults'])"));
 
         // Determine sort direction
-        if (currentSort.column === columnIndex) {
-          currentSort.direction =
-            currentSort.direction === "asc" ? "desc" : "asc";
+        if (currentSort[tableType].column === columnIndex) {
+          currentSort[tableType].direction =
+            currentSort[tableType].direction === "asc" ? "desc" : "asc";
         } else {
-          currentSort.column = columnIndex;
-          currentSort.direction = "asc";
+          currentSort[tableType].column = columnIndex;
+          currentSort[tableType].direction = "asc";
         }
 
         // Sort rows
@@ -297,7 +470,7 @@
             bVal = parseInt(bVal.replace(/,/g, ""));
           }
 
-          if (currentSort.direction === "asc") {
+          if (currentSort[tableType].direction === "asc") {
             return aVal > bVal ? 1 : -1;
           } else {
             return aVal < bVal ? 1 : -1;
@@ -313,16 +486,15 @@
           header.classList.remove("sort-asc", "sort-desc");
           if (index === columnIndex) {
             header.classList.add(
-              currentSort.direction === "asc" ? "sort-asc" : "sort-desc"
+              currentSort[tableType].direction === "asc" ? "sort-asc" : "sort-desc"
             );
           }
         });
       }
 
-      // Table is already sorted by rank ascending (1, 2, 3...) from the server
-      // Just set the visual indicator
-      const headers = document.querySelectorAll('th');
-      headers[0].classList.add('sort-asc');
+      // Set initial sort indicators (both tables sorted by rank ascending)
+      document.querySelector("#lifetimeTable th").classList.add("sort-asc");
+      document.querySelector("#bigspenderTable th").classList.add("sort-asc");
     </script>
   </body>
 </html>
