@@ -2,12 +2,14 @@
 FROM python:3.12-slim
 
 # 2. Install necessary system dependencies for Python packages (PyNaCl/Discord voice)
-#    and ffmpeg (required if your bot handles any audio/music)
+#    ffmpeg (required if your bot handles any audio/music)
+#    git (required for GitHub Pages deployment)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libffi-dev \
     libsodium-dev \
     ffmpeg \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. Set the working directory
