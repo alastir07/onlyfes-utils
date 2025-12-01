@@ -19,7 +19,7 @@ def generate_leaderboard_html(members_data, template_path='leaderboard_template.
     Generate HTML for the leaderboard from member data
     
     Args:
-        members_data: List of dicts with 'rsn' and 'total_ep' keys
+        members_data: List of dicts with 'rsn', 'total_ep', 'rank_id', and 'rank_name' keys
         template_path: Path to the HTML template file
     
     Returns:
@@ -29,6 +29,9 @@ def generate_leaderboard_html(members_data, template_path='leaderboard_template.
     with open(template_path, 'r', encoding='utf-8') as f:
         template = f.read()
     
+    # Get the directory containing rank icons
+    rank_icons_dir = Path(template_path).parent / 'clan-rank-icons'
+    
     # Generate table rows
     rows = []
     for rank, member in enumerate(members_data, start=1):
@@ -37,11 +40,13 @@ def generate_leaderboard_html(members_data, template_path='leaderboard_template.
         rank_id = member.get('rank_id', '')
         rank_name = member.get('rank_name', '')
         
-        # Build rank icon HTML if rank info exists
+        # Build rank icon HTML if rank info exists AND icon file exists
         rank_icon_html = ''
         if rank_id and rank_name:
             icon_filename = f"{rank_id} - {rank_name}.png"
-            rank_icon_html = f'<img src="clan-rank-icons/{icon_filename}" alt="{rank_name}" class="rank-icon">'
+            icon_path = rank_icons_dir / icon_filename
+            if icon_path.exists():
+                rank_icon_html = f'<img src="clan-rank-icons/{icon_filename}" alt="{rank_name}" class="rank-icon">'
         
         row = f'''                    <tr>
                         <td class="rank-cell">{rank}</td>
