@@ -104,6 +104,10 @@ def deploy_to_github_pages(html_content, github_token, repo_owner='alastir07', r
                     shutil.copy(source_path, dest_path)
                     log.info(f"Copied {asset} to gh-pages")
             
+            # Configure Git user (required for commits)
+            subprocess.run(['git', 'config', 'user.email', 'bot@onlyfes.com'], check=True)
+            subprocess.run(['git', 'config', 'user.name', 'OnlyFEs Bot'], check=True)
+            
             # Git operations
             subprocess.run(['git', 'add', '.'], check=True)
             
