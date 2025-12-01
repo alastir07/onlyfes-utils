@@ -149,9 +149,11 @@ async def on_ready():
         client.synced_on_startup = True 
         
         # Start scheduled tasks (only on first ready event)
+        scheduled_ep_leaderboard.start()
         scheduled_clan_sync.start()
         scheduled_inactivity_check.start()
-        log.info("Scheduled tasks started: clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC)")
+
+        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC)")
     log.info(f'Logged in as {client.user} (ID: {client.user.id})')
     log.info('Bot is ready and online.')
 
@@ -1108,7 +1110,6 @@ async def add_points_bigbooty(interaction: discord.Interaction, first: str, seco
 
 
 # --- 16. /CHECK-INACTIVES COMMAND ---
-
 @client.tree.command(name="checkinactives", description="Check for members with 0 XP gain in their check period.")
 @app_commands.describe(
     publish="False (default). True to post the report publicly."
@@ -1146,7 +1147,262 @@ async def check_inactives(interaction: discord.Interaction, publish: bool = Fals
         await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
 
 
+# --- 17. EP LEADERBOARD HELPER FUNCTIONS ---
+def get_ep_leaderboard_message_ids():
+    """Retrieve stored EP leaderboard message IDs from database"""
+    try:
+        response = supabase.table('bot_config').select('value').eq('key', 'ep_leaderboard_message_ids').limit(1).execute()
+        if response.data and response.data[0]['value']:
+            import json
+            return json.loads(response.data[0]['value'])
+        return []
+    except Exception as e:
+        log.error(f"Error retrieving EP leaderboard message IDs: {e}")
+        return []
+def save_ep_leaderboard_message_ids(message_ids):
+    """Save EP leaderboard message IDs to database"""
+    try:
+        import json
+        value = json.dumps(message_ids)
+        # Upsert the value
+        supabase.table('bot_config').upsert({
+            'key': 'ep_leaderboard_message_ids',
+            'value': value
+        }).execute()
+        log.info(f"Saved {len(message_ids)} EP leaderboard message IDs to database")
+    except Exception as e:
+        log.error(f"Error saving EP leaderboard message IDs: {e}")
+
+# --- 17.5. /UPDATE-EP-LEADERBOARD COMMAND ---
+@client.tree.command(name="updateepleaderboard", description="Manually update the EP leaderboard.")
+@app_commands.describe(
+    publish="False (default). True to post the confirmation publicly."
+)
+@check_staff_role("Colonel")
+async def update_ep_leaderboard_command(interaction: discord.Interaction, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /updateepleaderboard publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        # Get the sync report channel
+        if not SYNC_REPORT_CHANNEL_ID:
+            await interaction.followup.send("Error: SYNC_REPORT_CHANNEL_ID not configured.", ephemeral=True)
+            return
+        
+        channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+        if not channel:
+            await interaction.followup.send(f"Error: Could not find channel with ID {SYNC_REPORT_CHANNEL_ID}", ephemeral=True)
+            return
+        
+        # Fetch active members with non-zero EP
+        log.info("Fetching members with event points...")
+        response = supabase.table('members') \
+            .select('id, total_ep, member_rsns!inner(rsn, is_primary)') \
+            .eq('status', 'Active') \
+            .gt('total_ep', 0) \
+            .eq('member_rsns.is_primary', True) \
+            .order('total_ep', desc=True) \
+            .execute()
+        
+        members = response.data
+        
+        if not members:
+            await interaction.followup.send("No members with event points found.", ephemeral=is_ephemeral)
+            return
+        
+        # Pagination
+        members_per_page = 50
+        total_pages = (len(members) + members_per_page - 1) // members_per_page
+        
+        # Get stored message IDs
+        stored_message_ids = get_ep_leaderboard_message_ids()
+        stored_messages_map = {msg['page']: msg['message_id'] for msg in stored_message_ids}
+        
+        # Build and send/edit messages
+        new_message_ids = []
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
+        
+        for page in range(1, total_pages + 1):
+            start_idx = (page - 1) * members_per_page
+            end_idx = min(start_idx + members_per_page, len(members))
+            page_members = members[start_idx:end_idx]
+            
+            # Build message content
+            lines = [
+                f"📊 **Current EP Leaderboard** (Page {page}/{total_pages})",
+                f"Last Updated: {current_time}",
+                "",
+                "```",
+                "RSN - Event Points",
+                "─" * 40
+            ]
+            
+            for member in page_members:
+                rsn = member['member_rsns'][0]['rsn']
+                ep = member['total_ep']
+                lines.append(f"{rsn} - {ep:,}")
+            
+            lines.append("```")
+            message_content = "\n".join(lines)
+            
+            # Send or edit message
+            if page in stored_messages_map:
+                try:
+                    message = await channel.fetch_message(int(stored_messages_map[page]))
+                    await message.edit(content=message_content)
+                    new_message_ids.append({'page': page, 'message_id': stored_messages_map[page]})
+                except discord.NotFound:
+                    new_msg = await channel.send(message_content)
+                    new_message_ids.append({'page': page, 'message_id': str(new_msg.id)})
+            else:
+                new_msg = await channel.send(message_content)
+                new_message_ids.append({'page': page, 'message_id': str(new_msg.id)})
+        
+        # Delete extra messages
+        for page in stored_messages_map:
+            if page > total_pages:
+                try:
+                    message = await channel.fetch_message(int(stored_messages_map[page]))
+                    await message.delete()
+                except:
+                    pass
+        
+        # Save updated message IDs
+        save_ep_leaderboard_message_ids(new_message_ids)
+        
+        await interaction.followup.send(
+            f"✅ EP leaderboard updated successfully! ({len(members)} members across {total_pages} page(s))",
+            ephemeral=is_ephemeral
+        )
+        
+    except Exception as e:
+        log.error(f"Error in /updateepleaderboard command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
 # --- 18. SCHEDULED TASKS ---
+@tasks.loop(hours=1)
+async def scheduled_ep_leaderboard():
+    """Runs EP leaderboard update hourly"""
+    log.info("=== Starting scheduled EP leaderboard update ===")
+    
+    try:
+        # Get the sync report channel (using for testing)
+        if not SYNC_REPORT_CHANNEL_ID:
+            log.error("SYNC_REPORT_CHANNEL_ID not configured. Skipping EP leaderboard update.")
+            return
+        
+        channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+        if not channel:
+            log.error(f"Could not find channel with ID {SYNC_REPORT_CHANNEL_ID}")
+            return
+        
+        # Fetch active members with non-zero EP, ordered by EP descending
+        log.info("Fetching members with event points...")
+        response = supabase.table('members') \
+            .select('id, total_ep, member_rsns!inner(rsn, is_primary)') \
+            .eq('status', 'Active') \
+            .gt('total_ep', 0) \
+            .eq('member_rsns.is_primary', True) \
+            .order('total_ep', desc=True) \
+            .execute()
+        
+        members = response.data
+        log.info(f"Found {len(members)} members with event points")
+        
+        if not members:
+            log.info("No members with event points found. Skipping leaderboard update.")
+            return
+        
+        # Pagination: 50 members per message
+        members_per_page = 50
+        total_pages = (len(members) + members_per_page - 1) // members_per_page
+        
+        # Get stored message IDs
+        stored_message_ids = get_ep_leaderboard_message_ids()
+        stored_messages_map = {msg['page']: msg['message_id'] for msg in stored_message_ids}
+        
+        # Build and send/edit messages
+        new_message_ids = []
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
+        
+        for page in range(1, total_pages + 1):
+            start_idx = (page - 1) * members_per_page
+            end_idx = min(start_idx + members_per_page, len(members))
+            page_members = members[start_idx:end_idx]
+            
+            # Build message content
+            lines = [
+                f"📊 **Current EP Leaderboard** (Page {page}/{total_pages})",
+                f"Last Updated: {current_time}",
+                "",
+                "```",
+                "RSN - Event Points",
+                "─" * 40
+            ]
+            
+            for member in page_members:
+                rsn = member['member_rsns'][0]['rsn']  # Get the primary RSN
+                ep = member['total_ep']
+                lines.append(f"{rsn} - {ep:,}")
+            
+            lines.append("```")
+            message_content = "\\n".join(lines)
+            
+            # Send or edit message
+            try:
+                if page in stored_messages_map:
+                    # Try to edit existing message
+                    message_id = stored_messages_map[page]
+                    try:
+                        message = await channel.fetch_message(int(message_id))
+                        await message.edit(content=message_content)
+                        new_message_ids.append({'page': page, 'message_id': message_id})
+                        log.info(f"Updated leaderboard page {page}")
+                    except discord.NotFound:
+                        # Message was deleted, create a new one
+                        log.warning(f"Message for page {page} not found, creating new message")
+                        new_msg = await channel.send(message_content)
+                        new_message_ids.append({'page': page, 'message_id': str(new_msg.id)})
+                        log.info(f"Created new leaderboard page {page}")
+                else:
+                    # Create new message
+                    new_msg = await channel.send(message_content)
+                    new_message_ids.append({'page': page, 'message_id': str(new_msg.id)})
+                    log.info(f"Created new leaderboard page {page}")
+            except Exception as e:
+                log.error(f"Error updating/creating page {page}: {e}")
+        
+        # Delete extra messages if member count decreased
+        for page in stored_messages_map:
+            if page > total_pages:
+                try:
+                    message_id = stored_messages_map[page]
+                    message = await channel.fetch_message(int(message_id))
+                    await message.delete()
+                    log.info(f"Deleted extra leaderboard page {page}")
+                except Exception as e:
+                    log.warning(f"Could not delete extra page {page}: {e}")
+        
+        # Save updated message IDs
+        save_ep_leaderboard_message_ids(new_message_ids)
+        log.info("EP leaderboard update complete")
+        
+    except Exception as e:
+        log.error(f"ERROR in scheduled_ep_leaderboard: {e}\\n{traceback.format_exc()}")
+        # Try to post error to channel
+        try:
+            if SYNC_REPORT_CHANNEL_ID:
+                channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+                if channel:
+                    await channel.send(f"⚠️ **Automated EP Leaderboard Update Failed**\\nError: `{e}`\\nCheck bot logs for details.")
+        except:
+            pass  # If we can't post the error, just log it
+
+
 @tasks.loop(time=[time(hour=0, minute=0), time(hour=12, minute=0)])
 async def scheduled_clan_sync():
     """Runs clan sync twice daily at 00:00 and 12:00 UTC"""
