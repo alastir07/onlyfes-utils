@@ -34,9 +34,18 @@ def generate_leaderboard_html(members_data, template_path='leaderboard_template.
     for rank, member in enumerate(members_data, start=1):
         rsn = member['rsn']
         ep = member['total_ep']
+        rank_id = member.get('rank_id', '')
+        rank_name = member.get('rank_name', '')
+        
+        # Build rank icon HTML if rank info exists
+        rank_icon_html = ''
+        if rank_id and rank_name:
+            icon_filename = f"{rank_id} - {rank_name}.png"
+            rank_icon_html = f'<img src="clan-rank-icons/{icon_filename}" alt="{rank_name}" class="rank-icon">'
+        
         row = f'''                    <tr>
                         <td class="rank-cell">{rank}</td>
-                        <td class="name-cell">{rsn}</td>
+                        <td class="name-cell">{rank_icon_html}{rsn}</td>
                         <td class="ep-cell">{ep:,}</td>
                     </tr>'''
         rows.append(row)
@@ -104,6 +113,13 @@ def deploy_to_github_pages(html_content, github_token, repo_owner='alastir07', r
                     shutil.copy(source_path, dest_path)
                     log.info(f"Copied {asset} to gh-pages")
             
+            # Copy rank icons directory
+            rank_icons_source = assets_source / 'clan-rank-icons'
+            rank_icons_dest = Path(temp_dir) / 'clan-rank-icons'
+            if rank_icons_source.exists() and not rank_icons_dest.exists():
+                shutil.copytree(rank_icons_source, rank_icons_dest)
+                log.info(f"Copied clan-rank-icons directory to gh-pages")
+            
             # Configure Git user (required for commits)
             subprocess.run(['git', 'config', 'user.email', 'bot@onlyfes.com'], check=True)
             subprocess.run(['git', 'config', 'user.name', 'OnlyFEs Bot'], check=True)
@@ -154,10 +170,10 @@ def update_leaderboard(supabase, github_token):
         tuple: (success: bool, message: str)
     """
     try:
-        # Fetch EP data
+        # Fetch EP data with rank information
         log.info("Fetching EP leaderboard data...")
         response = supabase.table('members') \
-            .select('total_ep, member_rsns!inner(rsn, is_primary)') \
+            .select('total_ep, current_rank_id, member_rsns!inner(rsn, is_primary), ranks!current_rank_id(id, name)') \
             .eq('status', 'Active') \
             .gt('total_ep', 0) \
             .eq('member_rsns.is_primary', True) \
@@ -174,7 +190,9 @@ def update_leaderboard(supabase, github_token):
         members_data = [
             {
                 'rsn': member['member_rsns'][0]['rsn'],
-                'total_ep': member['total_ep']
+                'total_ep': member['total_ep'],
+                'rank_id': member.get('ranks', {}).get('id', '') if member.get('ranks') else '',
+                'rank_name': member.get('ranks', {}).get('name', '') if member.get('ranks') else ''
             }
             for member in members
         ]
