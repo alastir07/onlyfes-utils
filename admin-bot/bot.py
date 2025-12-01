@@ -1215,7 +1215,7 @@ async def update_ep_leaderboard_command(interaction: discord.Interaction, publis
             return
         
         # Pagination
-        members_per_page = 50
+        members_per_page = 100
         total_pages = (len(members) + members_per_page - 1) // members_per_page
         
         # Get stored message IDs
@@ -1231,23 +1231,41 @@ async def update_ep_leaderboard_command(interaction: discord.Interaction, publis
             end_idx = min(start_idx + members_per_page, len(members))
             page_members = members[start_idx:end_idx]
             
-            # Build message content
-            lines = [
+            # Build message content with two columns
+            header = [
                 f"📊 **Current EP Leaderboard** (Page {page}/{total_pages})",
                 f"Last Updated: {current_time}",
                 "",
-                "```",
-                "RSN - Event Points",
-                "─" * 40
+                "```"
             ]
-            
-            for member in page_members:
-                rsn = member['member_rsns'][0]['rsn']
-                ep = member['total_ep']
-                lines.append(f"{rsn} - {ep:,}")
-            
-            lines.append("```")
-            message_content = "\n".join(lines)
+            # Split into two columns (50 members each)
+            mid_point = (len(page_members) + 1) // 2
+            left_column = page_members[:mid_point]
+            right_column = page_members[mid_point:]
+            # Build rows with both columns
+            rows = []
+            for i in range(max(len(left_column), len(right_column))):
+                left_part = ""
+                right_part = ""
+                
+                if i < len(left_column):
+                    left_rsn = left_column[i]['member_rsns'][0]['rsn']
+                    left_ep = left_column[i]['total_ep']
+                    left_part = f"{left_rsn[:20]:<20} {left_ep:>6,}"
+                else:
+                    left_part = " " * 27
+                
+                if i < len(right_column):
+                    right_rsn = right_column[i]['member_rsns'][0]['rsn']
+                    right_ep = right_column[i]['total_ep']
+                    right_part = f"{right_rsn[:20]:<20} {right_ep:>6,}"
+                
+                if right_part:
+                    rows.append(f"{left_part}  {right_part}")
+                else:
+                    rows.append(left_part)
+            footer = ["```"]
+            message_content = "\n".join(header + rows + footer)
             
             # Send or edit message
             if page in stored_messages_map:
@@ -1317,8 +1335,8 @@ async def scheduled_ep_leaderboard():
             log.info("No members with event points found. Skipping leaderboard update.")
             return
         
-        # Pagination: 50 members per message
-        members_per_page = 50
+        # Pagination: 100 members per message
+        members_per_page = 100
         total_pages = (len(members) + members_per_page - 1) // members_per_page
         
         # Get stored message IDs
@@ -1334,23 +1352,41 @@ async def scheduled_ep_leaderboard():
             end_idx = min(start_idx + members_per_page, len(members))
             page_members = members[start_idx:end_idx]
             
-            # Build message content
-            lines = [
+            # Build message content with two columns
+            header = [
                 f"📊 **Current EP Leaderboard** (Page {page}/{total_pages})",
                 f"Last Updated: {current_time}",
                 "",
-                "```",
-                "RSN - Event Points",
-                "─" * 40
+                "```"
             ]
-            
-            for member in page_members:
-                rsn = member['member_rsns'][0]['rsn']  # Get the primary RSN
-                ep = member['total_ep']
-                lines.append(f"{rsn} - {ep:,}")
-            
-            lines.append("```")
-            message_content = "\n".join(lines)
+            # Split into two columns (50 members each)
+            mid_point = (len(page_members) + 1) // 2
+            left_column = page_members[:mid_point]
+            right_column = page_members[mid_point:]
+            # Build rows with both columns
+            rows = []
+            for i in range(max(len(left_column), len(right_column))):
+                left_part = ""
+                right_part = ""
+                
+                if i < len(left_column):
+                    left_rsn = left_column[i]['member_rsns'][0]['rsn']
+                    left_ep = left_column[i]['total_ep']
+                    left_part = f"{left_rsn[:20]:<20} {left_ep:>6,}"
+                else:
+                    left_part = " " * 27
+                
+                if i < len(right_column):
+                    right_rsn = right_column[i]['member_rsns'][0]['rsn']
+                    right_ep = right_column[i]['total_ep']
+                    right_part = f"{right_rsn[:20]:<20} {right_ep:>6,}"
+                
+                if right_part:
+                    rows.append(f"{left_part}  {right_part}")
+                else:
+                    rows.append(left_part)
+            footer = ["```"]
+            message_content = "\n".join(header + rows + footer)
             
             # Send or edit message
             try:
