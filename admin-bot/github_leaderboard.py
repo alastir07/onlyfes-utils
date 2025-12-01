@@ -43,10 +43,20 @@ def generate_leaderboard_html(members_data, template_path='leaderboard_template.
         # Build rank icon HTML if rank info exists AND icon file exists
         rank_icon_html = ''
         if rank_id and rank_name:
-            icon_filename = f"{rank_id} - {rank_name}.png"
-            icon_path = rank_icons_dir / icon_filename
+            # Try to find the icon file (case-insensitive)
+            icon_pattern = f"{rank_id} - {rank_name}.png"
+            icon_path = rank_icons_dir / icon_pattern
+            
+            # If exact match doesn't exist, try case-insensitive search
+            if not icon_path.exists() and rank_icons_dir.exists():
+                for file in rank_icons_dir.iterdir():
+                    if file.name.lower() == icon_pattern.lower():
+                        icon_pattern = file.name  # Use the actual filename
+                        icon_path = file
+                        break
+            
             if icon_path.exists():
-                rank_icon_html = f'<img src="clan-rank-icons/{icon_filename}" alt="{rank_name}" class="rank-icon">'
+                rank_icon_html = f'<img src="clan-rank-icons/{icon_pattern}" alt="{rank_name}" class="rank-icon">'
         
         row = f'''                    <tr>
                         <td class="rank-cell">{rank}</td>
