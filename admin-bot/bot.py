@@ -73,6 +73,23 @@ def get_staff_member_id(interaction: discord.Interaction) -> str | None:
 # --- Role-Based Permission System ---
 STAFF_ROLES = ["Owner", "Colonel", "General", "Captain"] # Ordered Highest to Lowest
 
+def get_user_role_level(interaction: discord.Interaction) -> str | None:
+    """
+    Returns the highest staff role the user has, or None if they have no staff role.
+    Returns: "Owner", "Colonel", "General", "Captain", or None
+    """
+    if not isinstance(interaction.user, discord.Member):
+        return None
+    
+    user_role_names = [r.name for r in interaction.user.roles]
+    
+    # Check from highest to lowest
+    for role in STAFF_ROLES:
+        if role in user_role_names:
+            return role
+    
+    return None
+
 def check_staff_role(required_role: str):
     """
     Decorator to check if a user has the required role or higher.
@@ -146,44 +163,81 @@ async def help(interaction: discord.Interaction, publish: bool = False):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /help publish={publish} used by {interaction.user}")
     
+    # Determine user's role level
+    user_role = get_user_role_level(interaction)
+    
     embed = discord.Embed(
         title="IronAssistant Help",
-        description="Here is a list of all my available commands.\n`[publish:True]` can be added to any command to make the reply public.",
+        description="Here are the commands you can use.\n`[publish:True]` can be added to any command to make the reply public.",
         color=discord.Color.greyple()
     )
     embed.set_thumbnail(url=client.user.avatar.url if client.user.avatar else None)
+    
+    # All users can see these commands
+    user_commands = [
+        "`/help [publish]`\nShows this help message.",
+        "`/memberinfo <rsn> [publish]`\nGets a member's rank, join date, current EP, and past RSNs.",
+        "`/rankhistory <rsn> [num_changes] [publish]`\nGets a member's recent rank changes."
+    ]
+    
     embed.add_field(
-        name="User Commands", 
-        value="`/help [publish]`\nShows this help message.\n\n" \
-              "`/memberinfo <rsn> [publish]`\nGets a member's rank, join date, current EP, and past RSNs.\n\n" \
-              "`/rankhistory <rsn> [publish]`\nGets a member's 3 most recent rank changes.",
+        name="📋 User Commands",
+        value="\n\n".join(user_commands),
         inline=False
     )
-    embed.add_field(
-        name="Staff Commands (Requires Permissions)",
-        value="`/sync-clan [dry_run] [force_run] [publish]`\n" \
-              "Runs the clan sync with WOM. `publish=True` makes the report public.\n\n" \
-              "`/rankup <rsn> <rank_name> [publish]`\n" \
-              "Manually promotes/demotes a single member.\n\n" \
-              "`/bulkrankup <rank_name> <rsn_list> [publish]`\n" \
-              "Updates multiple members to the same rank. RSNs must be comma-separated.\n\n" \
-              "`/link-rsn <rsn> <@user> [publish]`\n" \
-              "Links an existing member's RSN to their Discord account.\n\n" \
-              "`/add-points <rsn> <points> <reason> [publish]`\n" \
-              "Adds Event Points for a member.\n\n" \
-              "`/remove-points <rsn> <points> <reason> [publish]`\n" \
-              "Removes Event Points for a member.\n\n" \
-              "`/check-inactives [publish]`\n" \
-              "Checks for members with 0 XP gain in 30/60 days (based on rank).\n\n" \
-              "`/bulk-add-points <points> <reason> <rsn_list> [publish]`\n" \
-              "Adds Event Points to multiple members at once.\n\n" \
-              "`/addexempt <rsn> <reason> [publish]`\n" \
-              "Grants a member 3-month immunity from inactivity tracking.\n\n" \
-              "--- *DANGER ZONE* ---\n" \
-              "`/purge-member <rsn>`\n" \
-              "**IRREVERSIBLE.** Deletes a member and all their associated data from the database.",
-        inline=False
-    )
+    
+    # Captain commands (and higher)
+    if user_role in ["Captain", "General", "Colonel", "Owner"]:
+        captain_commands = [
+            "`/rankup <rsn> <rank_name> [publish]`\nManually promotes/demotes a single member.",
+            "`/bulkrankup <rank_name> <rsn_list> [publish]`\nUpdates multiple members to the same rank.",
+            "`/linkrsn <rsn> <@user> [publish]`\nLinks a member's RSN to their Discord account.",
+            "`/addpoints <rsn> <points> <reason> [publish]`\nAdds Event Points for a member.",
+            "`/removepoints <rsn> <points> <reason> [publish]`\nRemoves Event Points from a member.",
+            "`/bulkaddpoints <points> <reason> <rsn_list> [publish]`\nAdds Event Points to multiple members at once.",
+            "`/addpointsbotm <first> <second> <third> <participants> [publish]`\nAdds points for Boss of the Month.",
+            "`/addpointssotm <first> <second> <third> <participants> [publish]`\nAdds points for Skill of the Month.",
+            "`/addpointsbigbooty <first> <second> <third> <participants> [publish]`\nAdds points for Big Booty (Clue of the Month)."
+        ]
+        
+        embed.add_field(
+            name="👮 Captain Commands",
+            value="\n\n".join(captain_commands),
+            inline=False
+        )
+    
+    # General commands (and higher)
+    if user_role in ["General", "Colonel", "Owner"]:
+        general_commands = [
+            "`/syncclan [dry_run] [force_run] [publish]`\nRuns the clan sync with WOM.",
+            "`/addexempt <rsn> <reason> [publish]`\nGrants a member 3-month immunity from inactivity tracking.",
+            "`/checkinactives [publish]`\nChecks for members with 0 XP gain in their check period."
+        ]
+        
+        embed.add_field(
+            name="⭐ General Commands",
+            value="\n\n".join(general_commands),
+            inline=False
+        )
+    
+    # Colonel commands (and higher)
+    if user_role in ["Colonel", "Owner"]:
+        colonel_commands = [
+            "`/purgemember <rsn>`\n**⚠️ IRREVERSIBLE.** Deletes a member and all their associated data from the database."
+        ]
+        
+        embed.add_field(
+            name="🔥 Colonel Commands (DANGER ZONE)",
+            value="\n\n".join(colonel_commands),
+            inline=False
+        )
+    
+    # Add footer showing user's role level
+    if user_role:
+        embed.set_footer(text=f"Your role: {user_role} • You can use all commands at your level and below.")
+    else:
+        embed.set_footer(text="Your role: Member • You can use all User Commands.")
+    
     is_ephemeral = not publish
     await interaction.response.send_message(embed=embed, ephemeral=is_ephemeral)
 
@@ -288,7 +342,7 @@ async def rankhistory(interaction: discord.Interaction, rsn: str, num_changes: i
     force_run="False (default). True to bypass the rank mismatch safety check.",
     publish="False (default). True to post the final report publicly."
 )
-@check_staff_role("Captain")
+@check_staff_role("General")
 async def sync_clan(
     interaction: discord.Interaction, 
     dry_run: bool = True, 
@@ -838,7 +892,7 @@ async def bulk_add_points(interaction: discord.Interaction, points: int, reason:
     reason="The reason for this exemption (e.g., 'Taking a break from the game').",
     publish="True to post the confirmation publicly."
 )
-@check_staff_role("Captain")
+@check_staff_role("General")
 async def add_exempt(interaction: discord.Interaction, rsn: str, reason: str, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -1059,7 +1113,7 @@ async def add_points_bigbooty(interaction: discord.Interaction, first: str, seco
 @app_commands.describe(
     publish="False (default). True to post the report publicly."
 )
-@check_staff_role("Captain")
+@check_staff_role("General")
 async def check_inactives(interaction: discord.Interaction, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -1090,40 +1144,6 @@ async def check_inactives(interaction: discord.Interaction, publish: bool = Fals
     except Exception as e:
         log.error(f"CRITICAL Error in /check-inactives command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
-
-# --- 17. MANUAL TRIGGER COMMANDS FOR SCHEDULED TASKS ---
-@client.tree.command(name="triggersync", description="[TESTING] Manually trigger the scheduled clan sync task.")
-@check_staff_role("Captain")
-async def trigger_sync(interaction: discord.Interaction):
-    """Manually trigger the scheduled clan sync for testing"""
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /triggersync used by {interaction.user}")
-    
-    await interaction.response.send_message("🔧 Manually triggering scheduled clan sync...", ephemeral=True)
-    
-    try:
-        # Call the scheduled task function directly
-        await scheduled_clan_sync()
-        await interaction.followup.send("✅ Scheduled clan sync completed! Check the sync report channel.", ephemeral=True)
-    except Exception as e:
-        log.error(f"Error in manual sync trigger: {e}\n{traceback.format_exc()}")
-        await interaction.followup.send(f"❌ Error triggering sync: `{e}`", ephemeral=True)
-@client.tree.command(name="triggerinactivity", description="[TESTING] Manually trigger the scheduled inactivity check task.")
-@check_staff_role("Captain")
-async def trigger_inactivity(interaction: discord.Interaction):
-    """Manually trigger the scheduled inactivity check for testing"""
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /triggerinactivity used by {interaction.user}")
-    
-    await interaction.response.send_message("🔧 Manually triggering scheduled inactivity check...", ephemeral=True)
-    
-    try:
-        # Call the scheduled task function directly
-        await scheduled_inactivity_check()
-        await interaction.followup.send("✅ Scheduled inactivity check completed! Check the inactivity report channel/thread.", ephemeral=True)
-    except Exception as e:
-        log.error(f"Error in manual inactivity trigger: {e}\n{traceback.format_exc()}")
-        await interaction.followup.send(f"❌ Error triggering inactivity check: `{e}`", ephemeral=True)
 
 
 # --- 18. SCHEDULED TASKS ---
