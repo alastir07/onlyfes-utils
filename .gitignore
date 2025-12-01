@@ -1,3 +1,7 @@
 /chat-history/*.txt
 /discord-archiver/DiscordChatExporter.Cli.win-x64
 /discord-archiver/*-Archive
+/admin-bot/.env
+/admin-bot/OnlyFEs Event Points Tracker - Tracker.csv
+/admin-bot/OnlyFEs Join Dates - Table.csv
+/admin-bot/__pycache__

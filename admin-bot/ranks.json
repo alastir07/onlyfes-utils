@@ -1,0 +1,209 @@
+[
+  {
+    "id": 10,
+    "name": "Sapphire",
+    "rank_type": "Permanent",
+    "hierarchy_level": 1,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "A New Recruit to OnlyFEs!"
+  },
+  {
+    "id": 11,
+    "name": "Emerald",
+    "rank_type": "Permanent",
+    "hierarchy_level": 2,
+    "req_months_in_clan": 1,
+    "req_total_level": 0,
+    "notes": "1 Month Member."
+  },
+  {
+    "id": 12,
+    "name": "Ruby",
+    "rank_type": "Permanent",
+    "hierarchy_level": 3,
+    "req_months_in_clan": 2,
+    "req_total_level": 1250,
+    "notes": "2 Months Member, 1250 Total Level."
+  },
+  {
+    "id": 13,
+    "name": "Diamond",
+    "rank_type": "Permanent",
+    "hierarchy_level": 4,
+    "req_months_in_clan": 3,
+    "req_total_level": 1500,
+    "notes": "3 Months Member, 1500 Total Level, 6 Completed Easy Diaries."
+  },
+  {
+    "id": 14,
+    "name": "Dragonstone",
+    "rank_type": "Permanent",
+    "hierarchy_level": 5,
+    "req_months_in_clan": 4,
+    "req_total_level": 1750,
+    "notes": "4 Months Member, 1750 Total Level, 6 Completed Medium Diaries."
+  },
+  {
+    "id": 15,
+    "name": "Onyx",
+    "rank_type": "Permanent",
+    "hierarchy_level": 6,
+    "req_months_in_clan": 5,
+    "req_total_level": 1900,
+    "notes": "5 Months Member, 1900 Total Level, 6 Completed Hard Diaries, Quest Point Cape, AND EITHER Hard CAs OR 3x Skill Masteries."
+  },
+  {
+    "id": 16,
+    "name": "Zenyte",
+    "rank_type": "Permanent",
+    "hierarchy_level": 7,
+    "req_months_in_clan": 6,
+    "req_total_level": 2000,
+    "notes": "6 Months Member, 2000 Total Level, Diary Cape (t), AND EITHER Elite CAs OR 6x Skill Masteries."
+  },
+  {
+    "id": 17,
+    "name": "Maxed",
+    "rank_type": "Permanent",
+    "hierarchy_level": 8,
+    "req_months_in_clan": 6,
+    "req_total_level": 2000,
+    "notes": "Elite Skiller. 6 Months Member, All Non-Combat Skills 99."
+  },
+  {
+    "id": 18,
+    "name": "TzKal",
+    "rank_type": "Permanent",
+    "hierarchy_level": 9,
+    "req_months_in_clan": 6,
+    "req_total_level": 2000,
+    "notes": "Elite PvMer. 6 Months Member, Dizana's Quiver, Infernal Cape, 1500 Combat Points."
+  },
+  {
+    "id": 19,
+    "name": "Myth",
+    "rank_type": "Permanent",
+    "hierarchy_level": 10,
+    "req_months_in_clan": 8,
+    "req_total_level": 2376,
+    "notes": "Living Legend. 8 Months Member, Maxed Overall, Music Cape (t), Master CAs, Dizana's Quiver, Infernal Cape."
+  },
+  {
+    "id": 20,
+    "name": "Adventurer",
+    "rank_type": "Permanent",
+    "hierarchy_level": 20,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "Event Winner"
+  },
+  {
+    "id": 21,
+    "name": "Gamer",
+    "rank_type": "Permanent",
+    "hierarchy_level": 21,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "Event Champion"
+  },
+  {
+    "id": 22,
+    "name": "Raider",
+    "rank_type": "Permanent",
+    "hierarchy_level": 22,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "Event Overlord"
+  },
+  {
+    "id": 23,
+    "name": "Merchant",
+    "rank_type": "Permanent",
+    "hierarchy_level": 23,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "Big Booty Winner"
+  },
+  {
+    "id": 24,
+    "name": "Beast",
+    "rank_type": "Permanent",
+    "hierarchy_level": 24,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "BOTM Winner"
+  },
+  {
+    "id": 25,
+    "name": "Skiller",
+    "rank_type": "Permanent",
+    "hierarchy_level": 25,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "SOTM Winner"
+  },
+  {
+    "id": 26,
+    "name": "Administrator",
+    "rank_type": "Permanent",
+    "hierarchy_level": 30,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "Retired Staff"
+  },
+  {
+    "id": 27,
+    "name": "Captain",
+    "rank_type": "Staff",
+    "hierarchy_level": 50,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "Staff Rank"
+  },
+  {
+    "id": 28,
+    "name": "General",
+    "rank_type": "Staff",
+    "hierarchy_level": 51,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "Staff Rank"
+  },
+  {
+    "id": 29,
+    "name": "Colonel",
+    "rank_type": "Staff",
+    "hierarchy_level": 52,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "Staff Rank"
+  },
+  {
+    "id": 30,
+    "name": "Deputy Owner",
+    "rank_type": "Staff",
+    "hierarchy_level": 98,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "Admin Rank"
+  },
+  {
+    "id": 31,
+    "name": "Owner",
+    "rank_type": "Staff",
+    "hierarchy_level": 99,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "Admin Rank"
+  },
+  {
+    "id": 32,
+    "name": "Anchor",
+    "rank_type": "Other",
+    "hierarchy_level": null,
+    "req_months_in_clan": null,
+    "req_total_level": null,
+    "notes": null
+  }
+]
