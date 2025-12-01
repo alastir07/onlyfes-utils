@@ -205,33 +205,51 @@ def update_leaderboard(supabase, github_token):
         # Fetch Lifetime Leaderboard data (sum of positive modifications)
         log.info("Fetching Lifetime leaderboard data...")
         
-        # Fetch all positive transactions for active members
-        # Use the specific relationship name to avoid ambiguity
+        # Fetch all positive transactions with member data
+        # Note: We can't filter on nested fields when using explicit relationship names,
+        # so we'll filter in Python instead
         lifetime_transactions = supabase.table('event_point_transactions') \
-            .select('member_id, modification, members!event_point_transactions_member_id_fkey(status, current_rank_id, member_rsns!inner(rsn, is_primary), ranks!current_rank_id(id, name))') \
-            .eq('members.status', 'Active') \
-            .eq('members.member_rsns.is_primary', True) \
+            .select('member_id, modification, members!event_point_transactions_member_id_fkey(status, current_rank_id, member_rsns(rsn, is_primary), ranks!current_rank_id(id, name))') \
             .gt('modification', 0) \
             .execute()
 
-
-        
-        # Aggregate lifetime EP by member
+        # Aggregate lifetime EP by member (filter in Python)
         lifetime_dict = {}
         for txn in lifetime_transactions.data:
             member_id = txn['member_id']
+            member_data = txn.get('members')
+            
+            # Skip if no member data or member is not active
+            if not member_data or member_data.get('status') != 'Active':
+                continue
+            
+            # Get primary RSN
+            member_rsns = member_data.get('member_rsns', [])
+            if not member_rsns:
+                continue
+            
+            primary_rsn = None
+            for rsn_entry in member_rsns:
+                if rsn_entry.get('is_primary'):
+                    primary_rsn = rsn_entry.get('rsn')
+                    break
+            
+            if not primary_rsn:
+                continue
+            
+            # Initialize member in dict if not exists
             if member_id not in lifetime_dict:
-                member_data = txn['members']
-                rsn = member_data['member_rsns'][0]['rsn'] if member_data.get('member_rsns') else 'Unknown'
-                rank_info = member_data.get('ranks', {}) if member_data.get('ranks') else {}
+                rank_info = member_data.get('ranks') or {}
                 
                 lifetime_dict[member_id] = {
-                    'rsn': rsn,
+                    'rsn': primary_rsn,
                     'lifetime_ep': 0,
-                    'rank_id': rank_info.get('id', '') if rank_info else '',
-                    'rank_name': rank_info.get('name', '') if rank_info else ''
+                    'rank_id': rank_info.get('id', ''),
+                    'rank_name': rank_info.get('name', '')
                 }
+            
             lifetime_dict[member_id]['lifetime_ep'] += txn['modification']
+
         
         # Convert to list and sort
         lifetime_data = sorted(lifetime_dict.values(), key=lambda x: x['lifetime_ep'], reverse=True)
@@ -240,14 +258,11 @@ def update_leaderboard(supabase, github_token):
         # Fetch Big Spender Leaderboard data (sum of negative modifications, excluding test)
         log.info("Fetching Big Spender leaderboard data...")
         big_spender_transactions = supabase.table('event_point_transactions') \
-            .select('member_id, modification, reason, members!event_point_transactions_member_id_fkey(status, current_rank_id, member_rsns!inner(rsn, is_primary), ranks!current_rank_id(id, name))') \
-            .eq('members.status', 'Active') \
-            .eq('members.member_rsns.is_primary', True) \
+            .select('member_id, modification, reason, members!event_point_transactions_member_id_fkey(status, current_rank_id, member_rsns(rsn, is_primary), ranks!current_rank_id(id, name))') \
             .lt('modification', 0) \
             .execute()
 
-        
-        # Aggregate big spender EP by member (excluding test transactions)
+        # Aggregate big spender EP by member (filter in Python, excluding test transactions)
         big_spender_dict = {}
         for txn in big_spender_transactions.data:
             # Skip if reason contains "test" (case-insensitive)
@@ -256,19 +271,40 @@ def update_leaderboard(supabase, github_token):
                 continue
             
             member_id = txn['member_id']
+            member_data = txn.get('members')
+            
+            # Skip if no member data or member is not active
+            if not member_data or member_data.get('status') != 'Active':
+                continue
+            
+            # Get primary RSN
+            member_rsns = member_data.get('member_rsns', [])
+            if not member_rsns:
+                continue
+            
+            primary_rsn = None
+            for rsn_entry in member_rsns:
+                if rsn_entry.get('is_primary'):
+                    primary_rsn = rsn_entry.get('rsn')
+                    break
+            
+            if not primary_rsn:
+                continue
+            
+            # Initialize member in dict if not exists
             if member_id not in big_spender_dict:
-                member_data = txn['members']
-                rsn = member_data['member_rsns'][0]['rsn'] if member_data.get('member_rsns') else 'Unknown'
-                rank_info = member_data.get('ranks', {}) if member_data.get('ranks') else {}
+                rank_info = member_data.get('ranks') or {}
                 
                 big_spender_dict[member_id] = {
-                    'rsn': rsn,
+                    'rsn': primary_rsn,
                     'total_spent': 0,
-                    'rank_id': rank_info.get('id', '') if rank_info else '',
-                    'rank_name': rank_info.get('name', '') if rank_info else ''
+                    'rank_id': rank_info.get('id', ''),
+                    'rank_name': rank_info.get('name', '')
                 }
+            
             # Add absolute value (convert negative to positive for display)
             big_spender_dict[member_id]['total_spent'] += abs(txn['modification'])
+
         
         # Convert to list and sort
         big_spender_data = sorted(big_spender_dict.values(), key=lambda x: x['total_spent'], reverse=True)
