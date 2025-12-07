@@ -455,14 +455,14 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
     for member_id in db_member_data:
         if member_id in db_member_data:
             member = db_member_data[member_id]
-            if member['current_rank_id'] == ranks_map_by_id['Sapphire'] and member['date_joined'] > (today - timedelta(days=28)):
+            if member['current_rank_id'] == ranks_map_by_id[10] and member['date_joined'] > (today - timedelta(days=28)):
                 report_promo_emerald.append(f"{member['rsn']}")
 
     # E: Check for ruby rankups (Emerald rank and joined over 56 days ago with 1250 total level)
     for member_id in db_member_data:
         if member_id in db_member_data:
             member = db_member_data[member_id]
-            if member['current_rank_id'] == ranks_map_by_id['Emerald'] and member['date_joined'] > (today - timedelta(days=56)) and member['total_level'] >= 1250:
+            if member['current_rank_id'] == ranks_map_by_id[11] and member['date_joined'] > (today - timedelta(days=56)) and member['total_level'] >= 1250:
                 report_promo_ruby.append(f"{member['rsn']}")
     
     # --- 6. CIRCUIT BREAKER CHECK ---
