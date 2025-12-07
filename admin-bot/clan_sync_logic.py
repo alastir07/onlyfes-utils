@@ -450,7 +450,21 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                     # Rank mismatch detected!
                     db_rank_name = ranks_map_by_id.get(db_rank_id, 'Unknown')
                     report_rank_mismatches.append(f"{wom_member['rsn']}: DB says '{db_rank_name}', WOM says '{wom_rank_name}'")
-        
+
+    # D: Check for emerald rankups (Sapphire rank and joined over 28 days ago)
+    for member_id in db_member_data:
+        if member_id in db_member_data:
+            member = db_member_data[member_id]
+            if member['current_rank_id'] == ranks_map_by_id['Sapphire'] and member['date_joined'] > (today - timedelta(days=28)):
+                report_promo_emerald.append(f"{member['rsn']}")
+
+    # E: Check for ruby rankups (Emerald rank and joined over 56 days ago with 1250 total level)
+    for member_id in db_member_data:
+        if member_id in db_member_data:
+            member = db_member_data[member_id]
+            if member['current_rank_id'] == ranks_map_by_id['Emerald'] and member['date_joined'] > (today - timedelta(days=56)) and member['total_level'] >= 1250:
+                report_promo_ruby.append(f"{member['rsn']}")
+    
     # --- 6. CIRCUIT BREAKER CHECK ---
     report_lines.append("\n--- Running Safety Checks ---")
     report_lines.append(f"Found {len(report_rank_mismatches)} rank mismatches.")
@@ -605,7 +619,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
     report_lines.append("\n--- 💎 Staff Action Required: Pending Promotions ---")
     report_lines.append("Promote in-game, then run /rankup <rsn> <rank>")
     if report_promo_emerald:
-        report_lines.append("\n  Sapphire -> Emerald (>= 30 days):")
+        report_lines.append("\n  Sapphire -> Emerald (>= 28 days):")
         for report in report_promo_emerald:
             report_lines.append(f"    - {report}")
     if report_promo_ruby:
