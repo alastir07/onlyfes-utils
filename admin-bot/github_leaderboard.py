@@ -203,6 +203,28 @@ def update_leaderboard(supabase, github_token):
     Returns:
         tuple: (success: bool, message: str)
     """
+    def fetch_all_rows(query_builder, page_size=1000):
+        """Helper to fetch all rows using pagination"""
+        all_data = []
+        page = 0
+        while True:
+            start = page * page_size
+            end = start + page_size - 1
+            # Note: Supabase range is inclusive
+            response = query_builder.range(start, end).execute()
+            data = response.data
+            
+            if not data:
+                break
+                
+            all_data.extend(data)
+            
+            if len(data) < page_size:
+                break
+                
+            page += 1
+        return all_data
+
     try:
         log.info("Fetching leaderboard data...")
         
@@ -212,14 +234,15 @@ def update_leaderboard(supabase, github_token):
         # Fetch all positive transactions with member data
         # Note: We can't filter on nested fields when using explicit relationship names,
         # so we'll filter in Python instead
-        lifetime_transactions = supabase.table('event_point_transactions') \
+        lifetime_query = supabase.table('event_point_transactions') \
             .select('member_id, modification, members!event_point_transactions_member_id_fkey(status, current_rank_id, member_rsns(rsn, is_primary), ranks!current_rank_id(id, name))') \
-            .gt('modification', 0) \
-            .execute()
+            .gt('modification', 0)
+            
+        lifetime_transactions_data = fetch_all_rows(lifetime_query)
 
         # Aggregate lifetime EP by member (filter in Python)
         lifetime_dict = {}
-        for txn in lifetime_transactions.data:
+        for txn in lifetime_transactions_data:
             member_id = txn['member_id']
             member_data = txn.get('members')
             
@@ -261,14 +284,15 @@ def update_leaderboard(supabase, github_token):
         
         # Fetch Big Spender Leaderboard data (sum of negative modifications, excluding test)
         log.info("Fetching Big Spender leaderboard data...")
-        big_spender_transactions = supabase.table('event_point_transactions') \
+        big_spender_query = supabase.table('event_point_transactions') \
             .select('member_id, modification, reason, members!event_point_transactions_member_id_fkey(status, current_rank_id, member_rsns(rsn, is_primary), ranks!current_rank_id(id, name))') \
-            .lt('modification', 0) \
-            .execute()
+            .lt('modification', 0)
+            
+        big_spender_transactions_data = fetch_all_rows(big_spender_query)
 
         # Aggregate big spender EP by member (filter in Python, excluding test transactions)
         big_spender_dict = {}
-        for txn in big_spender_transactions.data:
+        for txn in big_spender_transactions_data:
             # Skip if reason contains "test" (case-insensitive)
             reason = txn.get('reason', '') or ''
             if 'test' in reason.lower():
@@ -316,12 +340,13 @@ def update_leaderboard(supabase, github_token):
 
         # Fetch Raffle Leaderboard data (count of positive transactions in Dec 2025)
         log.info("Fetching Raffle leaderboard data...")
-        raffle_transactions = supabase.table('event_point_transactions') \
+        raffle_query = supabase.table('event_point_transactions') \
             .select('member_id, modification, date_enacted, members!event_point_transactions_member_id_fkey(status, current_rank_id, member_rsns(rsn, is_primary), ranks!current_rank_id(id, name))') \
             .gt('modification', 0) \
             .gte('date_enacted', '2025-12-01 00:00:00') \
-            .lte('date_enacted', '2025-12-31 23:59:59') \
-            .execute()
+            .lte('date_enacted', '2025-12-31 23:59:59')
+            
+        raffle_transactions_data = fetch_all_rows(raffle_query)
 
         # Aggregate raffle entries by member
         raffle_dict = {}
