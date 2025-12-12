@@ -350,7 +350,7 @@ def update_leaderboard(supabase, github_token):
 
         # Aggregate raffle entries by member
         raffle_dict = {}
-        for txn in raffle_transactions.data:
+        for txn in raffle_transactions_data:
             member_id = txn['member_id']
             member_data = txn.get('members')
             
