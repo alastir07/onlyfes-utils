@@ -299,7 +299,8 @@
         margin-left: -5px;
         border-width: 5px;
         border-style: solid;
-        border-color: rgba(139, 69, 19, 0.95) transparent transparent transparent;
+        border-color: rgba(139, 69, 19, 0.95) transparent transparent
+          transparent;
       }
 
       .tooltip:hover .tooltiptext {
@@ -322,13 +323,21 @@
           <button class="tab-button" onclick="switchTab('bigspender')">
             Big Spender
           </button>
+          <button class="tab-button" onclick="switchTab('raffle')">
+            Raffle Entries
+          </button>
         </div>
 
         <!-- Lifetime Tab -->
         <div id="lifetime-tab" class="tab-content active">
           <div class="info-text">
-            This leaderboard shows all-time<span class="tooltip">*<span class="tooltiptext">Event Points earned and spent before 15/11/2025 may not be captured</span></span> Event Points earned by members,
-            without deductions.<br />
+            This leaderboard shows all-time<span class="tooltip"
+              >*<span class="tooltiptext"
+                >Event Points earned and spent before 15/11/2025 may not be
+                captured</span
+              ></span
+            >
+            Event Points earned by members, without deductions.<br />
             To check your currently spendable EP, use
             <strong>/memberinfo &lt;your rsn&gt;</strong> in Discord!
           </div>
@@ -399,6 +408,38 @@
           </table>
         </div>
 
+        <!-- Raffle Tab -->
+        <div id="raffle-tab" class="tab-content">
+          <div class="info-text">
+            <strong>December 2025 Giveaway!</strong><br />
+            Thanks to the generosity of our clanmembers, there are <img src="bond.png" style="width: 20px;"> 107 Bonds <img src="bond.png" style="width: 20px;"> that will be getting 
+            raffled off as part of our December Bond Giveaway! <strong>Earn 1 raffle entry for every event you attend in December!</strong> Bonus entries are available for various activities, 
+            see the full details <a href="https://discord.com/channels/1054602579197300867/1054611693197602936/1445523343846543401" target="_blank">here</a>
+          </div>
+
+          <input
+            type="text"
+            class="search-box"
+            id="searchBoxRaffle"
+            placeholder="Search by RSN..."
+          />
+
+          <table id="raffleTable">
+            <thead>
+              <tr>
+                <th class="rank-cell" onclick="sortTable('raffle', 0)">Rank</th>
+                <th class="name-cell" onclick="sortTable('raffle', 1)">Name</th>
+                <th class="ep-cell" onclick="sortTable('raffle', 2)">
+                  Entries
+                </th>
+              </tr>
+            </thead>
+            <tbody id="raffleBody">
+              {{RAFFLE_ROWS}}
+            </tbody>
+          </table>
+        </div>
+
         <div class="footer">
           Last Updated: {{LAST_UPDATED}} - Maintained by Corvid -
           <a href="https://discord.gg/onlyfes">discord.gg/onlyfes</a>
@@ -431,8 +472,16 @@
         const titles = {
           lifetime: "🏆 All-Time Event Points Leaderboard 🏆",
           bigspender: "💎 Big Spender Leaderboard 💎",
+          raffle: "December Raffle Entries",
         };
-        document.getElementById("pageTitle").textContent = titles[tabName];
+        
+        // Handle raffle title separately to allow HTML (images)
+        if (tabName === 'raffle') {
+            document.getElementById("pageTitle").innerHTML = '<img src="bond.png" style="width: 32px;"> December Raffle Entries <img src="bond.png" style="width: 32px;">';
+        } else {
+            document.getElementById("pageTitle").textContent = titles[tabName];
+        }
+        
         document.title = titles[tabName];
       }
 
@@ -479,19 +528,29 @@
       }
 
       setupSearch("searchBoxLifetime", "lifetimeBody");
+
       setupSearch("searchBoxBigSpender", "bigspenderBody");
+      setupSearch("searchBoxRaffle", "raffleBody");
 
       // Sort functionality
       let currentSort = {
         lifetime: { column: 0, direction: "asc" },
+
         bigspender: { column: 0, direction: "asc" },
+        raffle: { column: 0, direction: "asc" },
       };
 
       function sortTable(tableType, columnIndex) {
-        const tableId = tableType === "lifetime" ? "lifetimeTable" : "bigspenderTable";
+        let tableId;
+        if (tableType === "lifetime") tableId = "lifetimeTable";
+        else if (tableType === "bigspender") tableId = "bigspenderTable";
+        else tableId = "raffleTable";
+
         const table = document.getElementById(tableId);
         const tbody = table.querySelector("tbody");
-        const rows = Array.from(tbody.querySelectorAll("tr:not([id^='noResults'])"));
+        const rows = Array.from(
+          tbody.querySelectorAll("tr:not([id^='noResults'])")
+        );
 
         // Determine sort direction
         if (currentSort[tableType].column === columnIndex) {
@@ -529,15 +588,18 @@
           header.classList.remove("sort-asc", "sort-desc");
           if (index === columnIndex) {
             header.classList.add(
-              currentSort[tableType].direction === "asc" ? "sort-asc" : "sort-desc"
+              currentSort[tableType].direction === "asc"
+                ? "sort-asc"
+                : "sort-desc"
             );
           }
         });
       }
 
-      // Set initial sort indicators (both tables sorted by rank ascending)
+      // Set initial sort indicators (all tables sorted by rank ascending)
       document.querySelector("#lifetimeTable th").classList.add("sort-asc");
       document.querySelector("#bigspenderTable th").classList.add("sort-asc");
+      document.querySelector("#raffleTable th").classList.add("sort-asc");
     </script>
   </body>
 </html>

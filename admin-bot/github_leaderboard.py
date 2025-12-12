@@ -14,13 +14,15 @@ import logging
 log = logging.getLogger('ClanBot')
 
 
-def generate_leaderboard_html(lifetime_data, big_spender_data, template_path='leaderboard_template.html'):
+def generate_leaderboard_html(lifetime_data, big_spender_data, raffle_data, template_path='leaderboard_template.html'):
     """
     Generate HTML for the leaderboard from member data
     
     Args:
         lifetime_data: List of dicts with 'rsn', 'lifetime_ep', 'rank_id', and 'rank_name' keys
+
         big_spender_data: List of dicts with 'rsn', 'total_spent', 'rank_id', and 'rank_name' keys
+        raffle_data: List of dicts with 'rsn', 'raffle_entries', 'rank_id', and 'rank_name' keys
         template_path: Path to the HTML template file
     
     Returns:
@@ -71,6 +73,7 @@ def generate_leaderboard_html(lifetime_data, big_spender_data, template_path='le
     # Generate rows for both leaderboards
     lifetime_rows = generate_rows(lifetime_data, 'lifetime_ep')
     big_spender_rows = generate_rows(big_spender_data, 'total_spent')
+    raffle_rows = generate_rows(raffle_data, 'raffle_entries')
     
     # Replace placeholders
     last_updated = datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
@@ -78,6 +81,7 @@ def generate_leaderboard_html(lifetime_data, big_spender_data, template_path='le
     html = html.replace('{{PAGE_TITLE}}', '🏆 All-Time Event Points Leaderboard 🏆')
     html = html.replace('{{LIFETIME_ROWS}}', lifetime_rows)
     html = html.replace('{{BIGSPENDER_ROWS}}', big_spender_rows)
+    html = html.replace('{{RAFFLE_ROWS}}', raffle_rows)
     
     return html
 
@@ -128,7 +132,7 @@ def deploy_to_github_pages(html_content, github_token, repo_owner='alastir07', r
             
             # Copy assets if they don't exist
             assets_source = Path(__file__).parent
-            assets = ['scroll_top.gif', 'scroll_middle.gif', 'scroll_bottom.gif', 'bg2.jpg', 'runescape.ttf']
+            assets = ['scroll_top.gif', 'scroll_middle.gif', 'scroll_bottom.gif', 'bg2.jpg', 'runescape.ttf', 'bond.png']
             
             for asset in assets:
                 source_path = assets_source / asset
@@ -309,10 +313,61 @@ def update_leaderboard(supabase, github_token):
         # Convert to list and sort
         big_spender_data = sorted(big_spender_dict.values(), key=lambda x: x['total_spent'], reverse=True)
         log.info(f"Found {len(big_spender_data)} members for Big Spender leaderboard")
+
+        # Fetch Raffle Leaderboard data (count of positive transactions in Dec 2025)
+        log.info("Fetching Raffle leaderboard data...")
+        raffle_transactions = supabase.table('event_point_transactions') \
+            .select('member_id, modification, date_enacted, members!event_point_transactions_member_id_fkey(status, current_rank_id, member_rsns(rsn, is_primary), ranks!current_rank_id(id, name))') \
+            .gt('modification', 0) \
+            .gte('date_enacted', '2025-12-01 00:00:00') \
+            .lte('date_enacted', '2025-12-31 23:59:59') \
+            .execute()
+
+        # Aggregate raffle entries by member
+        raffle_dict = {}
+        for txn in raffle_transactions.data:
+            member_id = txn['member_id']
+            member_data = txn.get('members')
+            
+            # Skip if no member data or member is not active
+            if not member_data or member_data.get('status') != 'Active':
+                continue
+            
+            # Get primary RSN
+            member_rsns = member_data.get('member_rsns', [])
+            if not member_rsns:
+                continue
+            
+            primary_rsn = None
+            for rsn_entry in member_rsns:
+                if rsn_entry.get('is_primary'):
+                    primary_rsn = rsn_entry.get('rsn')
+                    break
+            
+            if not primary_rsn:
+                continue
+            
+            # Initialize member in dict if not exists
+            if member_id not in raffle_dict:
+                rank_info = member_data.get('ranks') or {}
+                
+                raffle_dict[member_id] = {
+                    'rsn': primary_rsn,
+                    'raffle_entries': 0,
+                    'rank_id': rank_info.get('id', ''),
+                    'rank_name': rank_info.get('name', '')
+                }
+            
+            # Each transaction counts as 1 entry
+            raffle_dict[member_id]['raffle_entries'] += 1
+        
+        # Convert to list and sort
+        raffle_data = sorted(raffle_dict.values(), key=lambda x: x['raffle_entries'], reverse=True)
+        log.info(f"Found {len(raffle_data)} members for Raffle leaderboard")
         
         # Generate HTML
         template_path = Path(__file__).parent / 'leaderboard_template.html'
-        html = generate_leaderboard_html(lifetime_data, big_spender_data, template_path)
+        html = generate_leaderboard_html(lifetime_data, big_spender_data, raffle_data, template_path)
         
         # Deploy to GitHub Pages
         success = deploy_to_github_pages(html, github_token)
