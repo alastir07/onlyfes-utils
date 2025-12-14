@@ -297,7 +297,7 @@ def check_inactivity(supabase: Client, members: list) -> dict:
                 latest_snapshot_date = datetime.fromisoformat(snapshots[0]['snapshot_date'].replace('Z', '+00:00'))
                 days_since_latest = (datetime.now(timezone.utc) - latest_snapshot_date).days
                 
-                if days_since_latest > days_threshold:
+                if days_since_latest > (at_risk_threshold - 5):
                     needs_wom_verification = True
                     reason = f"latest snapshot is {days_since_latest} days old"
             
