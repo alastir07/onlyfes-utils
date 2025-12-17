@@ -70,7 +70,26 @@ BEGIN
         ) AS past_rsns
       ) AS past_names,
       
-      m.discord_id
+      m.discord_id,
+
+      -- Get the most recent WOM snapshot date
+      (
+        SELECT snapshot_date
+        FROM public.wom_snapshots ws
+        WHERE ws.member_id = v_member_id
+        ORDER BY snapshot_date DESC
+        LIMIT 1
+      ) AS latest_wom_snapshot,
+
+      -- Get the most recent event point transaction date
+      (
+        SELECT date_enacted
+        FROM public.event_point_transactions ept
+        WHERE ept.member_id = v_member_id
+        AND ept.modification > 0
+        ORDER BY date_enacted DESC
+        LIMIT 1
+      ) AS latest_ep_transaction
     FROM
       public.members AS m
     -- Left join rank because inactive members might not have a valid rank_id

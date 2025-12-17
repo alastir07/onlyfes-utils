@@ -231,7 +231,7 @@ async def help(interaction: discord.Interaction, publish: bool = False):
         ]
         
         embed.add_field(
-            name="🔥 Colonel Commands (DANGER ZONE)",
+            name="🔥 Colonel Commands",
             value="\n\n".join(colonel_commands),
             inline=False
         )
@@ -270,6 +270,16 @@ async def member_info(interaction: discord.Interaction, rsn: str, publish: bool 
         
         join_date_obj = discord.utils.parse_time(member['date_joined'])
         formatted_date = f"<t:{int(join_date_obj.timestamp())}:D>"
+        days_in_clan = (datetime.now(timezone.utc) - join_date_obj).days
+        combined_date_and_days = f"{formatted_date} ({days_in_clan} days)"
+        latest_wom_snapshot_obj = discord.utils.parse_time(member['latest_wom_snapshot']) or "Never"
+        formatted_latest_wom_snapshot = f"<t:{int(latest_wom_snapshot_obj.timestamp())}:D>" if latest_wom_snapshot_obj != "Never" else "Never"
+        latest_ep_transaction_obj = discord.utils.parse_time(member['latest_ep_transaction']) or "Never"
+        formatted_latest_ep_transaction = f"<t:{int(latest_ep_transaction_obj.timestamp())}:D>" if latest_ep_transaction_obj != "Never" else "Never"
+
+        # Check permissions (Captain+)
+        user_role = get_user_role_level(interaction)
+        is_staff = user_role is not None
 
         embed = discord.Embed(
             title=f"Member Info: {member['primary_rsn']}",
@@ -277,14 +287,17 @@ async def member_info(interaction: discord.Interaction, rsn: str, publish: bool 
         )
         embed.add_field(name="Current Rank", value=member['rank_name'], inline=True)
         embed.add_field(name="Current EP", value=f"{member['total_ep']:,}", inline=True)
-        embed.add_field(name="Join Date", value=formatted_date, inline=True)
+        embed.add_field(name="Join Date", value=combined_date_and_days, inline=True)
         
-        # --- NEW: Add Discord ID (plaintext) ---
-        discord_id = member.get('discord_id')
-        if discord_id:
-            # Use backticks to format it as code and prevent pings
-            embed.add_field(name="Linked Discord ID", value=f"`{discord_id}`", inline=False)
-        # --- END NEW ---
+        if is_staff:
+             embed.add_field(name="Latest XP Gain", value=formatted_latest_wom_snapshot, inline=True)
+             embed.add_field(name="Latest EP Gain", value=formatted_latest_ep_transaction, inline=True)
+        
+             # --- Add Discord ID (plaintext) ---
+             discord_id = member.get('discord_id')
+             if discord_id:
+                 # Use backticks to format it as code and prevent pings
+                 embed.add_field(name="Linked Discord ID", value=f"`{discord_id}`", inline=False)
 
         past_names = member.get('past_names')
         if past_names:
