@@ -8,6 +8,7 @@ import asyncio
 from io import StringIO
 import traceback
 from datetime import datetime, time
+from zoneinfo import ZoneInfo
 import functools
 import logging
 import sys # <-- Import sys
@@ -270,7 +271,7 @@ async def member_info(interaction: discord.Interaction, rsn: str, publish: bool 
         
         join_date_obj = discord.utils.parse_time(member['date_joined'])
         formatted_date = f"<t:{int(join_date_obj.timestamp())}:D>"
-        days_in_clan = (datetime.now(timezone.utc) - join_date_obj).days
+        days_in_clan = (datetime.now(ZoneInfo('UTC')) - join_date_obj).days
         combined_date_and_days = f"{formatted_date} ({days_in_clan} days)"
         latest_wom_snapshot_obj = discord.utils.parse_time(member['latest_wom_snapshot']) or "Never"
         formatted_latest_wom_snapshot = f"<t:{int(latest_wom_snapshot_obj.timestamp())}:D>" if latest_wom_snapshot_obj != "Never" else "Never"
