@@ -53,8 +53,29 @@ def normalize_string(s: str) -> str:
     if not s:
         return ""
     return s.lower().replace(' ', '').replace('_', '').replace('-', '').replace('.', '')
+    return s.lower().replace(' ', '').replace('_', '').replace('-', '').replace('.', '')
 
-# --- 3. DATA FETCHING FUNCTIONS ---
+def fetch_all_rows(query_builder, page_size=1000):
+    """Helper to fetch all rows using pagination"""
+    all_data = []
+    page = 0
+    while True:
+        start = page * page_size
+        end = start + page_size - 1
+        # Note: Supabase range is inclusive
+        response = query_builder.range(start, end).execute()
+        data = response.data
+        
+        if not data:
+            break
+            
+        all_data.extend(data)
+        
+        if len(data) < page_size:
+            break
+            
+        page += 1
+    return all_data
 
 def fetch_wom_members() -> tuple:
     log.info(f"Fetching group data from WOM Group ID: {WOM_GROUP_ID}...")
@@ -92,9 +113,12 @@ def fetch_db_ranks_and_rsns(supabase: Client) -> (dict, dict, dict):
             ranks_map_normalized[normalize_string(rank['name'])] = rank['id']
             ranks_map_by_id[rank['id']] = rank['name']
         
-        rsns_res = supabase.table('member_rsns').select('rsn, member_id, is_primary').execute()
+        
+        rsns_query = supabase.table('member_rsns').select('rsn, member_id, is_primary')
+        rsns_data = fetch_all_rows(rsns_query)
+        
         db_rsn_map_normalized = {}
-        for item in rsns_res.data:
+        for item in rsns_data:
             db_rsn_map_normalized[normalize_string(item['rsn'])] = {
                 "member_id": item['member_id'],
                 "is_primary": item['is_primary'],
@@ -233,10 +257,46 @@ def fetch_and_process_name_changes(supabase: Client, db_rsn_map_normalized: dict
 
                 # --- FIX: Check if new name is already linked to this member ---
                 if new_norm in db_rsn_map_normalized:
-                    existing_member_id = db_rsn_map_normalized[new_norm]['member_id']
+                    existing_entry = db_rsn_map_normalized[new_norm]
+                    existing_member_id = existing_entry['member_id']
+                    
                     if existing_member_id == member_id:
-                        log.warning(f"Skipping name change {old_name} -> {new_name} (Already processed).")
-                        continue
+                        # Check if we are just reverting to an old name (A -> B -> A)
+                        # If existing entry is NOT primary, we need to swap it back to primary
+                        if not existing_entry['is_primary']:
+                            report_lines.append(f"Processing name revert: {old_name} -> {new_name} (Swapping primary)")
+                            report_name_changes.append(f"{old_name} -> {new_name} (Revert)")
+                            
+                            if not dry_run:
+                                try:
+                                    # 1. Set the OLD name (which was primary) to non-primary
+                                    supabase.table('member_rsns').update({'is_primary': False})\
+                                        .eq('member_id', member_id)\
+                                        .eq('rsn', original_db_rsn)\
+                                        .execute()
+                                        
+                                    # 2. Set the NEW (existing) name to primary
+                                    # Use the stored original RSN from the DB map to match exactly
+                                    target_rsn_str = existing_entry['original_rsn']
+                                    supabase.table('member_rsns').update({'is_primary': True})\
+                                        .eq('member_id', member_id)\
+                                        .eq('rsn', target_rsn_str)\
+                                        .execute()
+                                except Exception as e:
+                                    report_lines.append(f"  > ERROR: Failed to swap primary status for {old_name} -> {new_name}. {e}")
+                                    continue
+
+                            # Update local map to reflect the swap
+                            if old_norm in db_rsn_map_normalized:
+                                db_rsn_map_normalized[old_norm]['is_primary'] = False
+                            db_rsn_map_normalized[new_norm]['is_primary'] = True
+                            
+                            continue
+
+                        else:
+                            # It's already primary? Then we truly have already processed this.
+                            log.warning(f"Skipping name change {old_name} -> {new_name} (Already processed).")
+                            continue
                 # ---------------------------------------------------------------
 
                 report_lines.append(f"Processing name change: {old_name} -> {new_name}")
