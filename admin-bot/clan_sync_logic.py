@@ -245,6 +245,12 @@ def fetch_and_process_name_changes(supabase: Client, db_rsn_map_normalized: dict
         if not name_changes:
             return db_rsn_map_normalized, report_name_changes
 
+        # FIX: Sort by date (createdAt) ascending to replay history correctly
+        # Oldest change first -> Newest change last
+        # Default implicit order might be reverse chrono (newest first), causing "reverts" to happen backwards
+        name_changes.sort(key=lambda x: parse(x['createdAt']))
+
+
         for change in name_changes:
             old_name = change['oldName']
             new_name = change['newName']
@@ -254,6 +260,8 @@ def fetch_and_process_name_changes(supabase: Client, db_rsn_map_normalized: dict
             if old_norm in db_rsn_map_normalized:
                 member_id = db_rsn_map_normalized[old_norm]['member_id']
                 original_db_rsn = db_rsn_map_normalized[old_norm]['original_rsn']
+
+
 
                 # --- FIX: Check if new name is already linked to this member ---
                 if new_norm in db_rsn_map_normalized:
@@ -332,8 +340,53 @@ def fetch_and_process_name_changes(supabase: Client, db_rsn_map_normalized: dict
                         }
                 
                 except Exception as e:
+                    # Robust recovery for unique constraint violation (code 23505)
+                    # This happens if the RSN exists in DB but wasn't caught by our map check
+                    error_str = str(e)
+                    is_unique_violation = '23505' in error_str or (hasattr(e, 'code') and e.code == '23505')
+                    
+                    if is_unique_violation and not dry_run:
+                        try:
+                            # Verify if the existing RSN belongs to THIS member
+                            conflict_res = supabase.table('member_rsns').select('member_id, is_primary').eq('rsn', new_name).execute()
+                            if conflict_res.data:
+                                conflict_row = conflict_res.data[0]
+                                if conflict_row['member_id'] == member_id:
+                                    # It's our own RSN! We can recover by swapping.
+                                    log.info(f"  > Recovering from 23505 error: {new_name} belongs to user. Swapping primary.")
+                                    
+                                    # 1. Set OLD to non-primary
+                                    supabase.table('member_rsns').update({'is_primary': False})\
+                                        .eq('member_id', member_id)\
+                                        .eq('rsn', original_db_rsn)\
+                                        .execute()
+                                    
+                                    # 2. Set NEW to primary
+                                    supabase.table('member_rsns').update({'is_primary': True})\
+                                        .eq('member_id', member_id)\
+                                        .eq('rsn', new_name)\
+                                        .execute()
+                                        
+                                    report_lines.append(f"  > Recovered: {old_name} -> {new_name} (Swapped Primary)")
+                                    
+                                    # Update local map
+                                    if old_norm in db_rsn_map_normalized:
+                                        db_rsn_map_normalized[old_norm]['is_primary'] = False
+                                    db_rsn_map_normalized[new_norm] = {
+                                        "member_id": member_id, 
+                                        "is_primary": True, 
+                                        "original_rsn": new_name
+                                    }
+                                    continue # Success, move to next change
+                                else:
+                                    report_lines.append(f"  > ERROR: Name overlap with DIFFERENT member! Cannot process {old_name} -> {new_name}.")
+                        except Exception as inner_e:
+                            log.error(f"Failed to recover from error: {inner_e}")
+                    
                     report_lines.append(f"  > ERROR: Failed to update name change for {old_name}. {e}")
-                    report_name_changes.pop()
+                    # Only pop if we failed
+                    if len(report_name_changes) > 0 and report_name_changes[-1] == f"{old_name} -> {new_name}":
+                        report_name_changes.pop()
 
     except Exception as e:
         report_lines.append(f"CRITICAL ERROR: Failed to fetch WOM name changes: {e}")
