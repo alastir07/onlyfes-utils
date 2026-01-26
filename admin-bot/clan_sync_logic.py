@@ -251,11 +251,68 @@ def fetch_and_process_name_changes(supabase: Client, db_rsn_map_normalized: dict
         name_changes.sort(key=lambda x: parse(x['createdAt']))
 
 
-        for change in name_changes:
+        name_changes.sort(key=lambda x: parse(x['createdAt']))
+
+        for i, change in enumerate(name_changes):
             old_name = change['oldName']
             new_name = change['newName']
             old_norm = normalize_string(old_name)
             new_norm = normalize_string(new_name)
+            
+            # --- FEATURE: LOOK AHEAD SQUASHING ---
+            # Check if this member has another name change immediately pending (chain)
+            # If so, treating this as an "intermediate" step suppresses the Primary Swap
+            # to avoid flipping back and forth (A->B, B->A).
+            is_intermediate = False
+            for future_change in name_changes[i+1:]:
+                # If the future change's OLD name matches our NEW name, it continues the chain
+                if normalize_string(future_change['oldName']) == new_norm:
+                    is_intermediate = True
+                    break
+            
+            if is_intermediate:
+                try:
+                    # Logic: Ensure 'new_name' is linked to the member (as non-primary)
+                    # But DO NOT perform any 'is_primary' swaps.
+                    
+                    # 1. Resolve Member ID using old name
+                    target_member_id = None
+                    if old_norm in db_rsn_map_normalized:
+                        target_member_id = db_rsn_map_normalized[old_norm]['member_id']
+                    
+                    if target_member_id:
+                        # 2. Check if new_name exists in DB
+                        if new_norm in db_rsn_map_normalized:
+                             # It exists. We trust it's linked correctly (or conflict logic handles it later).
+                             # Just skip the main logic block.
+                             # We perform a quick sanity check to ensure it points to same member
+                             if db_rsn_map_normalized[new_norm]['member_id'] == target_member_id:
+                                log.info(f"Skipping intermediate primary swap: {old_name} -> {new_name} (Chain detected)")
+                                continue
+                        
+                        else:
+                            # 3. New name doesn't exist. Insert it as Non-Primary.
+                            log.info(f"Processing intermediate name insert: {new_name} (Chain detected)")
+                            if not dry_run:
+                                supabase.table('member_rsns').insert({
+                                    'member_id': target_member_id,
+                                    'rsn': new_name,
+                                    'is_primary': False
+                                }).execute()
+                            
+                            # Update local map
+                            db_rsn_map_normalized[new_norm] = {
+                                "member_id": target_member_id, 
+                                "is_primary": False, 
+                                "original_rsn": new_name
+                            }
+                            continue
+                            
+                except Exception as e:
+                    log.warning(f"Error handling intermediate squash for {old_name} -> {new_name}: {e}")
+                    # Fall through to standard logic if something weird happens
+            
+            # -------------------------------------
 
             if old_norm in db_rsn_map_normalized:
                 member_id = db_rsn_map_normalized[old_norm]['member_id']
