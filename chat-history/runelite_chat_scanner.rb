@@ -3,7 +3,7 @@
 require 'fileutils'
 
 class RuneLiteChatScanner
-  def initialize(username, chat_logs_dir = ['C:/Users/danny/.runelite/chatlogs/CorvusUmbra/clan', 'C:/Users/danny/.runelite/chatlogs/Corvidastir/clan'])
+  def initialize(username, chat_logs_dir = ['C:/Users/danny/.runelite/chatlogs/CorvusUmbra/clan', 'C:/Users/danny/.runelite/chatlogs/Corvidastir/clan', 'C:/Users/danny/.runelite/chatlogs/CorvidsNest/clan', 'C:/Users/danny/.runelite/chatlogs/CorvidClaus/clan'])
     @username = username.downcase # Case insensitive matching
     @chat_logs_dir = chat_logs_dir
     @total_messages = 0
