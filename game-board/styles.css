@@ -202,6 +202,18 @@ body {
     border-color: #888;
 }
 
+.tile-number {
+    position: absolute;
+    top: 1px;
+    left: 3px; /* Moved to left */
+    font-size: 14px;
+    font-weight: bold;
+    color: yellow;
+    text-shadow: 0 0 3px black, 0 0 5px black;
+    pointer-events: none;
+    z-index: 10;
+}
+
 .tile-details {
     position: fixed;
     right: 0;
@@ -1075,6 +1087,21 @@ body {
 .tox .tox-checkbox__input:checked + .tox-checkbox__label::before {
     background: #4CAF50 !important;
     border-color: #4CAF50 !important;
+}
+
+/* Snakes and Ladders Visuals */
+.tile-ladder .hex-content,
+.tile-ladder .square-content,
+.tile-ladder.square {
+    box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.5);
+    border-color: #44ff44 !important;
+}
+
+.tile-snake .hex-content,
+.tile-snake .square-content,
+.tile-snake.square {
+    box-shadow: inset 0 0 20px rgba(255, 0, 0, 0.5);
+    border-color: #ff4444 !important;
 }
 
 .tox .tox-radio__input:checked + .tox-radio__label::before {
