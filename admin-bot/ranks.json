@@ -172,7 +172,7 @@
   },
   {
     "id": 29,
-    "name": "Colonel",
+    "name": "Master",
     "rank_type": "Staff",
     "hierarchy_level": 52,
     "req_months_in_clan": 0,
@@ -181,6 +181,15 @@
   },
   {
     "id": 30,
+    "name": "Commander",
+    "rank_type": "Staff",
+    "hierarchy_level": 53,
+    "req_months_in_clan": 0,
+    "req_total_level": 0,
+    "notes": "Staff Rank"
+  },
+  {
+    "id": 31,
     "name": "Deputy Owner",
     "rank_type": "Staff",
     "hierarchy_level": 98,
@@ -189,7 +198,7 @@
     "notes": "Admin Rank"
   },
   {
-    "id": 31,
+    "id": 32,
     "name": "Owner",
     "rank_type": "Staff",
     "hierarchy_level": 99,
@@ -198,7 +207,7 @@
     "notes": "Admin Rank"
   },
   {
-    "id": 32,
+    "id": 33,
     "name": "Anchor",
     "rank_type": "Other",
     "hierarchy_level": null,
