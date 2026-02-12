@@ -74,12 +74,12 @@ def get_staff_member_id(interaction: discord.Interaction) -> str | None:
     return None
 
 # --- Role-Based Permission System ---
-STAFF_ROLES = ["Owner", "Colonel", "General", "Captain"] # Ordered Highest to Lowest
+STAFF_ROLES = ["Owner", "Commander", "Master", "General", "Captain"] # Ordered Highest to Lowest
 
 def get_user_role_level(interaction: discord.Interaction) -> str | None:
     """
     Returns the highest staff role the user has, or None if they have no staff role.
-    Returns: "Owner", "Colonel", "General", "Captain", or None
+    Returns: "Owner", "Commander", "Master", "General", "Captain", or None
     """
     if not isinstance(interaction.user, discord.Member):
         return None
@@ -192,7 +192,7 @@ async def help(interaction: discord.Interaction, publish: bool = False):
     )
     
     # Captain commands (and higher)
-    if user_role in ["Captain", "General", "Colonel", "Owner"]:
+    if user_role in ["Captain", "General", "Master", "Commander", "Owner"]:
         captain_commands = [
             "`/rankup <rsn> <rank_name> [publish]`\nManually promotes/demotes a single member.",
             "`/bulkrankup <rank_name> <rsn_list> [publish]`\nUpdates multiple members to the same rank.",
@@ -211,8 +211,8 @@ async def help(interaction: discord.Interaction, publish: bool = False):
             inline=False
         )
     
-    # General commands (and higher)
-    if user_role in ["General", "Colonel", "Owner"]:
+    # General and Master commands (and higher)
+    if user_role in ["General", "Master", "Commander", "Owner"]:
         general_commands = [
             "`/syncclan [dry_run] [force_run] [publish]`\nRuns the clan sync with WOM.",
             "`/addexempt <rsn> <reason> [publish]`\nGrants a member 3-month immunity from inactivity tracking.",
@@ -220,20 +220,20 @@ async def help(interaction: discord.Interaction, publish: bool = False):
         ]
         
         embed.add_field(
-            name="⭐ General Commands",
+            name="⭐ General & Master Commands",
             value="\n\n".join(general_commands),
             inline=False
         )
     
-    # Colonel commands (and higher)
-    if user_role in ["Colonel", "Owner"]:
-        colonel_commands = [
+    # Commander commands (and higher)
+    if user_role in ["Commander", "Owner"]:
+        commander_commands = [
             "`/purgemember <rsn>`\n**⚠️ IRREVERSIBLE.** Deletes a member and all their associated data from the database."
         ]
         
         embed.add_field(
-            name="🔥 Colonel Commands",
-            value="\n\n".join(colonel_commands),
+            name="🔥 Commander Commands",
+            value="\n\n".join(commander_commands),
             inline=False
         )
     
@@ -441,7 +441,7 @@ class ConfirmPurgeView(ui.View):
 
 @client.tree.command(name="purgemember", description="DANGER: Permanently deletes a member and all their data.")
 @app_commands.describe(rsn="The RSN of the member to purge (must be an exact, case-sensitive match).")
-@check_staff_role("Colonel")
+@check_staff_role("Commander")
 async def purge_member(interaction: discord.Interaction, rsn: str):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -1177,7 +1177,7 @@ async def check_inactives(interaction: discord.Interaction, publish: bool = Fals
 @app_commands.describe(
     publish="False (default). True to post the confirmation publicly."
 )
-@check_staff_role("Colonel")
+@check_staff_role("Commander")
 async def update_ep_leaderboard_command(interaction: discord.Interaction, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
