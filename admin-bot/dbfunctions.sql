@@ -7,14 +7,15 @@ BEGIN
     m.id,
     m.date_joined,
     m.current_rank_id,
-    s.total_xp AS latest_db_xp
+    s.total_xp AS latest_db_xp,
+    s.total_level
   FROM
     public.members m
   -- LEFT JOIN so we still get members with NO snapshot
   LEFT JOIN LATERAL (
     -- This subquery gets only the *most recent* snapshot
     -- for each member.
-    SELECT snap.total_xp
+    SELECT snap.total_xp, snap.total_level
     FROM public.wom_snapshots snap
     WHERE snap.member_id = m.id
     ORDER BY snap.snapshot_date DESC
