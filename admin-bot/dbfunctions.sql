@@ -1,6 +1,16 @@
 -- DB FUNCTION: get_active_member_snapshots
 -- Returns a list of active members and their latest snapshots
 
+CREATE OR REPLACE FUNCTION get_active_member_snapshots()
+RETURNS TABLE (
+  id UUID,
+  date_joined TIMESTAMPTZ,
+  current_rank_id BIGINT,
+  latest_db_xp BIGINT,
+  total_level SMALLINT
+)
+LANGUAGE plpgsql
+AS $$
 BEGIN
   RETURN QUERY
   SELECT
@@ -24,6 +34,7 @@ BEGIN
   WHERE
     m.status = 'Active';
 END;
+$$;
 
 
 -- DB FUNCTION: get_member_info
