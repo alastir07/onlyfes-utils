@@ -301,12 +301,37 @@ def check_inactivity(supabase: Client, members: list) -> dict:
                     needs_wom_verification = True
                     reason = f"latest snapshot is {days_since_latest} days old"
             
-            # Flag 3: XP hasn't changed across snapshots (data integrity issue)
+            # Flag 3: XP hasn't changed across snapshots (data integrity issue or extended inactivity)
             if not needs_wom_verification and len(snapshots) > 1:
                 xp_values = [s['total_xp'] for s in snapshots]
-                if len(set(xp_values)) == 1:  # All XP values are the same
+                
+                # Case A: ALL snapshots identical
+                if len(set(xp_values)) == 1: 
+                    # Calculate timespan covered by these snapshots
+                    oldest_snapshot_date = datetime.fromisoformat(snapshots[-1]['snapshot_date'].replace('Z', '+00:00'))
+                    days_covered = (datetime.now(timezone.utc) - oldest_snapshot_date).days
+                    
                     needs_wom_verification = True
-                    reason = "XP unchanged across snapshots"
+                    reason = f"XP unchanged across all {len(snapshots)} snapshots ({days_covered} days coverage)"
+                
+                # Case B: Latest run of identical XP is long enough to be concerning
+                else:
+                    latest_xp = snapshots[0]['total_xp']
+                    # Find how far back this XP value goes
+                    oldest_matching_date = None
+                    for s in snapshots:
+                        if s['total_xp'] == latest_xp:
+                            oldest_matching_date = datetime.fromisoformat(s['snapshot_date'].replace('Z', '+00:00'))
+                        else:
+                            # XP changed here, so the streak ends
+                            break
+                    
+                    if oldest_matching_date:
+                        days_static = (datetime.now(timezone.utc) - oldest_matching_date).days
+                        # Check against threshold (give 5 days buffer)
+                        if days_static > (at_risk_threshold - 5):
+                            needs_wom_verification = True
+                            reason = f"XP unchanged for {days_static} days (since {oldest_matching_date.strftime('%Y-%m-%d')})"
             
             # If flagged, verify with WOM API
             if needs_wom_verification:
