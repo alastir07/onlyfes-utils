@@ -12,7 +12,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Twisted_bow_detail.png?7aa10\")",
       "details": {
         "name": "Tile -3,-6",
-        "description": "<p>Obtain 16 points using the below scoring system:</p>\n<ul>\n<li>Twisted Bow, Tumekan's Shadow or Scythe of Vitur - 16 points</li>\n<li>Any other purple from a raid - 1 point</li>\n<li>Any Olmlet, Tumekan's Guardian or Lil' Zik - 1 point</li>\n<li>Any fully completed Gauge - 1 point</li>\n</ul>",
+        "description": "<p>Obtain 16 points using the below scoring system:</p>\n<ul>\n<li>Twisted Bow, Tumeken's Shadow or Scythe of Vitur - 16 points</li>\n<li>Any other purple from a raid - 1 point</li>\n<li>Any Olmlet, Tumeken's Guardian or Lil' Zik - 1 point</li>\n<li>Any fully completed Gauge - 1 point</li>\n</ul>",
         "title": "Tile 100"
       },
       "number": "100"
@@ -147,7 +147,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Slayer_icon_%28detail%29.png?a4903\")",
       "details": {
         "name": "Tile -2,-5",
-        "description": "<p>Obtain 5x any uniques from the following Slayer bosses:</p>\n<ul>\n<li>Cerberus</li>\n<li>Groteque Gargolyes</li>\n<li>Thermonuclear Smoke Deil</li>\n<li>Alchemical Hydra</li>\n<li>Arraxor</li>\n</ul>",
+        "description": "<p>Obtain 5x any uniques from the following Slayer bosses:</p>\n<ul>\n<li>Cerberus</li>\n<li>Groteque Gargolyes</li>\n<li>Thermonuclear Smoke Deil</li>\n<li>Alchemical Hydra</li>\n<li>Araxxor</li>\n</ul>",
         "title": "Tile 82"
       },
       "number": "82"
@@ -528,7 +528,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Doom_of_Mokhaiotl.png?e5edb\")",
       "details": {
         "name": "Tile 1,-6",
-        "description": "<p>Obtain 2x any of the below uniques from the Doom of Mokhaitl:</p>\n<ul>\n<li>Avernic Treads</li>\n<li>Mokhaitl Cloth</li>\n<li>Eye of Ayak</li>\n</ul>\n<p><strong>OR</strong></p>\n<p>Obtain 1x of the below uniques from the Nightmare:</p>\n<ul>\n<li>Inquisitor's Mace</li>\n<li>Inquisitor's Great Helm</li>\n<li>Inquisitor's Hauberk</li>\n<li>Inquistors's Plateskire</li>\n<li>Nightmare Staff</li>\n<li>Volatile Orb</li>\n<li>Harmonised Orb</li>\n<li>Eldritch Orb</li>\n</ul>",
+        "description": "<p>Obtain 2x any of the below uniques from the Doom of Mokhaiotl:</p>\n<ul>\n<li>Avernic Treads</li>\n<li>Mokhaiotl Cloth</li>\n<li>Eye of Ayak</li>\n</ul>\n<p><strong>OR</strong></p>\n<p>Obtain 1x of the below uniques from the Nightmare:</p>\n<ul>\n<li>Inquisitor's Mace</li>\n<li>Inquisitor's Great Helm</li>\n<li>Inquisitor's Hauberk</li>\n<li>Inquisitor's Plateskirt</li>\n<li>Nightmare Staff</li>\n<li>Volatile Orb</li>\n<li>Harmonised Orb</li>\n<li>Eldritch Orb</li>\n</ul>",
         "title": "Tile 96"
       },
       "number": "96"
@@ -577,7 +577,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Zulrah_%28serpentine%29.png?29a54\")",
       "details": {
         "name": "Tile 1,-2",
-        "description": "<p>Obtain 2 of any below drops from Zulrah:</p>\n<ul>\n<li>Tanzanite Fang</li>\n<li>Magic Fang</li>\n<li>Serpentine Help</li>\n<li>Onyx</li>\n<li>Magma Mutagen</li>\n<li>Tanzanite Mutagen</li>\n</ul>",
+        "description": "<p>Obtain 2 of any below drops from Zulrah:</p>\n<ul>\n<li>Tanzanite Fang</li>\n<li>Magic Fang</li>\n<li>Serpentine Helm</li>\n<li>Onyx</li>\n<li>Magma Mutagen</li>\n<li>Tanzanite Mutagen</li>\n</ul>",
         "title": "Tile 56"
       },
       "number": "56"
@@ -664,7 +664,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Sol_Heredit.png?91250\")",
       "details": {
         "name": "Tile 2,-6",
-        "description": "<p>Obtain 3x of the below Fortis Colosseum Uniques:</p>\n<ul>\n<li>Sunfire Fanatic Cuirass</li>\n<li>Sunfire Fanatic Chausses</li>\n<li>Sunfire Fanatic Helm</li>\n<li>Echo Crystal</li>\n<li>Tonalzytics of Ralos</li>\n<li>Collection Log Quiver</li>\n</ul>",
+        "description": "<p>Obtain 3x of the below Fortis Colosseum Uniques:</p>\n<ul>\n<li>Sunfire Fanatic Cuirass</li>\n<li>Sunfire Fanatic Chausses</li>\n<li>Sunfire Fanatic Helm</li>\n<li>Echo Crystal</li>\n<li>Tonalztics of Ralos</li>\n<li>Collection Log Dizana's Quiver</li>\n</ul>",
         "title": "Tile 95"
       },
       "number": "95"
@@ -776,7 +776,7 @@
       "backgroundImage": "url(\"https://i.ibb.co/DDPvs9Ns/thievery.png\")",
       "details": {
         "name": "Tile 2,3",
-        "description": "<p>Obtain 1x Pharoahs Sceptre and 2x Enhanced Crystal Teleport Seed</p>",
+        "description": "<p>Obtain 1x Pharaoh's Sceptre and 2x Enhanced Crystal Teleport Seed</p>",
         "title": "Tile 6"
       },
       "number": "6"
