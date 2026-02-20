@@ -12,7 +12,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Twisted_bow_detail.png?7aa10\")",
       "details": {
         "name": "Tile -3,-6",
-        "description": "<p>Obtain 12 points using the below scoring system:</p>\n<ul>\n<li>Twisted Bow, Tumekan's Shadow or Scythe of Vitur - 12 points</li>\n<li>Any other purple from a raid - 1 point</li>\n<li>Any Olmlet, Tumekan's Guardian or Lil' Zik - 1 point</li>\n<li>Any fully completed Gauge - 1 point</li>\n</ul>",
+        "description": "<p>Obtain 16 points using the below scoring system:</p>\n<ul>\n<li>Twisted Bow, Tumekan's Shadow or Scythe of Vitur - 16 points</li>\n<li>Any other purple from a raid - 1 point</li>\n<li>Any Olmlet, Tumekan's Guardian or Lil' Zik - 1 point</li>\n<li>Any fully completed Gauge - 1 point</li>\n</ul>",
         "title": "Tile 100"
       },
       "number": "100"
@@ -24,7 +24,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Kree%27arra.png?ba75c\")",
       "details": {
         "name": "Tile -3,-5",
-        "description": "<p>Obtain 1x any of the below uniques from Kree'arra:</p>\n<ul>\n<li>Armadyl Helmet</li>\n<li>Armadyl Chainskirt</li>\n<li>Armadyl Chestplate</li>\n<li>Armadyl Hilt</li>\n</ul>",
+        "description": "<p>Obtain 2x any of the below uniques from Kree'arra:</p>\n<ul>\n<li>Armadyl Helmet</li>\n<li>Armadyl Chainskirt</li>\n<li>Armadyl Chestplate</li>\n<li>Armadyl Hilt</li>\n</ul>",
         "title": "Tile 81"
       },
       "number": "81"
@@ -147,7 +147,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Slayer_icon_%28detail%29.png?a4903\")",
       "details": {
         "name": "Tile -2,-5",
-        "description": "<p>Obtain 4x any uniques from the following Slayer bosses:</p>\n<ul>\n<li>Cerberus</li>\n<li>Groteque Gargolyes</li>\n<li>Thermonuclear Smoke Deil</li>\n<li>Alchemical Hydra</li>\n<li>Arraxor</li>\n</ul>",
+        "description": "<p>Obtain 5x any uniques from the following Slayer bosses:</p>\n<ul>\n<li>Cerberus</li>\n<li>Groteque Gargolyes</li>\n<li>Thermonuclear Smoke Deil</li>\n<li>Alchemical Hydra</li>\n<li>Arraxor</li>\n</ul>",
         "title": "Tile 82"
       },
       "number": "82"
@@ -394,7 +394,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Soulreaper_axe_detail.png?27b3b\")",
       "details": {
         "name": "Tile 0,-6",
-        "description": "<p>Obtain 1x any Soulreaper Axe piece or 2x any Vestige rolls (gold rings count)</p>",
+        "description": "<p>Obtain any Soulreaper Axe piece</p>\n<p><strong>OR</strong></p>\n<p>Obtain 3x any vestige ring roll</p>",
         "title": "Tile 97"
       },
       "number": "97"
@@ -540,7 +540,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Blood_shard_detail.png?2fbc7\")",
       "details": {
         "name": "Tile 1,-5",
-        "description": "<p>Obtain 1x Blood Shard</p>",
+        "description": "<p>Obtain 2x Blood Shard</p>",
         "title": "Tile 85"
       },
       "number": "85"
@@ -664,7 +664,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Sol_Heredit.png?91250\")",
       "details": {
         "name": "Tile 2,-6",
-        "description": "<p>Obtain 2x of the below Fortis Colosseum Uniques:</p>\n<ul>\n<li>Sunfire Fanatic Cuirass</li>\n<li>Sunfire Fanatic Chausses</li>\n<li>Sunfire Fanatic Helm</li>\n<li>Echo Crystal</li>\n<li>Tonalzytics of Ralos</li>\n</ul>\n<p><strong>OR</strong></p>\n<p>Obtain 1x Collection Log Quiver</p>",
+        "description": "<p>Obtain 3x of the below Fortis Colosseum Uniques:</p>\n<ul>\n<li>Sunfire Fanatic Cuirass</li>\n<li>Sunfire Fanatic Chausses</li>\n<li>Sunfire Fanatic Helm</li>\n<li>Echo Crystal</li>\n<li>Tonalzytics of Ralos</li>\n<li>Collection Log Quiver</li>\n</ul>",
         "title": "Tile 95"
       },
       "number": "95"
@@ -812,7 +812,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Reward_Chest_%28The_Gauntlet%29.png?69415\")",
       "details": {
         "name": "Tile 3,-4",
-        "description": "<p>Obtain 2x Crystal Armor Seed or Crystal Weapon Seed, <strong>OR&nbsp;</strong>1x Enhanced Crystal Weapon Seed</p>",
+        "description": "<p>Obtain 2x Crystal Armor Seed <strong>OR&nbsp;</strong>1x Enhanced Crystal Weapon Seed</p>",
         "title": "Tile 74"
       },
       "number": "74"
@@ -1160,7 +1160,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Craw%27s_bow_%28u%29_detail.png?bf1fd\")",
       "details": {
         "name": "Tile 6,-6",
-        "description": "<p>Obtain 2x any Revenant Uniques from the below list:</p>\n<ul>\n<li>Craw's Bow</li>\n<li>Thammaron's Sceptre</li>\n<li>Viggora's Chainmace</li>\n<li>Amulet of Avarice</li>\n<li>Ancient Crystal</li>\n<li>Ancient Relic</li>\n<li>Ancient Effigy</li>\n<li>Ancient Medallion</li>\n<li>Ancient Statuette</li>\n<li>Ancient Totem</li>\n<li>Ancient Emblem</li>\n</ul>",
+        "description": "<p>Obtain 3x any Revenant Uniques from the below list:</p>\n<ul>\n<li>Craw's Bow</li>\n<li>Thammaron's Sceptre</li>\n<li>Viggora's Chainmace</li>\n<li>Amulet of Avarice</li>\n<li>Ancient Crystal</li>\n<li>Ancient Relic</li>\n<li>Ancient Effigy</li>\n<li>Ancient Medallion</li>\n<li>Ancient Statuette</li>\n<li>Ancient Totem</li>\n<li>Ancient Emblem</li>\n</ul>",
         "title": "Tile 91"
       },
       "number": "91"
