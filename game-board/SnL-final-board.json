@@ -394,7 +394,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Soulreaper_axe_detail.png?27b3b\")",
       "details": {
         "name": "Tile 0,-6",
-        "description": "<p>Obtain any Soulreaper Axe piece</p>\n<p><strong>OR</strong></p>\n<p>Obtain 3x any vestige ring roll</p>",
+        "description": "<p>Obtain 3x the following from the Forgotten Four:</p>\n<ul>\n<li>SRA Pieces</li>\n<li>Vestige rolls</li>\n</ul>",
         "title": "Tile 97"
       },
       "number": "97"
