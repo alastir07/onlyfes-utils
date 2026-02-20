@@ -1197,7 +1197,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Awakener%27s_orb_detail.png?fb7a8\")",
       "details": {
         "name": "Tile 6,-3",
-        "description": "<p>Obtain 3x Awakeners Orb&nbsp;<strong>or</strong> Chromium Ingot</p>",
+        "description": "<p>Obtain 3x combined:</p>\n<ul>\n<li>Awakeners Orb</li>\n<li>Chromium Ingot</li>\n</ul>",
         "title": "Tile 70"
       },
       "number": "70"
