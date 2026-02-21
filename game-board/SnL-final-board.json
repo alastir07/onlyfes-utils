@@ -49,7 +49,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/thumb/Combat_achievements_detail.png/1024px-Combat_achievements_detail.png?d8b9a\")",
       "details": {
         "name": "Tile -3,-3",
-        "description": "<p>Obtain 150 points worth of 'Perfection' Combat Achievements. Each player cannot submit the same CA twice.</p>",
+        "description": "<p>Obtain 300 points worth of 'Perfection' Combat Achievements. Each player cannot submit the same CA twice.</p>",
         "title": "Tile 61"
       },
       "number": "61"
@@ -480,7 +480,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/thumb/Combat_achievements_detail.png/1024px-Combat_achievements_detail.png?d8b9a\")",
       "details": {
         "name": "Tile 0,1",
-        "description": "<p>Obtain 150 points of 'Restriction' Combat Achievements. Each player cannot submit the same CA twice.</p>",
+        "description": "<p>Obtain 300 points of 'Restriction' Combat Achievements. Each player cannot submit the same CA twice.</p>",
         "title": "Tile 24"
       },
       "number": "24"
