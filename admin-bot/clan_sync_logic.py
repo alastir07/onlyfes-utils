@@ -540,6 +540,12 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
     # 5. PREPARE REPORTS
     report_newly_added = []
     report_deactivated = []
+    for d_id in departed_member_ids:
+        for rsn_data in db_rsn_map_normalized.values():
+            if rsn_data['member_id'] == d_id and rsn_data['is_primary']:
+                report_deactivated.append(rsn_data['original_rsn'])
+                break
+                
     report_rank_mismatches = []
     report_promo_emerald = []
     report_promo_ruby = []
@@ -584,7 +590,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
             "status": 'Active'
         })
         
-        report_newly_added.append(f"{member['rsn']} (Rank: {rank_name})")
+        report_newly_added.append(member['rsn'])
         
     # B: Process Returning Members (inactive in DB, present in WOM) - PRIMARY RSNs ONLY
     report_returning_members = []
@@ -613,7 +619,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                         'date_joined': today.isoformat()
                     })
                     old_rank_name = ranks_map_by_id.get(old_rank_id, 'Unknown')
-                    report_returning_members.append(f"{wom_member['rsn']}: {old_rank_name} -> {wom_rank_name}")
+                    report_returning_members.append(wom_member['rsn'])
     
     # C: Check Rank Mismatches for Existing Active Members (PRIMARY RSNs ONLY)
     for normalized_rsn in wom_normalized_rsns:
@@ -773,7 +779,8 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
         
         # A: Process New Members
         if new_members_payload:
-            report_lines.append(f"Adding {len(new_members_payload)} new members...")
+            rsns_joined = ", ".join(report_newly_added)
+            report_lines.append(f"Adding {len(new_members_payload)} new members: {rsns_joined}")
             db_members_payload = []
             for m in new_members_payload:
                 db_members_payload.append({k: v for k, v in m.items() if k not in ['rsn', 'latest_db_xp']})
@@ -794,7 +801,8 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
 
         # A2: Process Returning Members
         if returning_members_payload:
-            report_lines.append(f"Reactivating {len(returning_members_payload)} returning members...")
+            rsns_joined = ", ".join(report_returning_members)
+            report_lines.append(f"Reactivating {len(returning_members_payload)} returning members: {rsns_joined}")
             try:
                 rank_history_payload = []
                 for returning_member in returning_members_payload:
@@ -825,7 +833,8 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
 
         # B: Process Departed Members
         if departed_member_ids:
-            report_lines.append(f"Deactivating {len(report_deactivated)} departed members...")
+            rsns_joined = ", ".join(report_deactivated)
+            report_lines.append(f"Deactivating {len(departed_member_ids)} departed members: {rsns_joined}")
             try:
                 supabase.table('members').update({"status": 'Inactive'}).in_('id', list(departed_member_ids)).execute()
                 report_lines.append("Deactivation complete.")
@@ -845,9 +854,21 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
             
     else:
         report_lines.append("\n--- (DRY RUN) SKIPPING ALL DATABASE WRITES ---")
-        report_lines.append(f"Would add {len(report_newly_added)} new members.")
-        report_lines.append(f"Would reactivate {len(returning_members_payload)} returning members.")
-        report_lines.append(f"Would deactivate {len(report_deactivated)} members.")
+        if report_newly_added:
+            report_lines.append(f"Would add {len(report_newly_added)} new members: {', '.join(report_newly_added)}")
+        else:
+            report_lines.append(f"Would add {len(report_newly_added)} new members.")
+            
+        if returning_members_payload:
+            report_lines.append(f"Would reactivate {len(returning_members_payload)} returning members: {', '.join(report_returning_members)}")
+        else:
+            report_lines.append(f"Would reactivate {len(returning_members_payload)} returning members.")
+            
+        if departed_member_ids:
+            report_lines.append(f"Would deactivate {len(departed_member_ids)} members: {', '.join(report_deactivated)}")
+        else:
+            report_lines.append(f"Would deactivate {len(departed_member_ids)} members.")
+            
         report_lines.append(f"Would insert {len(snapshots_payload)} stat snapshots.")
         if report_auto_rank_updates:
             report_lines.append(f"Would force-update {len(report_auto_rank_updates)} mismatched ranks.")
