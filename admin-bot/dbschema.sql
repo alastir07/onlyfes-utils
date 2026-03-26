@@ -111,3 +111,11 @@ CREATE TABLE public.wom_snapshots (
   CONSTRAINT wom_snapshots_pkey PRIMARY KEY (id),
   CONSTRAINT wom_snapshots_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id)
 );
+CREATE TABLE public.membership_events (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  member_id uuid NOT NULL,
+  event_type USER-DEFINED NOT NULL,
+  event_date timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT membership_events_pkey PRIMARY KEY (id),
+  CONSTRAINT membership_events_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id)
+);
