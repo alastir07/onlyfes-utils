@@ -107,7 +107,6 @@ CREATE TABLE public.wom_snapshots (
   total_level smallint,
   ehp real,
   ehb real,
-  full_json_payload jsonb,
   CONSTRAINT wom_snapshots_pkey PRIMARY KEY (id),
   CONSTRAINT wom_snapshots_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id)
 );
