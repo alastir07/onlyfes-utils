@@ -522,8 +522,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                     'total_xp': overall_data.get('experience', 0),
                     'total_level': overall_data.get('level', 0),
                     'ehp': snapshot_data.get('computed', {}).get('ehp', {}).get('value', 0),
-                    'ehb': snapshot_data.get('computed', {}).get('ehb', {}).get('value', 0),
-                    'full_json_payload': snapshot
+                    'ehb': snapshot_data.get('computed', {}).get('ehb', {}).get('value', 0)
                 })
     
     # 4. CALCULATE "DIFF"
