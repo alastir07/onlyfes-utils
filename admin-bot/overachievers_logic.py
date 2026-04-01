@@ -179,3 +179,79 @@ def run_overachievers_check(supabase: Client, dry_run: bool = True) -> tuple:
 
     error_str = "\n".join(error_lines)
     return embeds[0], embeds[1], embeds[2], error_str
+
+def get_overachiever_lookup(supabase: Client, query: str) -> tuple[discord.Embed, str]:
+    log.info(f"--- Running Lookup for Overachiever '{query}' ---")
+    
+    normalized_query = normalize_string(query)
+    
+    # Check if the query is a Metric
+    all_metrics = SKILLS + ACTIVITIES + BOSSES
+    matched_metric = None
+    for m in all_metrics:
+        if normalize_string(m) == normalized_query:
+            matched_metric = m
+            break
+            
+    if matched_metric:
+        # Search the database for who is the overachiever for this metric
+        res = supabase.table('overachievers').select('metric, member_id, value, global_rank, date, members(member_rsns(rsn, is_primary))').eq('metric', matched_metric).order('date', desc=True).limit(1).execute()
+        
+        if not res.data:
+            return None, f"No overachiever found for '{format_metric_name(matched_metric)}' (sync may not have run yet)."
+            
+        data = res.data[0]
+        primary_rsn = "Unknown"
+        if data.get('members') and data['members'].get('member_rsns'):
+            for rsn_obj in data['members']['member_rsns']:
+                if rsn_obj.get('is_primary'):
+                    primary_rsn = rsn_obj['rsn']
+                    break
+                    
+        embed = discord.Embed(title=f"🏆 {format_metric_name(matched_metric)}", color=discord.Color.gold())
+        
+        date_obj = discord.utils.parse_time(data['date'])
+        if date_obj is None:
+            date_str = data['date'].split('T')[0]
+        else:
+            date_str = f"<t:{int(date_obj.timestamp())}:D>"
+
+        embed.description = f"**{primary_rsn}** is the clan's overachiever with a value of **{data['value']:,}** (Global Rank: {data['global_rank']}).\n*Recorded on: {date_str}*"
+        return embed, None
+        
+    else:
+        # It's an RSN query
+        rsn_res = supabase.table('member_rsns').select('member_id, rsn, is_primary').ilike('rsn', query).execute()
+        
+        if not rsn_res.data:
+            return None, f"Could not find any member with RSN: '{query}' or any metric called '{query}'."
+            
+        member_record = next((r for r in rsn_res.data if r['is_primary']), rsn_res.data[0])
+        member_id = member_record['member_id']
+        display_rsn = member_record['rsn']
+        
+        recent_res = supabase.table('overachievers').select('metric, member_id, value, global_rank, date').order('date', desc=True).limit(2000).execute()
+        
+        latest_db_records = {} # metric -> record
+        for row in recent_res.data:
+            m = row['metric']
+            if m not in latest_db_records:
+                latest_db_records[m] = row
+                
+        user_records = [rec for rec in latest_db_records.values() if rec['member_id'] == member_id]
+        
+        if not user_records:
+            return None, f"'{display_rsn}' is currently not an overachiever for any metric."
+            
+        embed = discord.Embed(title=f"🏆 Overachiever: {display_rsn}", description=f"They currently hold the #1 spot in the clan for **{len(user_records)}** metrics:", color=discord.Color.gold())
+        
+        lines = []
+        for rec in user_records:
+            lines.append(f"**{format_metric_name(rec['metric'])}**: {rec['value']:,} (Global Rank {rec['global_rank']})")
+            
+        desc_str = "\n".join(lines)
+        if len(desc_str) > 4000:
+            desc_str = desc_str[:4000] + "\n... (truncated)"
+        embed.description = embed.description + "\n\n" + desc_str
+        
+        return embed, None

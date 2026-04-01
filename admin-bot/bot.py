@@ -1462,15 +1462,15 @@ async def before_scheduled_inactivity_check():
 
 
 # --- 18.5 OVERACHIEVERS ---
-@client.tree.command(name="overachievers", description="Run the Overachievers check (1st of month typically).")
+@client.tree.command(name="overachievers-sync", description="Run the Overachievers check (1st of month typically).")
 @app_commands.describe(
     dry_run="True (default) to just see report. False to execute DB writes.",
     publish="False (default). True to post publicly."
 )
 @check_staff_role("Commander")
-async def check_overachievers(interaction: discord.Interaction, dry_run: bool = True, publish: bool = False):
+async def check_overachievers_sync(interaction: discord.Interaction, dry_run: bool = True, publish: bool = False):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /overachievers dry_run={dry_run} publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /overachievers-sync dry_run={dry_run} publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -1495,7 +1495,36 @@ async def check_overachievers(interaction: discord.Interaction, dry_run: bool = 
             await interaction.followup.send(f"Warnings/Errors:\n```text\n{err_str}\n```", ephemeral=True)
             
     except Exception as e:
-        log.error(f"CRITICAL Error in /overachievers command: {e}\n{traceback.format_exc()}")
+        log.error(f"CRITICAL Error in /overachievers-sync command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
+
+@client.tree.command(name="overachievers", description="Look up which metrics an RSN holds, or who holds a specific metric.")
+@app_commands.describe(
+    query="RSN (e.g., 'Maikhol') or Metric (e.g., 'Artio')",
+    publish="False (default). True to post publicly."
+)
+async def lookup_overachievers(interaction: discord.Interaction, query: str, publish: bool = False):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /overachievers query='{query}' publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        embed, err_str = await asyncio.to_thread(
+            overachievers_logic.get_overachiever_lookup,
+            supabase,
+            query
+        )
+        
+        if err_str:
+            await interaction.followup.send(f"Error: {err_str}", ephemeral=True)
+            return
+            
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+            
+    except Exception as e:
+        log.error(f"CRITICAL Error in /overachievers lookup: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
 
 @tasks.loop(time=[time(hour=0, minute=0)])
