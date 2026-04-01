@@ -81,8 +81,8 @@ def run_overachievers_check(supabase: Client, dry_run: bool = True) -> tuple:
     headers = {"User-Agent": "OnlyFEs-Clan-Bot-v1.0", "x-api-key": WOM_API_KEY}
     
     log.info("Fetching members from DB...")
-    members_res = supabase.table('members').select('id, wom_id').not_is('wom_id', 'null').execute()
-    db_wom_map = {row['wom_id']: row['id'] for row in members_res.data}
+    members_res = supabase.table('members').select('id, wom_id').execute()
+    db_wom_map = {row['wom_id']: row['id'] for row in members_res.data if row.get('wom_id') is not None}
     
     log.info("Fetching previous overachievers...")
     recent_res = supabase.table('overachievers').select('metric, member_id, value, global_rank, date').order('date', desc=True).execute()
