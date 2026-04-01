@@ -196,6 +196,7 @@ async def help(interaction: discord.Interaction, publish: bool = False):
         captain_commands = [
             "`/rankup <rsn> <rank_name> [publish]`\nManually promotes/demotes a single member.",
             "`/bulkrankup <rank_name> <rsn_list> [publish]`\nUpdates multiple members to the same rank.",
+            "`/rankup-check <rsn> <rank_name> [publish]`\nChecks if a member meets the requirements for a rank.",
             "`/linkrsn <rsn> <@user> [publish]`\nLinks a member's RSN to their Discord account.",
             "`/addpoints <rsn> <points> <reason> [publish]`\nAdds Event Points for a member.",
             "`/removepoints <rsn> <points> <reason> [publish]`\nRemoves Event Points from a member.",
@@ -638,7 +639,109 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         log.error(f"Error in /bulkrankup command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
-# --- 10. /LINK-RSN COMMAND ---
+
+# --- 10. /RANKUP-CHECK COMMAND ---
+@client.tree.command(name="rankup-check", description="Check if a member meets the requirements for a rank.")
+@app_commands.describe(
+    rsn="The member's RSN.",
+    rank_name="The rank to check eligibility for.",
+    publish="True to post the report publicly."
+)
+@app_commands.choices(rank_name=[
+    app_commands.Choice(name="Diamond", value="Diamond"),
+    app_commands.Choice(name="Dragonstone", value="Dragonstone"),
+    app_commands.Choice(name="Onyx", value="Onyx"),
+    app_commands.Choice(name="Zenyte", value="Zenyte"),
+    app_commands.Choice(name="Maxed (Elite Skiller)", value="Maxed"),
+    app_commands.Choice(name="TzKal (Elite PvMer)", value="TzKal"),
+    app_commands.Choice(name="Myth (Living Legend)", value="Myth"),
+])
+@check_staff_role("Captain")
+async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /rankup-check rsn='{rsn}' rank_name='{rank_name}' publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        rank_res = supabase.table('ranks').select('name, req_months_in_clan, req_total_level, manual_criteria').ilike('name', rank_name).limit(1).execute()
+        if not rank_res.data:
+            await interaction.followup.send(f"Error: Rank `{rank_name}` not found in database.", ephemeral=True)
+            return
+        
+        target_rank = rank_res.data[0]
+        
+        member_res = supabase.table('member_rsns').select('member_id, rsn').ilike('rsn', rsn).limit(1).execute()
+        if not member_res.data:
+            await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
+            return
+
+        member_id = member_res.data[0]['member_id']
+        member_rsn = member_res.data[0]['rsn']
+
+        info_res = supabase.rpc('get_member_info', {'rsn_query': rsn}).execute()
+        if not info_res.data:
+            await interaction.followup.send(f"Error: Could not retrieve info for `{rsn}`.", ephemeral=True)
+            return
+            
+        member_info = info_res.data[0]
+        
+        date_joined_str = member_info.get('date_joined')
+        if date_joined_str:
+            join_date_obj = discord.utils.parse_time(date_joined_str)
+            formatted_join_date = f"<t:{int(join_date_obj.timestamp())}:D>"
+        else:
+            formatted_join_date = "Unknown"
+
+        days_in_clan = member_info.get('total_days_in_clan', 0)
+
+        wom_res = supabase.table('wom_snapshots').select('total_level').eq('member_id', member_id).order('snapshot_date', desc=True).limit(1).execute()
+        total_level = wom_res.data[0].get('total_level', 0) if wom_res.data else 0
+        total_level = total_level or 0
+        
+        req_months = target_rank.get('req_months_in_clan') or 0
+        req_tl = target_rank.get('req_total_level') or 0
+        
+        has_time = days_in_clan >= (req_months * 30) - 2
+        time_status = "✅ Met" if has_time else "❌ Not Met"
+
+        has_tl = total_level >= req_tl
+        tl_status = "✅ Met" if has_tl else "❌ Not Met"
+
+        embed = discord.Embed(
+            title=f"Checking if {member_rsn} is eligible for {target_rank['name']}...",
+            color=discord.Color.gold()
+        )
+        
+        embed.add_field(name="Join Date", value=formatted_join_date, inline=True)
+        embed.add_field(name="Current EP", value=f"{member_info.get('total_ep', 0):,}", inline=True)
+        embed.add_field(name="Current Rank", value=member_info.get('rank_name', 'Unknown'), inline=True)
+        
+        embed.add_field(
+            name="Time In Clan Requirement", 
+            value=f"{time_status} (Needs {req_months} mo.)", 
+            inline=False
+        )
+        if req_tl > 0:
+            embed.add_field(
+                name="Total Level Requirement", 
+                value=f"{tl_status} ({total_level:,} / {req_tl:,})", 
+                inline=False
+            )
+        
+        manual_crit = target_rank.get('manual_criteria') or "None"
+        embed.add_field(name="Manual Criteria", value=manual_crit, inline=False)
+        
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+
+    except Exception as e:
+        log.error(f"Error in /rankup-check command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
+# --- 11. /LINK-RSN COMMAND ---
 @client.tree.command(name="linkrsn", description="Links a member's RSN to their Discord account.")
 @app_commands.describe(
     rsn="The member's RSN (current or past).",
