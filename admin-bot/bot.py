@@ -39,6 +39,7 @@ root.setLevel(logging.INFO) # Set the minimum level for all logs
 import clan_sync_logic
 import inactivity_logic
 import github_leaderboard
+import overachievers_logic
 
 # --- 1. LOAD SECRETS & CONNECT ---
 load_dotenv()
@@ -155,8 +156,9 @@ async def on_ready():
         scheduled_ep_leaderboard.start()
         scheduled_clan_sync.start()
         scheduled_inactivity_check.start()
+        scheduled_overachievers_check.start()
 
-        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC)")
+        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily)")
     log.info(f'Logged in as {client.user} (ID: {client.user.id})')
     log.info('Bot is ready and online.')
 
@@ -1457,6 +1459,78 @@ async def before_scheduled_inactivity_check():
     """Wait for bot to be ready before starting the inactivity check task"""
     await client.wait_until_ready()
     log.info("Bot is ready. Starting scheduled inactivity check task.")
+
+
+# --- 18.5 OVERACHIEVERS ---
+@client.tree.command(name="overachievers", description="Run the Overachievers check (1st of month typically).")
+@app_commands.describe(
+    dry_run="True (default) to just see report. False to execute DB writes.",
+    publish="False (default). True to post publicly."
+)
+@check_staff_role("Commander")
+async def check_overachievers(interaction: discord.Interaction, dry_run: bool = True, publish: bool = False):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /overachievers dry_run={dry_run} publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        skill_emb, act_emb, boss_emb, err_str = await asyncio.to_thread(
+            overachievers_logic.run_overachievers_check,
+            supabase,
+            dry_run=dry_run
+        )
+        
+        if skill_emb is None:
+            await interaction.followup.send(f"Critical API Error: {err_str}", ephemeral=True)
+            return
+            
+        await interaction.followup.send(content=f"Overachievers Sync Complete.", embeds=[skill_emb, act_emb, boss_emb], ephemeral=is_ephemeral)
+        
+        if err_str:
+            log.warning(f"Overachievers sync warnings:\n{err_str}")
+            if len(err_str) > 1000:
+                err_str = err_str[:1000] + "\n... (truncated)"
+            await interaction.followup.send(f"Warnings/Errors:\n```text\n{err_str}\n```", ephemeral=True)
+            
+    except Exception as e:
+        log.error(f"CRITICAL Error in /overachievers command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
+
+@tasks.loop(time=[time(hour=0, minute=0)])
+async def scheduled_overachievers_check():
+    """Runs overachievers check daily at 00:00 UTC but executes ONLY on the 1st of the month"""
+    log.info("=== Starting scheduled overachievers check ===")
+    
+    # Check if it's the first of the month
+    if datetime.now(ZoneInfo('UTC')).day != 1:
+        log.info("Not the 1st of the month. Skipping overachievers check.")
+        return
+        
+    try:
+        if not SYNC_REPORT_CHANNEL_ID:
+            log.error("SYNC_REPORT_CHANNEL_ID not configured.")
+            return
+            
+        channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+        if channel:
+            skill_emb, act_emb, boss_emb, err_str = await asyncio.to_thread(
+                overachievers_logic.run_overachievers_check,
+                supabase,
+                dry_run=False
+            )
+            if skill_emb:
+                await channel.send("🏆 **Monthly Overachievers Report**", embeds=[skill_emb, act_emb, boss_emb])
+            else:
+                log.error(f"Failed to generate overachievers report: {err_str}")
+    except Exception as e:
+        log.error(f"ERROR in scheduled_overachievers_check: {e}")
+
+@scheduled_overachievers_check.before_loop
+async def before_scheduled_overachievers_check():
+    await client.wait_until_ready()
+    log.info("Bot is ready. Starting scheduled overachievers task.")
 
 
 # --- 19. RUN THE BOT ---
