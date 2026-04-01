@@ -42,6 +42,9 @@ BOSSES = [
     'tombs_of_amascut_expert', 'tzkal_zuk', 'tztok_jad', 'vardorvis', 'venenatis', 
     'vetion', 'vorkath', 'wintertodt', 'yama', 'zalcano', 'zulrah'
 ]
+def normalize_string(s: str) -> str:
+    if not s: return ""
+    return s.lower().replace(' ', '').replace('_', '').replace('-', '').replace('.', '')
 
 def format_metric_name(metric: str) -> str:
     return metric.replace('_', ' ').title()
@@ -81,8 +84,8 @@ def run_overachievers_check(supabase: Client, dry_run: bool = True) -> tuple:
     headers = {"User-Agent": "OnlyFEs-Clan-Bot-v1.0", "x-api-key": WOM_API_KEY}
     
     log.info("Fetching members from DB...")
-    members_res = supabase.table('members').select('id, wom_id').execute()
-    db_wom_map = {row['wom_id']: row['id'] for row in members_res.data if row.get('wom_id') is not None}
+    rsn_res = supabase.table('member_rsns').select('rsn, member_id').execute()
+    db_rsn_map = {normalize_string(row['rsn']): row['member_id'] for row in rsn_res.data}
     
     log.info("Fetching previous overachievers...")
     recent_res = supabase.table('overachievers').select('metric, member_id, value, global_rank, date').order('date', desc=True).execute()
@@ -125,11 +128,13 @@ def run_overachievers_check(supabase: Client, dry_run: bool = True) -> tuple:
                 
                 wom_id = player['id']
                 display_name = player['displayName']
+                username = player['username']
                 
                 val = player_data.get(value_key, 0)
                 rank = player_data.get('rank', -1)
                 
-                member_id = db_wom_map.get(wom_id)
+                normalized_username = normalize_string(username)
+                member_id = db_rsn_map.get(normalized_username)
                 if not member_id:
                     error_lines.append(f"Skipped {metric}: Top player {display_name} (WOM ID {wom_id}) not found in database.")
                     continue
