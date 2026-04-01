@@ -60,7 +60,7 @@ def create_embed(title: str, changes: list) -> discord.Embed:
     for change in changes:
         # e.g., "**Woodcutting**: Bilie (200,000,000) - Rank 5"
         description_lines.append(
-            f"**{format_metric_name(change['metric'])}**: {change['player_name']} ({change['value']:,}) - Rank {change['rank']}"
+            f"**{format_metric_name(change['metric'])}**: {change['player_name']} ({change['value']:,}) - Global Rank {change['rank']}"
         )
     
     desc_str = "\n".join(description_lines)
