@@ -97,6 +97,7 @@ CREATE TABLE public.ranks (
   req_months_in_clan smallint,
   req_total_level smallint,
   notes text,
+  manual_criteria text,
   CONSTRAINT ranks_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.wom_snapshots (
