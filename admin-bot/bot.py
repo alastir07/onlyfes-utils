@@ -706,7 +706,7 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
         req_months = target_rank.get('req_months_in_clan') or 0
         req_tl = target_rank.get('req_total_level') or 0
         
-        has_time = days_in_clan >= (req_months * 30) - 2
+        has_time = days_in_clan >= (req_months * 28)
         time_status = "✅ Met" if has_time else "❌ Not Met"
 
         has_tl = total_level >= req_tl
