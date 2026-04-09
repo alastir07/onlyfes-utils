@@ -64,6 +64,21 @@ def normalize_string(s: str) -> str:
     if not s: return ""
     return s.lower().replace(' ', '').replace('_', '').replace('-', '').replace('.', '')
 
+def get_normalized_rank_from_db(rank_name_input: str) -> dict | None:
+    """Fetches a rank from the database matching the normalized rank name."""
+    try:
+        ranks_res = supabase.table('ranks').select('*').execute()
+        if not ranks_res.data:
+            return None
+        normalized_input = normalize_string(rank_name_input)
+        for r in ranks_res.data:
+            if normalize_string(r['name']) == normalized_input:
+                return r
+        return None
+    except Exception as e:
+        log.error(f"Error fetching ranks for normalization: {e}")
+        return None
+
 def get_staff_member_id(interaction: discord.Interaction) -> str | None:
     try:
         user_id_int = interaction.user.id
@@ -491,14 +506,12 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
     try:
         staff_member_id = get_staff_member_id(interaction)
         
-        normalized_rank_name = normalize_string(rank_name)
-        rank_res = supabase.table('ranks').select('id, name').ilike('name', normalized_rank_name).limit(1).execute()
+        new_rank = get_normalized_rank_from_db(rank_name)
         
-        if not rank_res.data:
+        if not new_rank:
             await interaction.followup.send(f"Error: The rank `{rank_name}` does not exist in the database.", ephemeral=True)
             return
         
-        new_rank = rank_res.data[0]
         new_rank_id = new_rank['id']
         new_rank_name = new_rank['name'] 
 
@@ -555,14 +568,12 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
     try:
         staff_member_id = get_staff_member_id(interaction)
 
-        normalized_rank_name = normalize_string(rank_name)
-        rank_res = supabase.table('ranks').select('id, name').ilike('name', normalized_rank_name).limit(1).execute()
+        new_rank = get_normalized_rank_from_db(rank_name)
         
-        if not rank_res.data:
+        if not new_rank:
             await interaction.followup.send(f"Error: The rank `{rank_name}` does not exist in the database.", ephemeral=True)
             return
         
-        new_rank = rank_res.data[0]
         new_rank_id = new_rank['id']
         new_rank_name = new_rank['name']
 
@@ -668,12 +679,10 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
     await interaction.response.defer(ephemeral=is_ephemeral)
     
     try:
-        rank_res = supabase.table('ranks').select('name, req_months_in_clan, req_total_level, manual_criteria').ilike('name', rank_name).limit(1).execute()
-        if not rank_res.data:
+        target_rank = get_normalized_rank_from_db(rank_name)
+        if not target_rank:
             await interaction.followup.send(f"Error: Rank `{rank_name}` not found in database.", ephemeral=True)
             return
-        
-        target_rank = rank_res.data[0]
         
         member_res = supabase.table('member_rsns').select('member_id, rsn').ilike('rsn', rsn).limit(1).execute()
         if not member_res.data:
