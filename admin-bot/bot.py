@@ -39,6 +39,7 @@ root.setLevel(logging.INFO) # Set the minimum level for all logs
 import clan_sync_logic
 import inactivity_logic
 import github_leaderboard
+import overachievers_logic
 
 # --- 1. LOAD SECRETS & CONNECT ---
 load_dotenv()
@@ -63,6 +64,21 @@ def normalize_string(s: str) -> str:
     if not s: return ""
     return s.lower().replace(' ', '').replace('_', '').replace('-', '').replace('.', '')
 
+def get_normalized_rank_from_db(rank_name_input: str) -> dict | None:
+    """Fetches a rank from the database matching the normalized rank name."""
+    try:
+        ranks_res = supabase.table('ranks').select('*').execute()
+        if not ranks_res.data:
+            return None
+        normalized_input = normalize_string(rank_name_input)
+        for r in ranks_res.data:
+            if normalize_string(r['name']) == normalized_input:
+                return r
+        return None
+    except Exception as e:
+        log.error(f"Error fetching ranks for normalization: {e}")
+        return None
+
 def get_staff_member_id(interaction: discord.Interaction) -> str | None:
     try:
         user_id_int = interaction.user.id
@@ -74,7 +90,15 @@ def get_staff_member_id(interaction: discord.Interaction) -> str | None:
     return None
 
 # --- Role-Based Permission System ---
-STAFF_ROLES = ["Owner", "Commander", "Master", "General", "Captain"] # Ordered Highest to Lowest
+STAFF_ROLES = ["Owner", "Deputy Owner", "Commander", "Master", "General", "Captain"] # Ordered Highest to Lowest
+ROLE_HIERARCHY_LEVELS = {
+    "Owner": 99,
+    "Deputy Owner": 98,
+    "Commander": 53,
+    "Master": 52,
+    "General": 51,
+    "Captain": 50
+}
 
 def get_user_role_level(interaction: discord.Interaction) -> str | None:
     """
@@ -155,8 +179,9 @@ async def on_ready():
         scheduled_ep_leaderboard.start()
         scheduled_clan_sync.start()
         scheduled_inactivity_check.start()
+        scheduled_overachievers_check.start()
 
-        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC)")
+        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily)")
     log.info(f'Logged in as {client.user} (ID: {client.user.id})')
     log.info('Bot is ready and online.')
 
@@ -488,20 +513,24 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
 
     try:
         staff_member_id = get_staff_member_id(interaction)
+        staff_role = get_user_role_level(interaction)
+        staff_max_hierarchy = ROLE_HIERARCHY_LEVELS.get(staff_role, 0) if staff_role else 0
         
-        normalized_rank_name = normalize_string(rank_name)
-        rank_res = supabase.table('ranks').select('id, name').ilike('name', normalized_rank_name).limit(1).execute()
+        new_rank = get_normalized_rank_from_db(rank_name)
         
-        if not rank_res.data:
+        if not new_rank:
             await interaction.followup.send(f"Error: The rank `{rank_name}` does not exist in the database.", ephemeral=True)
             return
+            
+        if new_rank.get('hierarchy_level', 0) > staff_max_hierarchy:
+            await interaction.followup.send(f"⛔ Permission Denied: You cannot assign a rank ({new_rank['name']}) with a higher hierarchy level than your own staff role.", ephemeral=True)
+            return
         
-        new_rank = rank_res.data[0]
         new_rank_id = new_rank['id']
         new_rank_name = new_rank['name'] 
 
         member_res = supabase.table('member_rsns') \
-            .select('member_id, rsn, members(current_rank_id)') \
+            .select('member_id, rsn, members(current_rank_id, ranks(hierarchy_level))') \
             .ilike('rsn', rsn) \
             .limit(1) \
             .execute()
@@ -513,6 +542,14 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         member_id = member_res.data[0]['member_id']
         member_rsn = member_res.data[0]['rsn']
         old_rank_id = member_res.data[0]['members']['current_rank_id']
+        
+        old_hierarchy = 0
+        if member_res.data[0].get('members') and member_res.data[0]['members'].get('ranks'):
+            old_hierarchy = member_res.data[0]['members']['ranks'].get('hierarchy_level', 0)
+            
+        if old_hierarchy > staff_max_hierarchy:
+            await interaction.followup.send(f"⛔ Permission Denied: You cannot modify the rank of a member whose current hierarchy level ({old_hierarchy}) is higher than your own staff role.", ephemeral=True)
+            return
 
         if old_rank_id == new_rank_id:
             await interaction.followup.send(f"Error: `{member_rsn}` already has the rank `{new_rank_name}`.", ephemeral=True)
@@ -552,30 +589,38 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
     
     try:
         staff_member_id = get_staff_member_id(interaction)
+        staff_role = get_user_role_level(interaction)
+        staff_max_hierarchy = ROLE_HIERARCHY_LEVELS.get(staff_role, 0) if staff_role else 0
 
-        normalized_rank_name = normalize_string(rank_name)
-        rank_res = supabase.table('ranks').select('id, name').ilike('name', normalized_rank_name).limit(1).execute()
+        new_rank = get_normalized_rank_from_db(rank_name)
         
-        if not rank_res.data:
+        if not new_rank:
             await interaction.followup.send(f"Error: The rank `{rank_name}` does not exist in the database.", ephemeral=True)
             return
+            
+        if new_rank.get('hierarchy_level', 0) > staff_max_hierarchy:
+            await interaction.followup.send(f"⛔ Permission Denied: You cannot assign a rank ({new_rank['name']}) with a higher hierarchy level than your own staff role.", ephemeral=True)
+            return
         
-        new_rank = rank_res.data[0]
         new_rank_id = new_rank['id']
         new_rank_name = new_rank['name']
 
         log.info("Building RSN map for bulk rankup...")
         rsns_res = supabase.table('member_rsns') \
-            .select('rsn, member_id, members(current_rank_id)') \
+            .select('rsn, member_id, members(current_rank_id, ranks(hierarchy_level))') \
             .execute()
         
         rsn_map = {}
         for item in rsns_res.data:
             if item.get('members'):
+                old_h = 0
+                if item['members'].get('ranks'):
+                    old_h = item['members']['ranks'].get('hierarchy_level', 0)
                 rsn_map[normalize_string(item['rsn'])] = {
                     "member_id": item['member_id'],
                     "original_rsn": item['rsn'],
-                    "old_rank_id": item['members']['current_rank_id']
+                    "old_rank_id": item['members']['current_rank_id'],
+                    "old_hierarchy": old_h
                 }
         log.info("RSN map built.")
 
@@ -586,6 +631,7 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         report_success = []
         report_fail_not_found = []
         report_fail_already_rank = []
+        report_fail_permission = []
 
         for rsn in rsns_to_process:
             if not rsn: continue
@@ -597,6 +643,10 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                 report_fail_not_found.append(rsn)
                 continue
             
+            if member_data['old_hierarchy'] > staff_max_hierarchy:
+                report_fail_permission.append(member_data['original_rsn'])
+                continue
+                
             if member_data['old_rank_id'] == new_rank_id:
                 report_fail_already_rank.append(member_data['original_rsn'])
                 continue
@@ -629,8 +679,10 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
             embed.add_field(name=f"ℹ️ No Change ({len(report_fail_already_rank)})", value="```\n" + "\n".join(report_fail_already_rank) + "\n```", inline=False)
         if report_fail_not_found:
             embed.add_field(name=f"❌ Failed: RSN Not Found ({len(report_fail_not_found)})", value="```\n" + "\n".join(report_fail_not_found) + "\n```", inline=False)
+        if report_fail_permission:
+            embed.add_field(name=f"⛔ Failed: Permission Denied ({len(report_fail_permission)})", value="```\n" + "\n".join(report_fail_permission) + "\n```", inline=False)
         
-        if not report_success and not report_fail_already_rank and not report_fail_not_found:
+        if not report_success and not report_fail_already_rank and not report_fail_not_found and not report_fail_permission:
             embed.description = "No RSNs were provided or found."
 
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
@@ -666,12 +718,10 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
     await interaction.response.defer(ephemeral=is_ephemeral)
     
     try:
-        rank_res = supabase.table('ranks').select('name, req_months_in_clan, req_total_level, manual_criteria').ilike('name', rank_name).limit(1).execute()
-        if not rank_res.data:
+        target_rank = get_normalized_rank_from_db(rank_name)
+        if not target_rank:
             await interaction.followup.send(f"Error: Rank `{rank_name}` not found in database.", ephemeral=True)
             return
-        
-        target_rank = rank_res.data[0]
         
         member_res = supabase.table('member_rsns').select('member_id, rsn').ilike('rsn', rsn).limit(1).execute()
         if not member_res.data:
@@ -704,7 +754,7 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
         req_months = target_rank.get('req_months_in_clan') or 0
         req_tl = target_rank.get('req_total_level') or 0
         
-        has_time = days_in_clan >= (req_months * 30) - 2
+        has_time = days_in_clan >= (req_months * 28)
         time_status = "✅ Met" if has_time else "❌ Not Met"
 
         has_tl = total_level >= req_tl
@@ -1457,6 +1507,107 @@ async def before_scheduled_inactivity_check():
     """Wait for bot to be ready before starting the inactivity check task"""
     await client.wait_until_ready()
     log.info("Bot is ready. Starting scheduled inactivity check task.")
+
+
+# --- 18.5 OVERACHIEVERS ---
+@client.tree.command(name="overachievers-sync", description="Run the Overachievers check (1st of month typically).")
+@app_commands.describe(
+    dry_run="True (default) to just see report. False to execute DB writes.",
+    publish="False (default). True to post publicly."
+)
+@check_staff_role("Commander")
+async def check_overachievers_sync(interaction: discord.Interaction, dry_run: bool = True, publish: bool = False):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /overachievers-sync dry_run={dry_run} publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        skill_emb, act_emb, boss_emb, err_str = await asyncio.to_thread(
+            overachievers_logic.run_overachievers_check,
+            supabase,
+            dry_run=dry_run
+        )
+        
+        if skill_emb is None:
+            await interaction.followup.send(f"Critical API Error: {err_str}", ephemeral=True)
+            return
+            
+        await interaction.followup.send(content=f"Overachievers Sync Complete.", embeds=[skill_emb, act_emb, boss_emb], ephemeral=is_ephemeral)
+        
+        if err_str:
+            log.warning(f"Overachievers sync warnings:\n{err_str}")
+            if len(err_str) > 1000:
+                err_str = err_str[:1000] + "\n... (truncated)"
+            await interaction.followup.send(f"Warnings/Errors:\n```text\n{err_str}\n```", ephemeral=True)
+            
+    except Exception as e:
+        log.error(f"CRITICAL Error in /overachievers-sync command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
+
+@client.tree.command(name="overachievers", description="Look up which metrics an RSN holds, or who holds a specific metric.")
+@app_commands.describe(
+    query="RSN (e.g., 'Maikhol') or Metric (e.g., 'Artio')",
+    publish="False (default). True to post publicly."
+)
+async def lookup_overachievers(interaction: discord.Interaction, query: str, publish: bool = False):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /overachievers query='{query}' publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        embed, err_str = await asyncio.to_thread(
+            overachievers_logic.get_overachiever_lookup,
+            supabase,
+            query
+        )
+        
+        if err_str:
+            await interaction.followup.send(f"Error: {err_str}", ephemeral=True)
+            return
+            
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+            
+    except Exception as e:
+        log.error(f"CRITICAL Error in /overachievers lookup: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
+
+@tasks.loop(time=[time(hour=0, minute=0)])
+async def scheduled_overachievers_check():
+    """Runs overachievers check daily at 00:00 UTC but executes ONLY on the 1st of the month"""
+    log.info("=== Starting scheduled overachievers check ===")
+    
+    # Check if it's the first of the month
+    if datetime.now(ZoneInfo('UTC')).day != 1:
+        log.info("Not the 1st of the month. Skipping overachievers check.")
+        return
+        
+    try:
+        if not SYNC_REPORT_CHANNEL_ID:
+            log.error("SYNC_REPORT_CHANNEL_ID not configured.")
+            return
+            
+        channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+        if channel:
+            skill_emb, act_emb, boss_emb, err_str = await asyncio.to_thread(
+                overachievers_logic.run_overachievers_check,
+                supabase,
+                dry_run=False
+            )
+            if skill_emb:
+                await channel.send("🏆 **Monthly Overachievers Report**", embeds=[skill_emb, act_emb, boss_emb])
+            else:
+                log.error(f"Failed to generate overachievers report: {err_str}")
+    except Exception as e:
+        log.error(f"ERROR in scheduled_overachievers_check: {e}")
+
+@scheduled_overachievers_check.before_loop
+async def before_scheduled_overachievers_check():
+    await client.wait_until_ready()
+    log.info("Bot is ready. Starting scheduled overachievers task.")
 
 
 # --- 19. RUN THE BOT ---
