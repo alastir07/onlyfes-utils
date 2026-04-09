@@ -90,9 +90,10 @@ def get_staff_member_id(interaction: discord.Interaction) -> str | None:
     return None
 
 # --- Role-Based Permission System ---
-STAFF_ROLES = ["Owner", "Commander", "Master", "General", "Captain"] # Ordered Highest to Lowest
+STAFF_ROLES = ["Owner", "Deputy Owner", "Commander", "Master", "General", "Captain"] # Ordered Highest to Lowest
 ROLE_HIERARCHY_LEVELS = {
     "Owner": 99,
+    "Deputy Owner": 98,
     "Commander": 53,
     "Master": 52,
     "General": 51,
