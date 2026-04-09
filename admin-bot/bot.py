@@ -91,6 +91,13 @@ def get_staff_member_id(interaction: discord.Interaction) -> str | None:
 
 # --- Role-Based Permission System ---
 STAFF_ROLES = ["Owner", "Commander", "Master", "General", "Captain"] # Ordered Highest to Lowest
+ROLE_HIERARCHY_LEVELS = {
+    "Owner": 99,
+    "Commander": 53,
+    "Master": 52,
+    "General": 51,
+    "Captain": 50
+}
 
 def get_user_role_level(interaction: discord.Interaction) -> str | None:
     """
@@ -505,18 +512,24 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
 
     try:
         staff_member_id = get_staff_member_id(interaction)
+        staff_role = get_user_role_level(interaction)
+        staff_max_hierarchy = ROLE_HIERARCHY_LEVELS.get(staff_role, 0) if staff_role else 0
         
         new_rank = get_normalized_rank_from_db(rank_name)
         
         if not new_rank:
             await interaction.followup.send(f"Error: The rank `{rank_name}` does not exist in the database.", ephemeral=True)
             return
+            
+        if new_rank.get('hierarchy_level', 0) > staff_max_hierarchy:
+            await interaction.followup.send(f"⛔ Permission Denied: You cannot assign a rank ({new_rank['name']}) with a higher hierarchy level than your own staff role.", ephemeral=True)
+            return
         
         new_rank_id = new_rank['id']
         new_rank_name = new_rank['name'] 
 
         member_res = supabase.table('member_rsns') \
-            .select('member_id, rsn, members(current_rank_id)') \
+            .select('member_id, rsn, members(current_rank_id, ranks(hierarchy_level))') \
             .ilike('rsn', rsn) \
             .limit(1) \
             .execute()
@@ -528,6 +541,14 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         member_id = member_res.data[0]['member_id']
         member_rsn = member_res.data[0]['rsn']
         old_rank_id = member_res.data[0]['members']['current_rank_id']
+        
+        old_hierarchy = 0
+        if member_res.data[0].get('members') and member_res.data[0]['members'].get('ranks'):
+            old_hierarchy = member_res.data[0]['members']['ranks'].get('hierarchy_level', 0)
+            
+        if old_hierarchy > staff_max_hierarchy:
+            await interaction.followup.send(f"⛔ Permission Denied: You cannot modify the rank of a member whose current hierarchy level ({old_hierarchy}) is higher than your own staff role.", ephemeral=True)
+            return
 
         if old_rank_id == new_rank_id:
             await interaction.followup.send(f"Error: `{member_rsn}` already has the rank `{new_rank_name}`.", ephemeral=True)
@@ -567,11 +588,17 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
     
     try:
         staff_member_id = get_staff_member_id(interaction)
+        staff_role = get_user_role_level(interaction)
+        staff_max_hierarchy = ROLE_HIERARCHY_LEVELS.get(staff_role, 0) if staff_role else 0
 
         new_rank = get_normalized_rank_from_db(rank_name)
         
         if not new_rank:
             await interaction.followup.send(f"Error: The rank `{rank_name}` does not exist in the database.", ephemeral=True)
+            return
+            
+        if new_rank.get('hierarchy_level', 0) > staff_max_hierarchy:
+            await interaction.followup.send(f"⛔ Permission Denied: You cannot assign a rank ({new_rank['name']}) with a higher hierarchy level than your own staff role.", ephemeral=True)
             return
         
         new_rank_id = new_rank['id']
@@ -579,16 +606,20 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
 
         log.info("Building RSN map for bulk rankup...")
         rsns_res = supabase.table('member_rsns') \
-            .select('rsn, member_id, members(current_rank_id)') \
+            .select('rsn, member_id, members(current_rank_id, ranks(hierarchy_level))') \
             .execute()
         
         rsn_map = {}
         for item in rsns_res.data:
             if item.get('members'):
+                old_h = 0
+                if item['members'].get('ranks'):
+                    old_h = item['members']['ranks'].get('hierarchy_level', 0)
                 rsn_map[normalize_string(item['rsn'])] = {
                     "member_id": item['member_id'],
                     "original_rsn": item['rsn'],
-                    "old_rank_id": item['members']['current_rank_id']
+                    "old_rank_id": item['members']['current_rank_id'],
+                    "old_hierarchy": old_h
                 }
         log.info("RSN map built.")
 
@@ -599,6 +630,7 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         report_success = []
         report_fail_not_found = []
         report_fail_already_rank = []
+        report_fail_permission = []
 
         for rsn in rsns_to_process:
             if not rsn: continue
@@ -610,6 +642,10 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                 report_fail_not_found.append(rsn)
                 continue
             
+            if member_data['old_hierarchy'] > staff_max_hierarchy:
+                report_fail_permission.append(member_data['original_rsn'])
+                continue
+                
             if member_data['old_rank_id'] == new_rank_id:
                 report_fail_already_rank.append(member_data['original_rsn'])
                 continue
@@ -642,8 +678,10 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
             embed.add_field(name=f"ℹ️ No Change ({len(report_fail_already_rank)})", value="```\n" + "\n".join(report_fail_already_rank) + "\n```", inline=False)
         if report_fail_not_found:
             embed.add_field(name=f"❌ Failed: RSN Not Found ({len(report_fail_not_found)})", value="```\n" + "\n".join(report_fail_not_found) + "\n```", inline=False)
+        if report_fail_permission:
+            embed.add_field(name=f"⛔ Failed: Permission Denied ({len(report_fail_permission)})", value="```\n" + "\n".join(report_fail_permission) + "\n```", inline=False)
         
-        if not report_success and not report_fail_already_rank and not report_fail_not_found:
+        if not report_success and not report_fail_already_rank and not report_fail_not_found and not report_fail_permission:
             embed.description = "No RSNs were provided or found."
 
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
