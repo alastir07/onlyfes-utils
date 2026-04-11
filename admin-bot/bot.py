@@ -207,7 +207,8 @@ async def help(interaction: discord.Interaction, publish: bool = False):
     user_commands = [
         "`/help [publish]`\nShows this help message.",
         "`/memberinfo <rsn> [publish]`\nGets a member's rank, join date, current EP, and past RSNs.",
-        "`/rankhistory <rsn> [num_changes] [publish]`\nGets a member's recent rank changes."
+        "`/rankhistory <rsn> [num_changes] [publish]`\nGets a member's recent rank changes.",
+        "`/overachievers <query> [publish]`\nLook up which metrics an RSN holds, or who holds a specific metric."
     ]
     
     embed.add_field(
