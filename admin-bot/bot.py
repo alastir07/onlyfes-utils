@@ -242,7 +242,7 @@ async def help(interaction: discord.Interaction, publish: bool = False):
     if user_role in ["General", "Master", "Commander", "Owner"]:
         general_commands = [
             "`/syncclan [dry_run] [force_run] [publish]`\nRuns the clan sync with WOM.",
-            "`/addexempt <rsn> <reason> [publish]`\nGrants a member 3-month immunity from inactivity tracking.",
+            "`/addexempt <rsn> <reason> [days] [publish]`\nGrants a member immunity from inactivity tracking for a set number of days (default 90).",
             "`/checkinactives [publish]`\nChecks for members with 0 XP gain in their check period."
         ]
         
@@ -450,6 +450,9 @@ class ConfirmPurgeView(ui.View):
             item.disabled = True
         await interaction.response.edit_message(view=self)
         try:
+            # Delete dependent records that might not have ON DELETE CASCADE
+            supabase.table('membership_events').delete().eq('member_id', self.member_id).execute()
+            
             data = supabase.table('members').delete().eq('id', self.member_id).execute()
             if not data.data:
                 await interaction.followup.send(f"Error: Could not find member with ID {self.member_id} to delete.", ephemeral=True)
@@ -1058,17 +1061,18 @@ async def bulk_add_points(interaction: discord.Interaction, points: int, reason:
 
 
 # --- 14. /ADDEXEMPT COMMAND ---
-@client.tree.command(name="addexempt", description="Grant a member 3-month immunity from inactivity tracking.")
+@client.tree.command(name="addexempt", description="Grant a member immunity from inactivity tracking.")
 @app_commands.describe(
     rsn="The member's RSN (current or past).",
     reason="The reason for this exemption (e.g., 'Taking a break from the game').",
+    days="Number of days for the exemption (defaults to 90).",
     publish="True to post the confirmation publicly."
 )
 @check_staff_role("General")
-async def add_exempt(interaction: discord.Interaction, rsn: str, reason: str, publish: bool = False):
+async def add_exempt(interaction: discord.Interaction, rsn: str, reason: str, days: int = 90, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /addexempt rsn='{rsn}' reason='{reason}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /addexempt rsn='{rsn}' reason='{reason}' days={days} publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -1107,9 +1111,9 @@ async def add_exempt(interaction: discord.Interaction, rsn: str, reason: str, pu
         # 3. Get staff member ID
         staff_member_id = get_staff_member_id(interaction)
         
-        # 4. Calculate expiration date (3 months from now)
+        # 4. Calculate expiration date
         from dateutil.relativedelta import relativedelta
-        expiration_date = datetime.now() + relativedelta(months=3)
+        expiration_date = datetime.now() + relativedelta(days=days)
         
         # 5. Insert exemption
         supabase.table('inactivity_exemptions').insert({
