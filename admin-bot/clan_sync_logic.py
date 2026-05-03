@@ -4,7 +4,7 @@ import time
 import re
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from dateutil.parser import parse
 import sys
 import logging
@@ -133,9 +133,10 @@ def fetch_db_ranks_and_rsns(supabase: Client) -> (dict, dict, dict):
 
 def fetch_db_member_data(supabase: Client) -> dict:
     log.info("Fetching active members and latest snapshots from DB...")
+    db_member_data = {}
     try:
+        # Try optimal RPC first
         response = supabase.rpc('get_active_member_snapshots').execute()
-        db_member_data = {}
         for member in response.data:
             db_member_data[member['id']] = {
                 "member_id": member['id'],
@@ -143,11 +144,26 @@ def fetch_db_member_data(supabase: Client) -> dict:
                 "current_rank_id": member['current_rank_id'],
                 "latest_db_xp": member['latest_db_xp']
             }
-        log.info(f"Found {len(db_member_data)} active members in DB.")
+        log.info(f"Found {len(db_member_data)} active members via RPC.")
         return db_member_data
     except Exception as e:
-        log.error(f"Error fetching active member snapshots: {e}")
-        return None
+        log.warning(f"RPC 'get_active_member_snapshots' failed ({e}). Falling back to direct table query.")
+        
+        try:
+            # Fallback: Fetch directly from members table (ignoring latest_db_xp)
+            response = supabase.table('members').select('id, date_joined, current_rank_id').eq('status', 'Active').execute()
+            for member in response.data:
+                db_member_data[member['id']] = {
+                    "member_id": member['id'],
+                    "date_joined": member['date_joined'],
+                    "current_rank_id": member['current_rank_id'],
+                    "latest_db_xp": None # Force refresh
+                }
+            log.info(f"Found {len(db_member_data)} active members via Fallback.")
+            return db_member_data
+        except Exception as e2:
+            log.error(f"Critical error fetching members: {e2}")
+            return None
 
 def fetch_all_db_members(supabase: Client) -> dict:
     """Fetch ALL members (active and inactive) for detecting returning members"""
@@ -248,9 +264,6 @@ def fetch_and_process_name_changes(supabase: Client, db_rsn_map_normalized: dict
         # FIX: Sort by date (createdAt) ascending to replay history correctly
         # Oldest change first -> Newest change last
         # Default implicit order might be reverse chrono (newest first), causing "reverts" to happen backwards
-        name_changes.sort(key=lambda x: parse(x['createdAt']))
-
-
         name_changes.sort(key=lambda x: parse(x['createdAt']))
 
         for i, change in enumerate(name_changes):
@@ -509,8 +522,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                     'total_xp': overall_data.get('experience', 0),
                     'total_level': overall_data.get('level', 0),
                     'ehp': snapshot_data.get('computed', {}).get('ehp', {}).get('value', 0),
-                    'ehb': snapshot_data.get('computed', {}).get('ehb', {}).get('value', 0),
-                    'full_json_payload': snapshot
+                    'ehb': snapshot_data.get('computed', {}).get('ehb', {}).get('value', 0)
                 })
     
     # 4. CALCULATE "DIFF"
@@ -527,6 +539,12 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
     # 5. PREPARE REPORTS
     report_newly_added = []
     report_deactivated = []
+    for d_id in departed_member_ids:
+        for rsn_data in db_rsn_map_normalized.values():
+            if rsn_data['member_id'] == d_id and rsn_data['is_primary']:
+                report_deactivated.append(rsn_data['original_rsn'])
+                break
+                
     report_rank_mismatches = []
     report_promo_emerald = []
     report_promo_ruby = []
@@ -571,7 +589,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
             "status": 'Active'
         })
         
-        report_newly_added.append(f"{member['rsn']} (Rank: {rank_name})")
+        report_newly_added.append(member['rsn'])
         
     # B: Process Returning Members (inactive in DB, present in WOM) - PRIMARY RSNs ONLY
     report_returning_members = []
@@ -596,10 +614,11 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                     returning_members_payload.append({
                         'member_id': member_id,
                         'old_rank_id': old_rank_id,
-                        'new_rank_id': new_rank_id
+                        'new_rank_id': new_rank_id,
+                        'date_joined': today.isoformat()
                     })
                     old_rank_name = ranks_map_by_id.get(old_rank_id, 'Unknown')
-                    report_returning_members.append(f"{wom_member['rsn']}: {old_rank_name} -> {wom_rank_name}")
+                    report_returning_members.append(wom_member['rsn'])
     
     # C: Check Rank Mismatches for Existing Active Members (PRIMARY RSNs ONLY)
     for normalized_rsn in wom_normalized_rsns:
@@ -621,19 +640,48 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                     db_rank_name = ranks_map_by_id.get(db_rank_id, 'Unknown')
                     report_rank_mismatches.append(f"{wom_member['rsn']}: DB says '{db_rank_name}', WOM says '{wom_rank_name}'")
 
-    # D: Check for emerald rankups (Sapphire rank and joined over 28 days ago)
-    for member_id in db_member_data:
-        if member_id in db_member_data:
-            member = db_member_data[member_id]
-            if member['current_rank_id'] == ranks_map_by_id[10] and member['date_joined'] > (today - timedelta(days=28)):
-                report_promo_emerald.append(f"{member['rsn']}")
+    # D & E: Check for rankups based on cumulative Time in Clan
+    report_lines.append("\n--- Checking for Promotions ---")
+    try:
+        eligible_promotions_res = supabase.rpc('get_eligible_promotions').execute()
+        eligible_promotions = eligible_promotions_res.data or []
+        
+        for promo in eligible_promotions:
+            member_id = promo['member_id']
+            rsn = promo['rsn']
+            current_rank_id = promo['current_rank_id']
+            days_in_clan = promo['days_in_clan']
+            
+            normalized_rsn = normalize_string(rsn)
+            wom_member = wom_members.get(normalized_rsn)
+            if not wom_member:
+                continue
 
-    # E: Check for ruby rankups (Emerald rank and joined over 56 days ago with 1250 total level)
-    for member_id in db_member_data:
-        if member_id in db_member_data:
-            member = db_member_data[member_id]
-            if member['current_rank_id'] == ranks_map_by_id[11] and member['date_joined'] > (today - timedelta(days=56)) and member['total_level'] >= 1250:
-                report_promo_ruby.append(f"{member['rsn']}")
+            # Sapphire (10) -> Emerald
+            if current_rank_id == 10 and days_in_clan >= 28:
+                report_promo_emerald.append(f"{rsn} ({days_in_clan} days)")
+            
+            # Emerald (11) -> Ruby
+            if current_rank_id == 11 and days_in_clan >= 56:
+                total_level = 0
+                snapshot = wom_member.get('latest_snapshot')
+                if snapshot:
+                    total_level = snapshot.get('data', {}).get('skills', {}).get('overall', {}).get('level', 0)
+                
+                if total_level == 0:
+                    try:
+                        res = supabase.table('wom_snapshots').select('total_level').eq('member_id', member_id).order('snapshot_date', desc=True).limit(1).execute()
+                        if res.data:
+                            total_level = res.data[0].get('total_level', 0) or 0
+                    except Exception as e:
+                        log.warning(f"Failed to lazy-fetch total_level for {rsn}: {e}")
+                        total_level = 0
+                
+                if total_level >= 1250:
+                    report_promo_ruby.append(f"{rsn} ({days_in_clan} days, {total_level} TL)")
+    except Exception as e:
+        report_lines.append(f"ERROR: Failed to fetch eligible promotions: {e}")
+
     
     # --- 6. CIRCUIT BREAKER CHECK ---
     report_lines.append("\n--- Running Safety Checks ---")
@@ -707,7 +755,8 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
         
         # A: Process New Members
         if new_members_payload:
-            report_lines.append(f"Adding {len(new_members_payload)} new members...")
+            rsns_joined = ", ".join(report_newly_added)
+            report_lines.append(f"Adding {len(new_members_payload)} new members: {rsns_joined}")
             db_members_payload = []
             for m in new_members_payload:
                 db_members_payload.append({k: v for k, v in m.items() if k not in ['rsn', 'latest_db_xp']})
@@ -722,21 +771,34 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                     supabase.table('member_rsns').insert(new_rsns_payload).execute()
                 if new_ranks_payload:
                     supabase.table('rank_history').insert(new_ranks_payload).execute()
+                
+                # [NEW] Add a 'join' event
+                join_events_payload = []
+                for member_data in inserted_members:
+                    join_events_payload.append({
+                        "member_id": member_data['id'],
+                        "event_type": "join"
+                    })
+                if join_events_payload:
+                    supabase.table('membership_events').insert(join_events_payload).execute()
+                    
                 report_lines.append("New member processing complete.")
             except Exception as e:
                 report_lines.append(f"ERROR processing new members: {e}")
 
         # A2: Process Returning Members
         if returning_members_payload:
-            report_lines.append(f"Reactivating {len(returning_members_payload)} returning members...")
+            rsns_joined = ", ".join(report_returning_members)
+            report_lines.append(f"Reactivating {len(returning_members_payload)} returning members: {rsns_joined}")
             try:
                 rank_history_payload = []
+                join_events_payload = []
                 for returning_member in returning_members_payload:
                     member_id = returning_member['member_id']
                     new_rank_id = returning_member['new_rank_id']
                     old_rank_id = returning_member['old_rank_id']
                     
-                    # Reactivate and update rank
+                    # Reactivate and update rank (Leave date_joined alone!)
                     supabase.table('members').update({
                         'status': 'Active',
                         'current_rank_id': new_rank_id
@@ -748,9 +810,17 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
                         'previous_rank_id': old_rank_id,
                         'new_rank_id': new_rank_id
                     })
+                    
+                    # Add join event
+                    join_events_payload.append({
+                        'member_id': member_id,
+                        'event_type': 'join'
+                    })
                 
                 if rank_history_payload:
                     supabase.table('rank_history').insert(rank_history_payload).execute()
+                if join_events_payload:
+                    supabase.table('membership_events').insert(join_events_payload).execute()
                 
                 report_lines.append("Returning member processing complete.")
             except Exception as e:
@@ -758,9 +828,20 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
 
         # B: Process Departed Members
         if departed_member_ids:
-            report_lines.append(f"Deactivating {len(report_deactivated)} departed members...")
+            rsns_joined = ", ".join(report_deactivated)
+            report_lines.append(f"Deactivating {len(departed_member_ids)} departed members: {rsns_joined}")
             try:
                 supabase.table('members').update({"status": 'Inactive'}).in_('id', list(departed_member_ids)).execute()
+                
+                # Add leave events
+                leave_events_payload = []
+                for d_id in departed_member_ids:
+                    leave_events_payload.append({
+                        "member_id": d_id,
+                        "event_type": "leave"
+                    })
+                supabase.table('membership_events').insert(leave_events_payload).execute()
+                
                 report_lines.append("Deactivation complete.")
             except Exception as e:
                 report_lines.append(f"ERROR deactivating members: {e}")
@@ -778,20 +859,33 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
             
     else:
         report_lines.append("\n--- (DRY RUN) SKIPPING ALL DATABASE WRITES ---")
-        report_lines.append(f"Would add {len(report_newly_added)} new members.")
-        report_lines.append(f"Would reactivate {len(returning_members_payload)} returning members.")
-        report_lines.append(f"Would deactivate {len(report_deactivated)} members.")
+        if report_newly_added:
+            report_lines.append(f"Would add {len(report_newly_added)} new members: {', '.join(report_newly_added)}")
+        else:
+            report_lines.append(f"Would add {len(report_newly_added)} new members.")
+            
+        if returning_members_payload:
+            report_lines.append(f"Would reactivate {len(returning_members_payload)} returning members: {', '.join(report_returning_members)}")
+        else:
+            report_lines.append(f"Would reactivate {len(returning_members_payload)} returning members.")
+            
+        if departed_member_ids:
+            report_lines.append(f"Would deactivate {len(departed_member_ids)} members: {', '.join(report_deactivated)}")
+        else:
+            report_lines.append(f"Would deactivate {len(departed_member_ids)} members.")
+            
         report_lines.append(f"Would insert {len(snapshots_payload)} stat snapshots.")
         if report_auto_rank_updates:
             report_lines.append(f"Would force-update {len(report_auto_rank_updates)} mismatched ranks.")
 
         
-    report_lines.append("\n--- 💎 Staff Action Required: Pending Promotions ---")
+    report_lines.append("\n--- Staff Action Required: Pending Promotions ---")
     report_lines.append("Promote in-game, then run /rankup <rsn> <rank>")
     if report_promo_emerald:
         report_lines.append("\n  Sapphire -> Emerald (>= 28 days):")
         for report in report_promo_emerald:
             report_lines.append(f"    - {report}")
+            
     if report_promo_ruby:
         report_lines.append("\n  Emerald -> Ruby (>= 56 days & 1250+ total):")
         for report in report_promo_ruby:
@@ -821,7 +915,15 @@ if __name__ == "__main__":
         log.info("Supabase connection successful for manual run.")
         
         report = run_sync(supabase_client, dry_run=is_dry_run, force_run=is_force_run)
-        log.info(report)
+        
+        # Write to file explicitly to avoid encoding issues
+        with open("sync_report.txt", "w", encoding="utf-8") as f:
+            f.write(report)
+            
+        try:
+            log.info(report)
+        except Exception as e:
+            log.error(f"Error printing report to console (encoding issue?): {e}")
         
     except Exception as e:
         log.error(f"Error initializing Supabase: {e}")

@@ -1,20 +1,31 @@
 -- DB FUNCTION: get_active_member_snapshots
 -- Returns a list of active members and their latest snapshots
 
+CREATE OR REPLACE FUNCTION get_active_member_snapshots()
+RETURNS TABLE (
+  id UUID,
+  date_joined TIMESTAMPTZ,
+  current_rank_id BIGINT,
+  latest_db_xp BIGINT,
+  total_level SMALLINT
+)
+LANGUAGE plpgsql
+AS $$
 BEGIN
   RETURN QUERY
   SELECT
     m.id,
     m.date_joined,
     m.current_rank_id,
-    s.total_xp AS latest_db_xp
+    s.total_xp AS latest_db_xp,
+    s.total_level
   FROM
     public.members m
   -- LEFT JOIN so we still get members with NO snapshot
   LEFT JOIN LATERAL (
     -- This subquery gets only the *most recent* snapshot
     -- for each member.
-    SELECT snap.total_xp
+    SELECT snap.total_xp, snap.total_level
     FROM public.wom_snapshots snap
     WHERE snap.member_id = m.id
     ORDER BY snap.snapshot_date DESC
@@ -23,6 +34,7 @@ BEGIN
   WHERE
     m.status = 'Active';
 END;
+$$;
 
 
 -- DB FUNCTION: get_member_info
@@ -89,7 +101,11 @@ BEGIN
         AND ept.modification > 0
         ORDER BY date_enacted DESC
         LIMIT 1
-      ) AS latest_ep_transaction
+      ) AS latest_ep_transaction,
+      
+      -- Calculate total days in clan
+      (SELECT calculate_days_in_clan(m.id)) AS total_days_in_clan
+      
     FROM
       public.members AS m
     -- Left join rank because inactive members might not have a valid rank_id
@@ -169,3 +185,65 @@ BEGIN
 
     RETURN NULL;
 END;
+
+-- DB FUNCTION: calculate_days_in_clan
+-- Calculates the total days a member has been in the clan across joins/leaves
+
+CREATE OR REPLACE FUNCTION calculate_days_in_clan(p_member_id uuid)
+RETURNS integer
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  total_days integer := 0;
+  v_join_date timestamptz;
+  event_rec record;
+BEGIN
+  FOR event_rec IN
+    SELECT event_type, event_date
+    FROM public.membership_events
+    WHERE member_id = p_member_id
+    ORDER BY event_date ASC
+  LOOP
+    IF event_rec.event_type = 'join' THEN
+      v_join_date := event_rec.event_date;
+    ELSIF event_rec.event_type = 'leave' THEN
+      IF v_join_date IS NOT NULL THEN
+        total_days := total_days + EXTRACT(EPOCH FROM (event_rec.event_date - v_join_date))/86400;
+        v_join_date := NULL;
+      END IF;
+    END IF;
+  END LOOP;
+  
+  -- Add time since the last 'join' if they are currently active (no matching 'leave')
+  IF v_join_date IS NOT NULL THEN
+    total_days := total_days + EXTRACT(EPOCH FROM (NOW() - v_join_date))/86400;
+  END IF;
+  
+  RETURN total_days;
+END;
+$$;
+
+
+-- DB FUNCTION: get_eligible_promotions
+-- Returns active members who are eligible for promotion review based on time in clan
+CREATE OR REPLACE FUNCTION get_eligible_promotions()
+RETURNS TABLE (
+  member_id uuid,
+  rsn character varying,
+  current_rank_id bigint,
+  days_in_clan integer
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    m.id,
+    mr.rsn,
+    m.current_rank_id,
+    calculate_days_in_clan(m.id) AS days_in_clan
+  FROM public.members m
+  JOIN public.member_rsns mr ON m.id = mr.member_id AND mr.is_primary = true
+  WHERE m.status = 'Active' AND m.current_rank_id IN (10, 11);
+END;
+$$;
