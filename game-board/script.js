@@ -449,6 +449,8 @@ class HexGrid extends BaseGrid {
                             tile.element.classList.add('tile-ladder');
                         } else if (tile.details.type === 'snake') {
                             tile.element.classList.add('tile-snake');
+                        } else if (tile.details.type === 'reward') {
+                            tile.element.classList.add('tile-reward');
                         }
                     }
                 });
@@ -728,6 +730,12 @@ class HexGrid extends BaseGrid {
                                         onchange="hexGrid.setTileType('${key}', 'snake', this.checked)">
                                     Snake 🐍
                                 </label>
+                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                    <input type="checkbox" 
+                                        ${tile.details.type === 'reward' ? 'checked' : ''} 
+                                        onchange="hexGrid.setTileType('${key}', 'reward', this.checked)">
+                                    Reward 🏆
+                                </label>
                             </div>
                         </div>
 
@@ -745,7 +753,7 @@ class HexGrid extends BaseGrid {
                         </div>
                     </div>
                 </div>
-                ${this.isEditMode && !tile.details.type ? `
+                ${this.isEditMode && (!tile.details.type || tile.details.type === 'reward') ? `
                     <div class="item-search-section">
                         <h3>OSRS Item Search</h3>
                         <div class="search-container">
@@ -760,8 +768,8 @@ class HexGrid extends BaseGrid {
                     <div class="image-preview">
                         <img src="${tile.backgroundImage.replace(/url\(['"](.+)['"]\)/, '$1')}" alt="Tile preview">
                     </div>
-                    ${this.isEditMode && !tile.details.type ? `<button onclick="hexGrid.changeTileImage('${key}')">Change Image</button>` : ''}
-                    ${this.isEditMode && tile.details.type ? `<div style="text-align: center; color: #888; font-style: italic; margin-top: 5px;">Image locked by ${tile.details.type} type</div>` : ''}
+                    ${this.isEditMode && (!tile.details.type || tile.details.type === 'reward') ? `<button onclick="hexGrid.changeTileImage('${key}')">Change Image</button>` : ''}
+                    ${this.isEditMode && (tile.details.type && tile.details.type !== 'reward') ? `<div style="text-align: center; color: #888; font-style: italic; margin-top: 5px;">Image locked by ${tile.details.type} type</div>` : ''}
                 </div>
             </div>
         `;
@@ -881,13 +889,15 @@ class HexGrid extends BaseGrid {
         if (!tile) return;
 
         // Reset types first
-        tile.element.classList.remove('tile-ladder', 'tile-snake');
+        tile.element.classList.remove('tile-ladder', 'tile-snake', 'tile-reward');
         
         if (!checked) {
             // Deselecting
             tile.details.type = null;
-            // Revert to placeholder
-            tile.backgroundImage = 'url("https://via.placeholder.com/100x115")';
+            // Revert to placeholder only if not reward
+            if (type !== 'reward') {
+                tile.backgroundImage = 'url("https://via.placeholder.com/100x115")';
+            }
         } else {
             // Selecting
             tile.details.type = type;
@@ -901,6 +911,8 @@ class HexGrid extends BaseGrid {
                 const variants = [IMAGE_SNAKE_MAGMA, IMAGE_SNAKE_SERP, IMAGE_SNAKE_TANZ];
                 const variant = variants[Math.floor(Math.random() * variants.length)];
                 tile.backgroundImage = `url("${variant}")`;
+            } else if (type === 'reward') {
+                tile.element.classList.add('tile-reward');
             }
         }
 
@@ -1740,6 +1752,11 @@ body {
     box-shadow: inset 0 0 0 4px #f44336, 0 0 10px #f44336;
     z-index: 5;
 }
+
+.tile-reward {
+    box-shadow: inset 0 0 0 4px #ffe200, 0 0 10px #ffe200;
+    z-index: 5;
+}
 `;
 
         // Create the HTML content
@@ -2380,6 +2397,8 @@ body {
                             tile.backgroundImage = \`url("\${variant}")\`;
                             const inner = tile.element.querySelector(contentSelector);
                             if (inner) inner.style.backgroundImage = tile.backgroundImage;
+                        } else if (tile.details.type === 'reward') {
+                            tile.element.classList.add('tile-reward');
                         }
                         const content = tile.element.querySelector(contentSelector);
                         if (content) {

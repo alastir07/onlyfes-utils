@@ -119,3 +119,14 @@ CREATE TABLE public.membership_events (
   CONSTRAINT membership_events_pkey PRIMARY KEY (id),
   CONSTRAINT membership_events_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id)
 );
+
+CREATE TABLE public.overachievers (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  member_id uuid NOT NULL,
+  metric character varying NOT NULL,
+  value bigint NOT NULL,
+  global_rank integer NOT NULL,
+  date timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT overachievers_pkey PRIMARY KEY (id),
+  CONSTRAINT overachievers_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id)
+);
