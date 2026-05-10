@@ -1,7 +1,7 @@
 {
-  "viewportX": 788,
-  "viewportY": 507.5,
-  "zoom": 0.7513148009015782,
+  "viewportX": 847,
+  "viewportY": 531.5,
+  "zoom": 0.8264462809917362,
   "isEditMode": true,
   "gridType": "square",
   "tiles": [
@@ -38,7 +38,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Lamp_detail.png?78ba5\")",
       "details": {
         "name": "Tile -4,-4",
-        "description": "<p>Completing Row 2 awards 50 bonus points</p>",
+        "description": "<p>Completing Row 2 awards 75 bonus points</p>",
         "type": "reward",
         "title": "Row 2"
       },
@@ -51,7 +51,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Lamp_detail.png?78ba5\")",
       "details": {
         "name": "Tile -4,-3",
-        "description": "<p>Completing Row 3 awards 50 bonus points</p>",
+        "description": "<p>Completing Row 3 awards 75 bonus points</p>",
         "type": "reward",
         "title": "Row 3"
       },
@@ -64,7 +64,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Achievement_Diaries.png?1e549\")",
       "details": {
         "name": "Tile -4,-2",
-        "description": "<p>Completing Row 4 awards 150 bonus points</p>",
+        "description": "<p>Completing Row 4 awards 125 bonus points</p>",
         "type": "reward",
         "title": "Row 4"
       },
@@ -77,7 +77,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Lamp_detail.png?78ba5\")",
       "details": {
         "name": "Tile -4,-1",
-        "description": "<p>Completing Row 5 awards 50 bonus points</p>",
+        "description": "<p>Completing Row 5 awards 75 bonus points</p>",
         "type": "reward",
         "title": "Row 5"
       },
@@ -90,7 +90,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Lamp_detail.png?78ba5\")",
       "details": {
         "name": "Tile -4,0",
-        "description": "<p>Completing Row 6 awards 50 bonus points</p>",
+        "description": "<p>Completing Row 6 awards 75&nbsp;bonus points</p>",
         "type": "reward",
         "title": "Row 6"
       },
@@ -132,7 +132,7 @@
         "description": "<p>Obtain 1 Enhanced Crystal Teleport Seed</p>",
         "title": "Legolas' Escape Crystal"
       },
-      "number": ""
+      "number": "A1"
     },
     {
       "key": "-3,-4",
@@ -144,7 +144,7 @@
         "description": "<p>Obtain 3 ring rolls/Chromium Ingot OR 1x SRA piece/Virtus</p>",
         "title": "Room for Desert?"
       },
-      "number": ""
+      "number": "A2"
     },
     {
       "key": "-3,-3",
@@ -156,7 +156,7 @@
         "description": "<p>Obtain 2x Crystal Armor Seeds or 1x Enhanced Weapon Seed.</p>",
         "title": "Feeling lucky?"
       },
-      "number": ""
+      "number": "A3"
     },
     {
       "key": "-3,-2",
@@ -168,7 +168,7 @@
         "description": "<p>Obtain 1 of the below off-hand drops from Raids:</p>\n<ul>\n<li>Twisted Buckler</li>\n<li>Elidins Ward</li>\n<li>Avernic Defender</li>\n</ul>\n<p>&nbsp;</p>\n<p>&nbsp;</p>",
         "title": "Off-hander"
       },
-      "number": ""
+      "number": "A4"
     },
     {
       "key": "-3,-1",
@@ -180,7 +180,7 @@
         "description": "<p>Obtain 3 Venetor Shards</p>",
         "title": "Money dog"
       },
-      "number": ""
+      "number": "A5"
     },
     {
       "key": "-3,0",
@@ -192,7 +192,7 @@
         "description": "<p>Obtain each of the Dagannoth King rings</p>",
         "title": "Lord of the Rings"
       },
-      "number": ""
+      "number": "A6"
     },
     {
       "key": "-3,1",
@@ -204,7 +204,7 @@
         "description": "<p>Obtain 3 Squid Beaks</p>",
         "title": "Squid Game"
       },
-      "number": ""
+      "number": "A7"
     },
     {
       "key": "-3,2",
@@ -229,7 +229,7 @@
         "description": "<p>Obtain 1 Oathplate armor piece / horn OR 50 shards from Yama</p>",
         "title": "Ya mama"
       },
-      "number": ""
+      "number": "B1"
     },
     {
       "key": "-2,-4",
@@ -241,7 +241,7 @@
         "description": "<p>Obtain 1 Golden Tench</p>",
         "title": "Slap me with it"
       },
-      "number": ""
+      "number": "B2"
     },
     {
       "key": "-2,-3",
@@ -253,19 +253,19 @@
         "description": "<p>Obtain 2 drops from Demonic Gorrilas, these can be duplicates.</p>",
         "title": "Demonic Slayer"
       },
-      "number": ""
+      "number": "B3"
     },
     {
       "key": "-2,-2",
       "q": -2,
       "r": -2,
-      "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Uncharged_trident_detail.png?c0ec2\")",
+      "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Snakeling.png?f371a\")",
       "details": {
         "name": "Tile -2,-2",
-        "description": "<p>Obtain 1 Trident of the Seas (either charged or uncharged)</p>",
-        "title": "Tile -2,-2"
+        "description": "<p>Obtain 2 of the below drops from Zulrah:</p>\n<ul>\n<li>Tanzanite Fang</li>\n<li>Magic Fang</li>\n<li>Serpentine Helm</li>\n<li>Any Mutagen</li>\n</ul>",
+        "title": "Theres a snake in my boot"
       },
-      "number": ""
+      "number": "B4"
     },
     {
       "key": "-2,-1",
@@ -274,10 +274,10 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Leaf-bladed_battleaxe_detail.png?d1db6\")",
       "details": {
         "name": "Tile -2,-1",
-        "description": "<p>Obtain 1x Leaf Blade Battleaxe and 1x Leaf bladed Sword</p>",
+        "description": "<p>Obtain 1x Leaf bladed Battleaxe and 1x Leaf bladed Sword</p>",
         "title": "Leaf-blader"
       },
-      "number": ""
+      "number": "B5"
     },
     {
       "key": "-2,0",
@@ -286,10 +286,10 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Big_shark_detail.png?e3794\")",
       "details": {
         "name": "Tile -2,0",
-        "description": "<p>Includes:<br><br>Big Shark, Big Swordfish, Big bass, Big Harpoonfish</p>",
+        "description": "<p>Obtain 1x Big Fish, Includes:<br><br>Big Shark, Big Swordfish, Big bass</p>",
         "title": "I've caught a big one!"
       },
-      "number": ""
+      "number": "B6"
     },
     {
       "key": "-2,1",
@@ -301,7 +301,7 @@
         "description": "<p>Obtain 1 Arenea Boots</p>",
         "title": "Webbed Feet kinda guy"
       },
-      "number": ""
+      "number": "B7"
     },
     {
       "key": "-2,2",
@@ -310,7 +310,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Lamp_detail.png?78ba5\")",
       "details": {
         "name": "Tile -2,2",
-        "description": "<p>Completing Column B awards 50 bonus points</p>",
+        "description": "<p>Completing Column B awards 75 bonus points</p>",
         "type": "reward",
         "title": "Column B"
       },
@@ -326,7 +326,7 @@
         "description": "<p>Obtain 2 Unsireds</p>",
         "title": "You are the sire in my Un"
       },
-      "number": ""
+      "number": "C1"
     },
     {
       "key": "-1,-4",
@@ -338,7 +338,7 @@
         "description": "<p>Obtain 1 of each from Sarachnis:</p>\n<ul>\n<li>Sarachnis Cudgel</li>\n<li>Giant Egg Sac</li>\n<li>Pristine Spider Silk</li>\n</ul>",
         "title": "Spiderman"
       },
-      "number": ""
+      "number": "C2"
     },
     {
       "key": "-1,-3",
@@ -347,10 +347,10 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Blood_shard_detail.png?2fbc7\")",
       "details": {
         "name": "Tile -1,-3",
-        "description": "<a href=\"https://oldschool.runescape.wiki/w/Blood_shard\" target=\"_blank\">Blood shard</a>",
-        "title": "Obtain 1x Blood Shard"
+        "description": "<p>Obtain 1x Blood Shard</p>",
+        "title": "Bloody Hell"
       },
-      "number": ""
+      "number": "C3"
     },
     {
       "key": "-1,-2",
@@ -362,7 +362,7 @@
         "description": "<p>Obtain all of the below from Naguas:</p>\n<ul>\n<li>Glacial Temotli</li>\n<li>Earthbound Tecpatl</li>\n<li>Sulpher Blades</li>\n</ul>",
         "title": "Bopperino"
       },
-      "number": ""
+      "number": "C4"
     },
     {
       "key": "-1,-1",
@@ -374,7 +374,7 @@
         "description": "<p>Obtain 2 of any of the below from Gnome Restaurant:</p>\n<ul>\n<li>Gnome Scarf</li>\n<li>Mint Cake</li>\n<li>Gnome Goggles</li>\n</ul>",
         "title": "You've been Gnomed!"
       },
-      "number": ""
+      "number": "C5"
     },
     {
       "key": "-1,0",
@@ -386,7 +386,7 @@
         "description": "<p>Obtain 1 of any of the below from the Grotesque Guardians:</p>\n<ul>\n<li>Black Tourmaline Core</li>\n<li>Granite Gloves</li>\n<li>Granite Ring</li>\n<li>Granite Hammer</li>\n</ul>",
         "title": "Grotesque Garglers"
       },
-      "number": ""
+      "number": "C6"
     },
     {
       "key": "-1,1",
@@ -398,7 +398,7 @@
         "description": "<p>Obtain 3 drops from the Tzhaar collection log. These can be duplicates</p>",
         "title": "Tzhaar Bomba"
       },
-      "number": ""
+      "number": "C7"
     },
     {
       "key": "-1,2",
@@ -407,7 +407,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Lamp_detail.png?78ba5\")",
       "details": {
         "name": "Tile -1,2",
-        "description": "<p>Completing Column C awards 50 bonus points</p>",
+        "description": "<p>Completing Column C awards 75 bonus points</p>",
         "type": "reward",
         "title": "Column C"
       },
@@ -423,7 +423,7 @@
         "description": "<p>Obtain 2x the follow from raids:</p>\n<ul>\n<li>Dexterous Prayer Scroll</li>\n<li>Arcane Prayer Scroll</li>\n<li>Osmuntuns Fang</li>\n<li>Lightbearer</li>\n</ul>",
         "title": "Just a basic kinda guy"
       },
-      "number": ""
+      "number": "D1"
     },
     {
       "key": "0,-4",
@@ -435,7 +435,7 @@
         "description": "<p>Obtain 1 of each Godsword shard, OR any Hilt</p>",
         "title": "Find the Godsword!"
       },
-      "number": ""
+      "number": "D2"
     },
     {
       "key": "0,-3",
@@ -447,19 +447,19 @@
         "description": "<p>Obtain any of the below from Hueycoatl:</p>\n<ul>\n<li>Dragon Hunter Wand</li>\n<li>Tome of Earth</li>\n<li>6x Hueycoatl Hides</li>\n</ul>",
         "title": "Huey Hunter"
       },
-      "number": ""
+      "number": "D3"
     },
     {
       "key": "0,-2",
       "q": 0,
       "r": -2,
-      "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Sailing_cape_detail.png?d2c06\")",
+      "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Combat_achievements_detail.png?d8b9a\")",
       "details": {
         "name": "Tile 0,-2",
-        "description": "<p>Get 10 Marlin times across 3 courses. Each team member can submit once per course.</p>",
-        "title": "Barracuda Trials!"
+        "description": "<p>Obtain 500 CA points using only Perfection or Restriction type Combat Acheivements.&nbsp;<br><br>Each Team Member can only submit 50 points Maximum.</p>",
+        "title": "Combat Task, Completed"
       },
-      "number": ""
+      "number": "D4"
     },
     {
       "key": "0,-1",
@@ -471,7 +471,7 @@
         "description": "<p>Obtain 1 helmet, chest, legs and weapon slot from the Lunar Chest&nbsp;</p>",
         "title": "Moonman"
       },
-      "number": ""
+      "number": "D5"
     },
     {
       "key": "0,0",
@@ -483,7 +483,7 @@
         "description": "<p>Obtain 2 of the below Granite drops:</p>\n<ul>\n<li>Granite Boots</li>\n<li>Granite Legs</li>\n<li>Granite Shield</li>\n<li>Granite Helm</li>\n</ul>",
         "title": "Dwayne 'The Granite' Johnson"
       },
-      "number": ""
+      "number": "D6"
     },
     {
       "key": "0,1",
@@ -492,10 +492,10 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Twisted_bow_detail.png?7aa10\")",
       "details": {
         "name": "Tile 0,1",
-        "description": "<p>Obtain 2 of any of the below from Raids:</p>\n<ul>\n<li>Twisted Bow</li>\n<li>Tumekans Shadow</li>\n<li>Scythe of Vitur</li>\n<li>Elder Maul</li>\n<li>Kodai Insignia</li>\n<li>Ghrazi Rapier</li>\n<li>Sanguinesti Staff</li>\n<li>Dragon Hunter Crossbow</li>\n<li>Dragon Claws</li>\n</ul>",
+        "description": "<p>Obtain 2 of any of the below from Raids:</p>\n<ul>\n<li>Twisted Bow</li>\n<li>Tumekans Shadow</li>\n<li>Scythe of Vitur</li>\n<li>Elder Maul</li>\n<li>Kodai Insignia</li>\n<li>Dihn's Bulwark</li>\n<li>Ghrazi Rapier</li>\n<li>Sanguinesti Staff</li>\n<li>Dragon Hunter Crossbow</li>\n<li>Dragon Claws</li>\n</ul>",
         "title": "Megarare Puller"
       },
-      "number": ""
+      "number": "D7"
     },
     {
       "key": "0,2",
@@ -504,7 +504,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Achievement_Diaries.png?1e549\")",
       "details": {
         "name": "Tile 0,2",
-        "description": "<p>Completing Column D awards 150 bonus points</p>",
+        "description": "<p>Completing Column D awards 125 bonus points</p>",
         "type": "reward",
         "title": "Column D"
       },
@@ -520,7 +520,7 @@
         "description": "<p>Obtain 1 Cerberus Crystal</p>",
         "title": "Crystal Collector"
       },
-      "number": ""
+      "number": "E1"
     },
     {
       "key": "1,-4",
@@ -532,7 +532,7 @@
         "description": "<p>Obtain 2 Warped Sceptres</p>",
         "title": "Who needs a shadow?"
       },
-      "number": ""
+      "number": "E2"
     },
     {
       "key": "1,-3",
@@ -544,7 +544,7 @@
         "description": "<p>Obtain 1 of any of the below from Shades of Morton:</p>\n<ul>\n<li>Any Zealot piece</li>\n<li>Bloody notes</li>\n<li>Tree Wizard Journal</li>\n<li>Any Lock</li>\n</ul>",
         "title": "Shady Kinda Guy"
       },
-      "number": ""
+      "number": "E3"
     },
     {
       "key": "1,-2",
@@ -553,10 +553,10 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Chest_%28Barrows%29.png?9aff2\")",
       "details": {
         "name": "Tile 1,-2",
-        "description": "<p>Obtain 1 full set from any Barrows Brother</p>",
+        "description": "<p>Obtain any 6 pieces of Barrows gear OR 1 full set from any Barrows Brother</p>",
         "title": "Grave Digger"
       },
-      "number": ""
+      "number": "E4"
     },
     {
       "key": "1,-1",
@@ -565,9 +565,10 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Pharaoh%27s_sceptre_%28uncharged%29_detail.png?e35e8\")",
       "details": {
         "name": "Tile 1,-1",
-        "description": "<a href=\"https://oldschool.runescape.wiki/w/Pharaoh's_sceptre\" target=\"_blank\">Pharaoh's sceptre</a>"
+        "description": "<p>Obtain 1 Pharoahs Sceptre</p>",
+        "title": "This belongs to the British Museum"
       },
-      "number": ""
+      "number": "E5"
     },
     {
       "key": "1,0",
@@ -579,7 +580,7 @@
         "description": "<p>Obtain 2 Black Masks</p>",
         "title": "Slayer Starter Set"
       },
-      "number": ""
+      "number": "E6"
     },
     {
       "key": "1,1",
@@ -591,7 +592,7 @@
         "description": "<p>Obtain 1 of any of the below from Thermonuclear Smoke Devil:</p>\n<ul>\n<li>Occult Necklace</li>\n<li>Smoke Battlestaff</li>\n<li>Dragon Chainbody</li>\n</ul>",
         "title": "Thernobyl"
       },
-      "number": ""
+      "number": "E7"
     },
     {
       "key": "1,2",
@@ -600,7 +601,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Lamp_detail.png?78ba5\")",
       "details": {
         "name": "Tile 1,2",
-        "description": "<p>Completing Column E awards 50 bonus points</p>",
+        "description": "<p>Completing Column E awards 75 bonus points</p>",
         "type": "reward",
         "title": "Column E"
       },
@@ -616,7 +617,7 @@
         "description": "<p>Obtain any drop from Doom, or complete 100 Deep Delves</p>",
         "title": "Doomsday"
       },
-      "number": ""
+      "number": "F1"
     },
     {
       "key": "2,-4",
@@ -628,7 +629,7 @@
         "description": "<p>Obtain 1 Big Fish from Deep Sea Trawling,&nbsp;Includes:<br><br>Giant Blue Krill, Golden Haddock, Orangefin, Huge Halibut, Purplefin, Swift Marlin</p>",
         "title": "We're gunna need a bigger boat"
       },
-      "number": ""
+      "number": "F2"
     },
     {
       "key": "2,-3",
@@ -637,10 +638,10 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Dragon_pickaxe_detail.png?4f4ee\")",
       "details": {
         "name": "Tile 2,-3",
-        "description": "<p>Obtain 1 Dragon Pickaxe</p>",
+        "description": "<p>Obtain 1 Dragon Pickaxe OR 1 Dragon 2h Sword</p>",
         "title": "This tile is gunna Drag'on"
       },
-      "number": ""
+      "number": "F3"
     },
     {
       "key": "2,-2",
@@ -652,19 +653,19 @@
         "description": "<p>Obtain 3x Any Malediction/Odium shard</p>",
         "title": "Ward'nt you like to know"
       },
-      "number": ""
+      "number": "F4"
     },
     {
       "key": "2,-1",
       "q": 2,
       "r": -1,
-      "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Dragon_2h_sword_detail.png?6ed9d\")",
+      "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Steel_ring_detail.png?33393\")",
       "details": {
         "name": "Tile 2,-1",
-        "description": "<p>Obtain 1 Dragon 2h Sword</p>",
-        "title": "Gunna need two hands for this one"
+        "description": "<p>Obtain 3 Steel Rings</p>",
+        "title": "White cat 22 didn't die for this"
       },
-      "number": ""
+      "number": "F5"
     },
     {
       "key": "2,0",
@@ -676,7 +677,7 @@
         "description": "<p>Obtain 1x Tecu Salamander</p>",
         "title": "Tecu Salamanca"
       },
-      "number": ""
+      "number": "F6"
     },
     {
       "key": "2,1",
@@ -688,7 +689,7 @@
         "description": "<p>Obtain 15 Larran's Keys</p>",
         "title": "Larran's got a big chest"
       },
-      "number": ""
+      "number": "F7"
     },
     {
       "key": "2,2",
@@ -697,7 +698,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Lamp_detail.png?78ba5\")",
       "details": {
         "name": "Tile 2,2",
-        "description": "<p>Completing Column F awards 50 bonus points</p>",
+        "description": "<p>Completing Column F awards 75 bonus points</p>",
         "type": "reward",
         "title": "Column F"
       },
@@ -713,7 +714,7 @@
         "description": "<p>Obtain 1 Curved Bone</p>",
         "title": "No shame in it"
       },
-      "number": ""
+      "number": "G1"
     },
     {
       "key": "3,-4",
@@ -725,7 +726,7 @@
         "description": "<p>Obtain one full set of Dark/Light Mystic. You can mismatch across the sets, but each armour piece must be accounted for!<br><br>Dusk is excluded.</p>",
         "title": "Mystic Man"
       },
-      "number": ""
+      "number": "G2"
     },
     {
       "key": "3,-3",
@@ -737,7 +738,7 @@
         "description": "<p>Obtain 5 Dark Totems from Slayer. This can also be 15 Dark Totem Pieces across your team</p>",
         "title": "Who knew Skotizo was a demon?"
       },
-      "number": ""
+      "number": "G3"
     },
     {
       "key": "3,-2",
@@ -746,10 +747,10 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Justiciar_faceguard_detail.png?b297a\")",
       "details": {
         "name": "Tile 3,-2",
-        "description": "<p>Obtain 1 of any of the below from Raids:</p>\n<ul>\n<li>Masori</li>\n<li>Justiciar</li>\n<li>Ancestral</li>\n</ul>",
+        "description": "<p>Obtain 1 of any of the below armour pieces from Raids:</p>\n<ul>\n<li>Masori&nbsp;</li>\n<li>Justiciar</li>\n<li>Ancestral</li>\n</ul>",
         "title": "Armourer"
       },
-      "number": ""
+      "number": "G4"
     },
     {
       "key": "3,-1",
@@ -761,7 +762,7 @@
         "description": "<p>Obtain 10 Brimstone Keys</p>",
         "title": "Brimming with excitement"
       },
-      "number": ""
+      "number": "G5"
     },
     {
       "key": "3,0",
@@ -773,7 +774,7 @@
         "description": "<p>Obtain 1 unique drop from Zalcano</p>",
         "title": "Zalc is short for Zalculator if you didn't know"
       },
-      "number": ""
+      "number": "G6"
     },
     {
       "key": "3,1",
@@ -785,7 +786,7 @@
         "description": "<p>Obtain 1x Elven Signet</p>",
         "title": "Celebrimbor lost this"
       },
-      "number": ""
+      "number": "G7"
     },
     {
       "key": "3,2",
@@ -794,7 +795,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Antique_lamp_detail.png?5b59c\")",
       "details": {
         "name": "Tile 3,2",
-        "description": "<p>Completing Column G awards 50 bonus points</p>",
+        "description": "<p>Completing Column G awards 100 bonus points</p>",
         "type": "reward",
         "title": "Column G"
       },
