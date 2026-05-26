@@ -96,7 +96,7 @@ async def log_command_use(message: str):
         if IA_LOGGING_OUTPUT_CHANNEL_ID:
             channel = client.get_channel(int(IA_LOGGING_OUTPUT_CHANNEL_ID))
             if channel:
-                await channel.send(message)
+                await channel.send(f"```\n{message}\n```")
             else:
                 log.warning(f"Could not find admin logging channel ID {IA_LOGGING_OUTPUT_CHANNEL_ID}")
     except Exception as e:
