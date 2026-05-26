@@ -608,6 +608,31 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
     rsn_list="A comma-separated list of RSNs.",
     publish="True to post the confirmation publicly."
 )
+@app_commands.choices(rank_name=[
+    app_commands.Choice(name="Sapphire", value="Sapphire"),
+    app_commands.Choice(name="Emerald", value="Emerald"),
+    app_commands.Choice(name="Ruby", value="Ruby"),
+    app_commands.Choice(name="Diamond", value="Diamond"),
+    app_commands.Choice(name="Dragonstone", value="Dragonstone"),
+    app_commands.Choice(name="Onyx", value="Onyx"),
+    app_commands.Choice(name="Zenyte", value="Zenyte"),
+    app_commands.Choice(name="Maxed (Elite Skiller)", value="Maxed"),
+    app_commands.Choice(name="TzKal (Elite PvMer)", value="TzKal"),
+    app_commands.Choice(name="Myth (Living Legend)", value="Myth"),
+    app_commands.Choice(name="Beast (BOTM Winner)", value="Beast"),
+    app_commands.Choice(name="Skiller (SOTM Winner)", value="Skiller"),
+    app_commands.Choice(name="Merchant (Big Booty/COTM Winner)", value="Merchant"),
+    app_commands.Choice(name="Adventurer (Event Winner)", value="Adventurer"),
+    app_commands.Choice(name="Gamer (Event Champion)", value="Gamer"),
+    app_commands.Choice(name="Raider (Event Overlord)", value="Raider"),
+    app_commands.Choice(name="Administrator (Retired Key)", value="Administrator"),
+    app_commands.Choice(name="Captain", value="Captain"),
+    app_commands.Choice(name="General", value="General"),
+    app_commands.Choice(name="Master", value="Master"),
+    app_commands.Choice(name="Commander", value="Commander"),
+    app_commands.Choice(name="Deputy Owner", value="Deputy Owner"),
+    app_commands.Choice(name="Owner", value="Owner")
+])
 @check_staff_role("Captain")
 async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = False):
     
