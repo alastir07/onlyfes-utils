@@ -625,20 +625,18 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
             await interaction.followup.send(f"⛔ Permission Denied: You cannot modify the rank of a member whose current hierarchy level ({old_hierarchy}) is higher than your own staff role.", ephemeral=True)
             return
 
-        # TEMPORARILY COMMENTED OUT: already has rank check
-        # if old_rank_id == new_rank_id:
-        #     await interaction.followup.send(f"Error: `{member_rsn}` already has the rank `{new_rank_name}`.", ephemeral=True)
-        #     return
+        if old_rank_id == new_rank_id:
+            await interaction.followup.send(f"Error: `{member_rsn}` already has the rank `{new_rank_name}`.", ephemeral=True)
+            return
 
         supabase.table('members').update({'current_rank_id': new_rank_id}).eq('id', member_id).execute()
         
-        # TEMPORARILY COMMENTED OUT: write to rank_history
-        # supabase.table('rank_history').insert({
-        #     'member_id': member_id, 
-        #     'previous_rank_id': old_rank_id, 
-        #     'new_rank_id': new_rank_id,
-        #     'enacted_by_member_id': staff_member_id
-        # }).execute()
+        supabase.table('rank_history').insert({
+            'member_id': member_id, 
+            'previous_rank_id': old_rank_id, 
+            'new_rank_id': new_rank_id,
+            'enacted_by_member_id': staff_member_id
+        }).execute()
         
         # Update Discord role if linked and role_id is configured
         discord_msg = ""
@@ -786,10 +784,9 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                 report_fail_permission.append(member_data['original_rsn'])
                 continue
                 
-            # TEMPORARILY COMMENTED OUT: already has rank check
-            # if member_data['old_rank_id'] == new_rank_id:
-            #     report_fail_already_rank.append(member_data['original_rsn'])
-            #     continue
+            if member_data['old_rank_id'] == new_rank_id:
+                report_fail_already_rank.append(member_data['original_rsn'])
+                continue
                 
             if not member_data['discord_id'] and not bypass_discord:
                 report_fail_no_discord.append(member_data['original_rsn'])
@@ -811,8 +808,7 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         if member_ids_to_update:
             log.info(f"Updating {len(member_ids_to_update)} members to rank {new_rank_name}...")
             supabase.table('members').update({'current_rank_id': new_rank_id}).in_('id', member_ids_to_update).execute()
-            # TEMPORARILY COMMENTED OUT: write to rank_history
-            # supabase.table('rank_history').insert(history_payload).execute()
+            supabase.table('rank_history').insert(history_payload).execute()
             log.info("Batch update complete.")
         else:
             log.info("No members valid for update.")
