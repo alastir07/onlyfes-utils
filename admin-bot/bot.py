@@ -221,8 +221,9 @@ async def on_ready():
         scheduled_clan_sync.start()
         scheduled_inactivity_check.start()
         scheduled_overachievers_check.start()
+        scheduled_no_discord_check.start()
 
-        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily)")
+        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily), no_discord_check (00:05 UTC weekly on Sundays)")
     log.info(f'Logged in as {client.user} (ID: {client.user.id})')
     log.info('Bot is ready and online.')
 
@@ -1542,6 +1543,52 @@ async def check_inactives(interaction: discord.Interaction, publish: bool = Fals
 
 
 # --- 16.5 /CHECK-NO-DISCORD COMMAND ---
+async def generate_no_discord_embed() -> discord.Embed:
+    """Helper to query active members with no linked Discord and generate the embed."""
+    # 1. Fetch active members with no discord_id
+    members_res = supabase.table('members') \
+        .select('id') \
+        .eq('status', 'Active') \
+        .is_('discord_id', 'null') \
+        .execute()
+        
+    if not members_res.data:
+        return discord.Embed(
+            title="Active Members with No Discord",
+            description="✅ All active clan members have a linked Discord ID!",
+            color=discord.Color.green()
+        )
+
+    member_ids = [m['id'] for m in members_res.data]
+    
+    # 2. Fetch primary RSNs for these members
+    rsn_res = supabase.table('member_rsns') \
+        .select('rsn') \
+        .eq('is_primary', True) \
+        .in_('member_id', member_ids) \
+        .execute()
+        
+    rsns = [r['rsn'] for r in rsn_res.data]
+    rsns.sort(key=str.lower)
+    
+    # 3. Format the response
+    embed = discord.Embed(
+        title=f"Active Members with No Discord ({len(rsns)})",
+        color=discord.Color.orange()
+    )
+    
+    if rsns:
+        rsns_list_str = "\n".join(f"• {rsn}" for rsn in rsns)
+        if len(rsns_list_str) > 4000:
+            embed.description = "Here is the list of active members with no linked Discord ID (truncated due to length):\n\n" + rsns_list_str[:3800] + "\n... (list truncated)"
+        else:
+            embed.description = "Here is the list of active members with no linked Discord ID:\n\n" + rsns_list_str
+    else:
+        embed.description = "No RSNs found for these active members."
+        
+    return embed
+
+
 @client.tree.command(name="check-no-discord", description="Checks for active clan members with no linked Discord ID")
 @app_commands.describe(
     publish="False (default). True to post the report publicly."
@@ -1558,51 +1605,8 @@ async def check_no_discord(interaction: discord.Interaction, publish: bool = Fal
     await interaction.response.defer(ephemeral=is_ephemeral)
     
     try:
-        # 1. Fetch active members with no discord_id
-        members_res = supabase.table('members') \
-            .select('id') \
-            .eq('status', 'Active') \
-            .is_('discord_id', 'null') \
-            .execute()
-            
-        if not members_res.data:
-            embed = discord.Embed(
-                title="Active Members with No Discord",
-                description="✅ All active clan members have a linked Discord ID!",
-                color=discord.Color.green()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
-            return
-
-        member_ids = [m['id'] for m in members_res.data]
-        
-        # 2. Fetch primary RSNs for these members
-        rsn_res = supabase.table('member_rsns') \
-            .select('rsn') \
-            .eq('is_primary', True) \
-            .in_('member_id', member_ids) \
-            .execute()
-            
-        rsns = [r['rsn'] for r in rsn_res.data]
-        rsns.sort(key=str.lower)
-        
-        # 3. Format and send the response
-        embed = discord.Embed(
-            title=f"Active Members with No Discord ({len(rsns)})",
-            color=discord.Color.orange()
-        )
-        
-        if rsns:
-            rsns_list_str = "\n".join(f"• {rsn}" for rsn in rsns)
-            if len(rsns_list_str) > 4000:
-                embed.description = "Here is the list of active members with no linked Discord ID (truncated due to length):\n\n" + rsns_list_str[:3800] + "\n... (list truncated)"
-            else:
-                embed.description = "Here is the list of active members with no linked Discord ID:\n\n" + rsns_list_str
-        else:
-            embed.description = "No RSNs found for these active members."
-            
+        embed = await generate_no_discord_embed()
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
-        
     except Exception as e:
         log.error(f"Error in /check-no-discord command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
@@ -1897,6 +1901,49 @@ async def scheduled_overachievers_check():
 async def before_scheduled_overachievers_check():
     await client.wait_until_ready()
     log.info("Bot is ready. Starting scheduled overachievers task.")
+
+
+@tasks.loop(time=[time(hour=0, minute=5)])
+async def scheduled_no_discord_check():
+    """Runs check-no-discord weekly on Sundays at 00:05 UTC"""
+    log.info("=== Starting scheduled no discord check ===")
+    
+    # Check if today is Sunday (6)
+    if datetime.now(ZoneInfo('UTC')).weekday() != 6:
+        log.info("Not Sunday. Skipping no discord check.")
+        return
+        
+    try:
+        if not SYNC_REPORT_CHANNEL_ID:
+            log.error("SYNC_REPORT_CHANNEL_ID not configured. Skipping scheduled no discord check.")
+            return
+            
+        channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+        if not channel:
+            log.error(f"Could not find channel with ID {SYNC_REPORT_CHANNEL_ID}")
+            return
+            
+        embed = await generate_no_discord_embed()
+        embed.title = f"Weekly Discord Link Check: {embed.title}"
+        embed.timestamp = datetime.now()
+        
+        await channel.send(embed=embed)
+        log.info("Scheduled no discord check report posted successfully.")
+        
+    except Exception as e:
+        log.error(f"ERROR in scheduled_no_discord_check: {e}\n{traceback.format_exc()}")
+        try:
+            if SYNC_REPORT_CHANNEL_ID:
+                channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+                if channel:
+                    await channel.send(f"⚠️ **Scheduled Discord Link Check Failed**\nError: `{e}`\nCheck bot logs for details.")
+        except:
+            pass
+
+@scheduled_no_discord_check.before_loop
+async def before_scheduled_no_discord_check():
+    await client.wait_until_ready()
+    log.info("Bot is ready. Starting scheduled no discord check task.")
 
 
 # --- 19. RUN THE BOT ---
