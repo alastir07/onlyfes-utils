@@ -222,8 +222,9 @@ async def on_ready():
         scheduled_inactivity_check.start()
         scheduled_overachievers_check.start()
         scheduled_no_discord_check.start()
+        scheduled_clan_veteran_check.start()
 
-        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily), no_discord_check (00:05 UTC weekly on Sundays)")
+        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily), no_discord_check (00:05 UTC weekly on Sundays), clan_veteran_check (00:10 UTC monthly on the 1st)")
     log.info(f'Logged in as {client.user} (ID: {client.user.id})')
     log.info('Bot is ready and online.')
 
@@ -274,7 +275,8 @@ async def help(interaction: discord.Interaction, publish: bool = False):
             "`/addpointsbotm <first> <second> <third> <participants> [publish]`\nAdds points for Boss of the Month.",
             "`/addpointssotm <first> <second> <third> <participants> [publish]`\nAdds points for Skill of the Month.",
             "`/addpointsbigbooty <first> <second> <third> <participants> [publish]`\nAdds points for Big Booty (Clue of the Month).",
-            "`/check-no-discord [publish]`\nChecks for active clan members with no linked Discord ID."
+            "`/check-no-discord [publish]`\nChecks for active clan members with no linked Discord ID.",
+            "`/clan-veteran-check [publish]`\nChecks and updates Clan Veteran roles for members with >2y in the clan."
         ]
         
         embed.add_field(
@@ -1612,6 +1614,128 @@ async def check_no_discord(interaction: discord.Interaction, publish: bool = Fal
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
+# --- 16.7 /CLAN-VETERAN-CHECK COMMAND ---
+async def run_clan_veteran_check(guild: discord.Guild) -> discord.Embed:
+    CLAN_VETERAN_ROLE_ID = 1191649334438133820
+    role = guild.get_role(CLAN_VETERAN_ROLE_ID)
+    if not role:
+        return discord.Embed(
+            title="Clan Veteran Check Failed",
+            description=f"❌ Could not find Clan Veteran role with ID `{CLAN_VETERAN_ROLE_ID}` in this server.",
+            color=discord.Color.red()
+        )
+        
+    try:
+        response = supabase.rpc('get_active_members_time_in_clan').execute()
+        members = response.data or []
+    except Exception as e:
+        log.error(f"Failed to fetch members from database: {e}")
+        return discord.Embed(
+            title="Clan Veteran Check Failed",
+            description=f"❌ Database error: {e}",
+            color=discord.Color.red()
+        )
+
+    added_members = []
+    no_discord_members = []
+    failed_members = []
+    already_had_role = 0
+    not_eligible_yet = 0
+    
+    now = datetime.now(ZoneInfo('UTC'))
+    
+    for m in members:
+        rsn = m.get('primary_rsn') or "Unknown RSN"
+        days_in_clan = m.get('days_in_clan', 0)
+        discord_id = m.get('discord_id')
+        
+        if days_in_clan > 730:
+            if not discord_id:
+                no_discord_members.append(f"• **{rsn}** ({days_in_clan} days in clan)")
+                continue
+                
+            try:
+                discord_member = guild.get_member(int(discord_id))
+                if not discord_member:
+                    discord_member = await guild.fetch_member(int(discord_id))
+                    
+                if not discord_member:
+                    failed_members.append((rsn, f"Could not find Discord user with ID `{discord_id}` in this server"))
+                    continue
+                    
+                if role in discord_member.roles:
+                    already_had_role += 1
+                else:
+                    try:
+                        await discord_member.add_roles(role, reason="Clan Veteran check (automatic promotion for >2y in clan)")
+                        added_members.append(f"• **{rsn}** (<@{discord_id}>) - {days_in_clan} days")
+                    except discord.Forbidden:
+                        failed_members.append((rsn, "Bot lacks 'Manage Roles' permission or role is higher than Bot's role"))
+                    except Exception as role_err:
+                        failed_members.append((rsn, f"Failed to add role: {role_err}"))
+            except discord.NotFound:
+                failed_members.append((rsn, f"Discord user ID `{discord_id}` not found in this server"))
+            except Exception as member_err:
+                failed_members.append((rsn, f"Error fetching member: {member_err}"))
+        else:
+            not_eligible_yet += 1
+            
+    embed = discord.Embed(
+        title="🛡️ Clan Veteran Role Check Report",
+        timestamp=datetime.now(),
+        color=discord.Color.gold()
+    )
+    embed.add_field(name="✅ Roles Added", value=str(len(added_members)), inline=True)
+    embed.add_field(name="✨ Already Had Role", value=str(already_had_role), inline=True)
+    embed.add_field(name="⏳ Not Eligible Yet (<2y)", value=str(not_eligible_yet), inline=True)
+    
+    if added_members:
+        added_str = "\n".join(added_members)
+        if len(added_str) > 1024:
+            added_str = added_str[:1000] + "\n... (truncated)"
+        embed.add_field(name="🎉 Added Role To", value=added_str, inline=False)
+    else:
+        embed.add_field(name="🎉 Added Role To", value="No new members needed the role.", inline=False)
+        
+    if no_discord_members:
+        no_discord_str = "\n".join(no_discord_members)
+        if len(no_discord_str) > 1024:
+            no_discord_str = no_discord_str[:1000] + "\n... (truncated)"
+        embed.add_field(name="⚠️ Eligible but No Discord Linked", value=no_discord_str, inline=False)
+        
+    if failed_members:
+        failed_str = "\n".join(f"• **{r}**: {err}" for r, err in failed_members)
+        if len(failed_str) > 1024:
+            failed_str = failed_str[:1000] + "\n... (truncated)"
+        embed.add_field(name="❌ Errors", value=failed_str, inline=False)
+        
+    embed.set_footer(text="OnlyFEs Clan Veteran Check Utility")
+    return embed
+
+
+@client.tree.command(name="clan-veteran-check", description="Checks and updates Clan Veteran roles for members with >2y in the clan.")
+@app_commands.describe(
+    publish="False (default). True to post the report publicly."
+)
+@check_staff_role("Captain")
+async def clan_veteran_check(interaction: discord.Interaction, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /clan-veteran-check publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /clan-veteran-check publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        embed = await run_clan_veteran_check(interaction.guild)
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+    except Exception as e:
+        log.error(f"Error in /clan-veteran-check command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
 # --- 17. /UPDATE-EP-LEADERBOARD COMMAND ---
 @client.tree.command(name="updateepleaderboard", description="Manually update the EP leaderboard on GitHub Pages.")
 @app_commands.describe(
@@ -1944,6 +2068,49 @@ async def scheduled_no_discord_check():
 async def before_scheduled_no_discord_check():
     await client.wait_until_ready()
     log.info("Bot is ready. Starting scheduled no discord check task.")
+
+
+@tasks.loop(time=[time(hour=0, minute=10)])
+async def scheduled_clan_veteran_check():
+    """Runs clan veteran check daily at 00:10 UTC but executes ONLY on the 1st of the month"""
+    log.info("=== Starting scheduled clan veteran check ===")
+    
+    # Check if today is the 1st of the month
+    if datetime.now(ZoneInfo('UTC')).day != 1:
+        log.info("Not the 1st of the month. Skipping scheduled clan veteran check.")
+        return
+        
+    try:
+        if not SYNC_REPORT_CHANNEL_ID:
+            log.error("SYNC_REPORT_CHANNEL_ID not configured. Skipping scheduled clan veteran check.")
+            return
+            
+        channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+        if not channel:
+            log.error(f"Could not find channel with ID {SYNC_REPORT_CHANNEL_ID}")
+            return
+            
+        embed = await run_clan_veteran_check(channel.guild)
+        embed.title = f"Monthly Clan Veteran Check: {embed.title}"
+        embed.timestamp = datetime.now()
+        
+        await channel.send(embed=embed)
+        log.info("Scheduled clan veteran check report posted successfully.")
+        
+    except Exception as e:
+        log.error(f"ERROR in scheduled_clan_veteran_check: {e}\n{traceback.format_exc()}")
+        try:
+            if SYNC_REPORT_CHANNEL_ID:
+                channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+                if channel:
+                    await channel.send(f"⚠️ **Scheduled Clan Veteran Check Failed**\nError: `{e}`\nCheck bot logs for details.")
+        except:
+            pass
+
+@scheduled_clan_veteran_check.before_loop
+async def before_scheduled_clan_veteran_check():
+    await client.wait_until_ready()
+    log.info("Bot is ready. Starting scheduled clan veteran check task.")
 
 
 # --- 19. RUN THE BOT ---
