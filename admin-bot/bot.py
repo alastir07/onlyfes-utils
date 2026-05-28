@@ -47,12 +47,13 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+IA_LOGGING_OUTPUT_CHANNEL_ID = os.getenv("IA_LOGGING_OUTPUT_CHANNEL_ID")
 SYNC_REPORT_CHANNEL_ID = os.getenv("SYNC_REPORT_CHANNEL_ID")
 INACTIVITY_REPORT_CHANNEL_ID = os.getenv("INACTIVITY_REPORT_CHANNEL_ID")
 INACTIVITY_REPORT_THREAD_ID = os.getenv("INACTIVITY_REPORT_THREAD_ID")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
-if not all([DISCORD_TOKEN, SUPABASE_URL, SUPABASE_KEY, SYNC_REPORT_CHANNEL_ID, INACTIVITY_REPORT_CHANNEL_ID, INACTIVITY_REPORT_THREAD_ID, GITHUB_TOKEN]):
+if not all([DISCORD_TOKEN, SUPABASE_URL, SUPABASE_KEY, IA_LOGGING_OUTPUT_CHANNEL_ID, SYNC_REPORT_CHANNEL_ID, INACTIVITY_REPORT_CHANNEL_ID, INACTIVITY_REPORT_THREAD_ID, GITHUB_TOKEN]):
     log.error("Missing one or more .env variables!")
     exit()
 
@@ -88,6 +89,18 @@ def get_staff_member_id(interaction: discord.Interaction) -> str | None:
     except Exception as e:
         log.warning(f"Could not find member_id for staff {interaction.user}: {e}")
     return None
+
+async def log_command_use(message: str):
+    """Sends a command usage message to the admin logging channel if configured."""
+    try:
+        if IA_LOGGING_OUTPUT_CHANNEL_ID:
+            channel = client.get_channel(int(IA_LOGGING_OUTPUT_CHANNEL_ID))
+            if channel:
+                await channel.send(f"```\n{message}\n```")
+            else:
+                log.warning(f"Could not find admin logging channel ID {IA_LOGGING_OUTPUT_CHANNEL_ID}")
+    except Exception as e:
+        log.error(f"Failed to send log to admin logging channel: {e}")
 
 # --- Role-Based Permission System ---
 STAFF_ROLES = ["Owner", "Deputy Owner", "Commander", "Master", "General", "Captain"] # Ordered Highest to Lowest
@@ -192,6 +205,8 @@ async def help(interaction: discord.Interaction, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /help publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /help publish={publish} used by {interaction.user}")
     
     # Determine user's role level
     user_role = get_user_role_level(interaction)
@@ -283,6 +298,8 @@ async def member_info(interaction: discord.Interaction, rsn: str, publish: bool 
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /memberinfo rsn='{rsn}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /memberinfo rsn='{rsn}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral) 
@@ -350,6 +367,8 @@ async def rankhistory(interaction: discord.Interaction, rsn: str, num_changes: i
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /rankhistory rsn='{rsn}' num_changes={num_changes} publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /rankhistory rsn='{rsn}' num_changes={num_changes} publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral) 
@@ -397,6 +416,8 @@ async def sync_clan(
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /syncclan dry_run={dry_run} force_run={force_run} publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /syncclan dry_run={dry_run} force_run={force_run} publish={publish} used by {interaction.user}")
     is_ephemeral = not publish 
     await interaction.response.defer(ephemeral=is_ephemeral)
     if force_run and dry_run:
@@ -446,6 +467,7 @@ class ConfirmPurgeView(ui.View):
     async def confirm_button(self, interaction: discord.Interaction, button: ui.Button):
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         log.info(f"[{timestamp}] /purge-member CONFIRMED for rsn='{self.rsn}' by {interaction.user}")
+        await log_command_use(f"[{timestamp}] /purge-member CONFIRMED for rsn='{self.rsn}' by {interaction.user}")
         for item in self.children:
             item.disabled = True
         await interaction.response.edit_message(view=self)
@@ -476,6 +498,7 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /purgemember rsn='{rsn}' used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /purgemember rsn='{rsn}' used by {interaction.user}")
     await interaction.response.defer(ephemeral=True)
     try:
         response = supabase.table('member_rsns').select('member_id, members(date_joined)').eq('rsn', rsn).limit(1).execute()
@@ -506,11 +529,39 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
     rank_name="The new rank to assign (e.g., 'Ruby', 'Beast').",
     publish="True to post the confirmation publicly."
 )
+@app_commands.choices(rank_name=[
+    app_commands.Choice(name="Sapphire", value="Sapphire"),
+    app_commands.Choice(name="Emerald", value="Emerald"),
+    app_commands.Choice(name="Ruby", value="Ruby"),
+    app_commands.Choice(name="Diamond", value="Diamond"),
+    app_commands.Choice(name="Dragonstone", value="Dragonstone"),
+    app_commands.Choice(name="Onyx", value="Onyx"),
+    app_commands.Choice(name="Zenyte", value="Zenyte"),
+    app_commands.Choice(name="Maxed (Elite Skiller)", value="Maxed"),
+    app_commands.Choice(name="TzKal (Elite PvMer)", value="TzKal"),
+    app_commands.Choice(name="Myth (Living Legend)", value="Myth"),
+    app_commands.Choice(name="Beast (BOTM Winner)", value="Beast"),
+    app_commands.Choice(name="Skiller (SOTM Winner)", value="Skiller"),
+    app_commands.Choice(name="Merchant (Big Booty/COTM Winner)", value="Merchant"),
+    app_commands.Choice(name="Adventurer (Event Winner)", value="Adventurer"),
+    app_commands.Choice(name="Gamer (Event Champion)", value="Gamer"),
+    app_commands.Choice(name="Raider (Event Overlord)", value="Raider"),
+    app_commands.Choice(name="Administrator (Retired Key)", value="Administrator"),
+    app_commands.Choice(name="Captain", value="Captain"),
+    app_commands.Choice(name="General", value="General"),
+    app_commands.Choice(name="Master", value="Master"),
+    app_commands.Choice(name="Commander", value="Commander"),
+    app_commands.Choice(name="Deputy Owner", value="Deputy Owner"),
+    app_commands.Choice(name="Owner", value="Owner")
+])
+
 @check_staff_role("Captain")
 async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -582,11 +633,38 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
     rsn_list="A comma-separated list of RSNs.",
     publish="True to post the confirmation publicly."
 )
+@app_commands.choices(rank_name=[
+    app_commands.Choice(name="Sapphire", value="Sapphire"),
+    app_commands.Choice(name="Emerald", value="Emerald"),
+    app_commands.Choice(name="Ruby", value="Ruby"),
+    app_commands.Choice(name="Diamond", value="Diamond"),
+    app_commands.Choice(name="Dragonstone", value="Dragonstone"),
+    app_commands.Choice(name="Onyx", value="Onyx"),
+    app_commands.Choice(name="Zenyte", value="Zenyte"),
+    app_commands.Choice(name="Maxed (Elite Skiller)", value="Maxed"),
+    app_commands.Choice(name="TzKal (Elite PvMer)", value="TzKal"),
+    app_commands.Choice(name="Myth (Living Legend)", value="Myth"),
+    app_commands.Choice(name="Beast (BOTM Winner)", value="Beast"),
+    app_commands.Choice(name="Skiller (SOTM Winner)", value="Skiller"),
+    app_commands.Choice(name="Merchant (Big Booty/COTM Winner)", value="Merchant"),
+    app_commands.Choice(name="Adventurer (Event Winner)", value="Adventurer"),
+    app_commands.Choice(name="Gamer (Event Champion)", value="Gamer"),
+    app_commands.Choice(name="Raider (Event Overlord)", value="Raider"),
+    app_commands.Choice(name="Administrator (Retired Key)", value="Administrator"),
+    app_commands.Choice(name="Captain", value="Captain"),
+    app_commands.Choice(name="General", value="General"),
+    app_commands.Choice(name="Master", value="Master"),
+    app_commands.Choice(name="Commander", value="Commander"),
+    app_commands.Choice(name="Deputy Owner", value="Deputy Owner"),
+    app_commands.Choice(name="Owner", value="Owner")
+])
 @check_staff_role("Captain")
 async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -717,6 +795,8 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /rankup-check rsn='{rsn}' rank_name='{rank_name}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /rankup-check rsn='{rsn}' rank_name='{rank_name}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -807,6 +887,8 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /linkrsn rsn='{rsn}' user='{user}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /linkrsn rsn='{rsn}' user='{user}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -859,6 +941,8 @@ async def add_points(interaction: discord.Interaction, rsn: str, points: int, re
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /addpoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /addpoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -925,6 +1009,8 @@ async def remove_points(interaction: discord.Interaction, rsn: str, points: int,
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /removepoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /removepoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -991,6 +1077,8 @@ async def bulk_add_points(interaction: discord.Interaction, points: int, reason:
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /bulkaddpoints points={points} reason='{reason}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /bulkaddpoints points={points} reason='{reason}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -1073,6 +1161,8 @@ async def add_exempt(interaction: discord.Interaction, rsn: str, reason: str, da
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /addexempt rsn='{rsn}' reason='{reason}' days={days} publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /addexempt rsn='{rsn}' reason='{reason}' days={days} publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -1162,6 +1252,8 @@ async def process_competition_points(
     full_reason = f"{reason_prefix} {current_month}"
     
     log.info(f"[{timestamp}] Competition command ({reason_prefix}) used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] Competition command ({reason_prefix}) used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -1302,6 +1394,8 @@ async def check_inactives(interaction: discord.Interaction, publish: bool = Fals
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /checkinactives publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /checkinactives publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -1340,6 +1434,8 @@ async def update_ep_leaderboard_command(interaction: discord.Interaction, publis
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /updateepleaderboard publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /updateepleaderboard publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -1524,6 +1620,8 @@ async def before_scheduled_inactivity_check():
 async def check_overachievers_sync(interaction: discord.Interaction, dry_run: bool = True, publish: bool = False):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /overachievers-sync dry_run={dry_run} publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /overachievers-sync dry_run={dry_run} publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -1559,6 +1657,8 @@ async def check_overachievers_sync(interaction: discord.Interaction, dry_run: bo
 async def lookup_overachievers(interaction: discord.Interaction, query: str, publish: bool = False):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /overachievers query='{query}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /overachievers query='{query}' publish={publish} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)

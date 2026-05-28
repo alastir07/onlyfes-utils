@@ -253,9 +253,20 @@ def fetch_and_process_name_changes(supabase: Client, db_rsn_map_normalized: dict
     report_name_changes = []
     
     try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        name_changes = response.json()
+        max_attempts = 10
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                name_changes = response.json()
+                break
+            except Exception as e:
+                if attempt < max_attempts:
+                    log.warning(f"Attempt {attempt}/{max_attempts} failed to fetch WOM name changes: {e}. Retrying in 10 seconds...")
+                    time.sleep(10)
+                else:
+                    log.error(f"Attempt {attempt}/{max_attempts} failed. Max attempts reached. Propagating exception...")
+                    raise e
         log.info(f"Found {len(name_changes)} name changes to process.")
         
         if not name_changes:
