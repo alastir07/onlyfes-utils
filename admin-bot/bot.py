@@ -102,6 +102,33 @@ async def log_command_use(message: str):
     except Exception as e:
         log.error(f"Failed to send log to admin logging channel: {e}")
 
+# --- Discord Ranks Configuration ---
+DISCORD_RANKS = [
+    {"role_id": 1509529699255320657, "role_name": "Sapphire", "display_name": "Sapphire", "is_rankup_check": False, "auto_apply_discord": True},
+    {"role_id": 1509530886616518737, "role_name": "Emerald", "display_name": "Emerald", "is_rankup_check": False, "auto_apply_discord": True},
+    {"role_id": 1509530851854258306, "role_name": "Ruby", "display_name": "Ruby", "is_rankup_check": False, "auto_apply_discord": True},
+    {"role_id": 1225511074514604095, "role_name": "Diamond", "display_name": "Diamond", "is_rankup_check": True, "auto_apply_discord": True},
+    {"role_id": 1225511118005604453, "role_name": "Dragonstone", "display_name": "Dragonstone", "is_rankup_check": True, "auto_apply_discord": True},
+    {"role_id": 1225511151526346844, "role_name": "Onyx", "display_name": "Onyx", "is_rankup_check": True, "auto_apply_discord": True},
+    {"role_id": 1225511181528334346, "role_name": "Zenyte", "display_name": "Zenyte", "is_rankup_check": True, "auto_apply_discord": True},
+    {"role_id": 1282755027399868468, "role_name": "Maxed", "display_name": "Maxed (Elite Skiller)", "is_rankup_check": True, "auto_apply_discord": True},
+    {"role_id": 1282755185013166100, "role_name": "TzKal", "display_name": "TzKal (Elite PvMer)", "is_rankup_check": True, "auto_apply_discord": True},
+    {"role_id": 1419123726015922297, "role_name": "Myth", "display_name": "Myth (Living Legend)", "is_rankup_check": True, "auto_apply_discord": True},
+    {"role_id": 1170648724968587324, "role_name": "Beast", "display_name": "Beast (BOTM Winner)", "is_rankup_check": False, "auto_apply_discord": True},
+    {"role_id": 1170648918414082120, "role_name": "Skiller", "display_name": "Skiller (SOTM Winner)", "is_rankup_check": False, "auto_apply_discord": True},
+    {"role_id": 1233048247069708298, "role_name": "Merchant", "display_name": "Merchant (Big Booty/COTM Winner)", "is_rankup_check": False, "auto_apply_discord": True},
+    {"role_id": 1170649282039251074, "role_name": "Adventurer", "display_name": "Adventurer (Event Winner)", "is_rankup_check": False, "auto_apply_discord": True},
+    {"role_id": 1171851424372625459, "role_name": "Gamer", "display_name": "Gamer (Event Champion)", "is_rankup_check": False, "auto_apply_discord": True},
+    {"role_id": 1394777556280021204, "role_name": "Raider", "display_name": "Raider (Event Overlord)", "is_rankup_check": False, "auto_apply_discord": True},
+    {"role_id": 1418803591602245633, "role_name": "Administrator", "display_name": "Administrator (Retired Key)", "is_rankup_check": False, "auto_apply_discord": True},
+    {"role_id": 1059330179094302760, "role_name": "Captain", "display_name": "Captain", "is_rankup_check": False, "auto_apply_discord": False},
+    {"role_id": 1059330194139250698, "role_name": "General", "display_name": "General", "is_rankup_check": False, "auto_apply_discord": False},
+    {"role_id": 1471345801430302892, "role_name": "Master", "display_name": "Master", "is_rankup_check": False, "auto_apply_discord": False},
+    {"role_id": 1171576313862164590, "role_name": "Commander", "display_name": "Commander", "is_rankup_check": False, "auto_apply_discord": False},
+    {"role_id": 1054602889122812025, "role_name": "Deputy Owner", "display_name": "Deputy Owner", "is_rankup_check": False, "auto_apply_discord": False},
+    {"role_id": 1054602889122812025, "role_name": "Owner", "display_name": "Owner", "is_rankup_check": False, "auto_apply_discord": False}
+]
+
 # --- Role-Based Permission System ---
 STAFF_ROLES = ["Owner", "Deputy Owner", "Commander", "Master", "General", "Captain"] # Ordered Highest to Lowest
 ROLE_HIERARCHY_LEVELS = {
@@ -162,6 +189,7 @@ def check_staff_role(required_role: str):
 
 intents = discord.Intents.default()
 intents.message_content = True 
+intents.members = True 
 
 # --- Define the bot (UPDATED) ---
 class MyClient(discord.Client):
@@ -527,41 +555,21 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
 @app_commands.describe(
     rsn="The member's RSN (current or past).",
     rank_name="The new rank to assign (e.g., 'Ruby', 'Beast').",
-    publish="True to post the confirmation publicly."
+    publish="True to post the confirmation publicly.",
+    bypass_discord="True to bypass updating the Discord role (useful if member has no Discord)."
 )
 @app_commands.choices(rank_name=[
-    app_commands.Choice(name="Sapphire", value="Sapphire"),
-    app_commands.Choice(name="Emerald", value="Emerald"),
-    app_commands.Choice(name="Ruby", value="Ruby"),
-    app_commands.Choice(name="Diamond", value="Diamond"),
-    app_commands.Choice(name="Dragonstone", value="Dragonstone"),
-    app_commands.Choice(name="Onyx", value="Onyx"),
-    app_commands.Choice(name="Zenyte", value="Zenyte"),
-    app_commands.Choice(name="Maxed (Elite Skiller)", value="Maxed"),
-    app_commands.Choice(name="TzKal (Elite PvMer)", value="TzKal"),
-    app_commands.Choice(name="Myth (Living Legend)", value="Myth"),
-    app_commands.Choice(name="Beast (BOTM Winner)", value="Beast"),
-    app_commands.Choice(name="Skiller (SOTM Winner)", value="Skiller"),
-    app_commands.Choice(name="Merchant (Big Booty/COTM Winner)", value="Merchant"),
-    app_commands.Choice(name="Adventurer (Event Winner)", value="Adventurer"),
-    app_commands.Choice(name="Gamer (Event Champion)", value="Gamer"),
-    app_commands.Choice(name="Raider (Event Overlord)", value="Raider"),
-    app_commands.Choice(name="Administrator (Retired Key)", value="Administrator"),
-    app_commands.Choice(name="Captain", value="Captain"),
-    app_commands.Choice(name="General", value="General"),
-    app_commands.Choice(name="Master", value="Master"),
-    app_commands.Choice(name="Commander", value="Commander"),
-    app_commands.Choice(name="Deputy Owner", value="Deputy Owner"),
-    app_commands.Choice(name="Owner", value="Owner")
+    app_commands.Choice(name=rank["display_name"], value=rank["role_name"])
+    for rank in DISCORD_RANKS
 ])
 
 @check_staff_role("Captain")
-async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False):
+async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False, bypass_discord: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
     if not publish:
-        await log_command_use(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} used by {interaction.user}")
+        await log_command_use(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -585,7 +593,7 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         new_rank_name = new_rank['name'] 
 
         member_res = supabase.table('member_rsns') \
-            .select('member_id, rsn, members(current_rank_id, ranks(hierarchy_level))') \
+            .select('member_id, rsn, members(current_rank_id, discord_id, ranks(hierarchy_level))') \
             .ilike('rsn', rsn) \
             .limit(1) \
             .execute()
@@ -597,7 +605,18 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         member_id = member_res.data[0]['member_id']
         member_rsn = member_res.data[0]['rsn']
         old_rank_id = member_res.data[0]['members']['current_rank_id']
+        discord_id = member_res.data[0]['members'].get('discord_id')
         
+        # Check for linked Discord account
+        if not discord_id and not bypass_discord:
+            await interaction.followup.send(
+                f"⛔ **Linked Discord Account Required**: `{member_rsn}` does not have a linked Discord account. "
+                f"Please link their account using `/linkrsn` first, or re-run this command with `bypass_discord=True` "
+                f"to update their database rank only.",
+                ephemeral=True
+            )
+            return
+            
         old_hierarchy = 0
         if member_res.data[0].get('members') and member_res.data[0]['members'].get('ranks'):
             old_hierarchy = member_res.data[0]['members']['ranks'].get('hierarchy_level', 0)
@@ -619,7 +638,42 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
             'enacted_by_member_id': staff_member_id
         }).execute()
         
-        await interaction.followup.send(f"✅ Success! `{member_rsn}`'s rank has been updated to **{new_rank_name}**.", ephemeral=is_ephemeral)
+        # Update Discord role if linked and role_id is configured
+        discord_msg = ""
+        if discord_id and not bypass_discord:
+            rank_config = next((r for r in DISCORD_RANKS if r["role_name"] == rank_name), None)
+            if rank_config and rank_config.get("auto_apply_discord") is False:
+                discord_msg = " (Discord role auto-apply is disabled for staff ranks.)"
+            elif rank_config and rank_config.get("role_id"):
+                role_id = rank_config["role_id"]
+                guild = interaction.guild
+                if guild:
+                    role = guild.get_role(int(role_id))
+                    if role:
+                        try:
+                            discord_member = guild.get_member(int(discord_id))
+                            if not discord_member:
+                                discord_member = await guild.fetch_member(int(discord_id))
+                            
+                            if role not in discord_member.roles:
+                                await discord_member.add_roles(role, reason=f"Rankup to {new_rank_name} by {interaction.user}")
+                                discord_msg = f" Also added Discord role **{role.name}**."
+                            else:
+                                discord_msg = f" (Already has Discord role **{role.name}**.)"
+                        except discord.Forbidden:
+                            discord_msg = " ⚠️ Could not assign Discord role (Bot lacks 'Manage Roles' permission or role is higher than Bot's role)."
+                        except discord.HTTPException as de:
+                            discord_msg = f" ⚠️ Failed to assign Discord role: {de}"
+                    else:
+                        discord_msg = f" ⚠️ Discord role ID `{role_id}` not found in this server."
+                else:
+                    discord_msg = " ⚠️ Command was not run in a server, cannot assign Discord role."
+            elif rank_config:
+                discord_msg = " (Discord role ID not configured yet.)"
+        elif bypass_discord:
+            discord_msg = " (Bypassed Discord role update.)"
+        
+        await interaction.followup.send(f"✅ Success! `{member_rsn}`'s rank has been updated to **{new_rank_name}**.{discord_msg}", ephemeral=is_ephemeral)
 
     except Exception as e:
         log.error(f"Error in /rankup command: {e}\n{traceback.format_exc()}")
@@ -631,40 +685,20 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
 @app_commands.describe(
     rank_name="The new rank to assign all members (e.g., 'Beast').",
     rsn_list="A comma-separated list of RSNs.",
-    publish="True to post the confirmation publicly."
+    publish="True to post the confirmation publicly.",
+    bypass_discord="True to bypass updating Discord roles (useful if members have no Discord)."
 )
 @app_commands.choices(rank_name=[
-    app_commands.Choice(name="Sapphire", value="Sapphire"),
-    app_commands.Choice(name="Emerald", value="Emerald"),
-    app_commands.Choice(name="Ruby", value="Ruby"),
-    app_commands.Choice(name="Diamond", value="Diamond"),
-    app_commands.Choice(name="Dragonstone", value="Dragonstone"),
-    app_commands.Choice(name="Onyx", value="Onyx"),
-    app_commands.Choice(name="Zenyte", value="Zenyte"),
-    app_commands.Choice(name="Maxed (Elite Skiller)", value="Maxed"),
-    app_commands.Choice(name="TzKal (Elite PvMer)", value="TzKal"),
-    app_commands.Choice(name="Myth (Living Legend)", value="Myth"),
-    app_commands.Choice(name="Beast (BOTM Winner)", value="Beast"),
-    app_commands.Choice(name="Skiller (SOTM Winner)", value="Skiller"),
-    app_commands.Choice(name="Merchant (Big Booty/COTM Winner)", value="Merchant"),
-    app_commands.Choice(name="Adventurer (Event Winner)", value="Adventurer"),
-    app_commands.Choice(name="Gamer (Event Champion)", value="Gamer"),
-    app_commands.Choice(name="Raider (Event Overlord)", value="Raider"),
-    app_commands.Choice(name="Administrator (Retired Key)", value="Administrator"),
-    app_commands.Choice(name="Captain", value="Captain"),
-    app_commands.Choice(name="General", value="General"),
-    app_commands.Choice(name="Master", value="Master"),
-    app_commands.Choice(name="Commander", value="Commander"),
-    app_commands.Choice(name="Deputy Owner", value="Deputy Owner"),
-    app_commands.Choice(name="Owner", value="Owner")
+    app_commands.Choice(name=rank["display_name"], value=rank["role_name"])
+    for rank in DISCORD_RANKS
 ])
 @check_staff_role("Captain")
-async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = False):
+async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = False, bypass_discord: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
     if not publish:
-        await log_command_use(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
+        await log_command_use(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -689,7 +723,7 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
 
         log.info("Building RSN map for bulk rankup...")
         rsns_res = supabase.table('member_rsns') \
-            .select('rsn, member_id, members(current_rank_id, ranks(hierarchy_level))') \
+            .select('rsn, member_id, members(current_rank_id, discord_id, ranks(hierarchy_level))') \
             .execute()
         
         rsn_map = {}
@@ -702,7 +736,8 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                     "member_id": item['member_id'],
                     "original_rsn": item['rsn'],
                     "old_rank_id": item['members']['current_rank_id'],
-                    "old_hierarchy": old_h
+                    "old_hierarchy": old_h,
+                    "discord_id": item['members'].get('discord_id')
                 }
         log.info("RSN map built.")
 
@@ -710,10 +745,12 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         
         member_ids_to_update = []
         history_payload = []
+        successful_discord_members = []
         report_success = []
         report_fail_not_found = []
         report_fail_already_rank = []
         report_fail_permission = []
+        report_fail_no_discord = []
 
         for rsn in rsns_to_process:
             if not rsn: continue
@@ -733,6 +770,10 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                 report_fail_already_rank.append(member_data['original_rsn'])
                 continue
                 
+            if not member_data['discord_id'] and not bypass_discord:
+                report_fail_no_discord.append(member_data['original_rsn'])
+                continue
+                
             member_ids_to_update.append(member_data['member_id'])
             history_payload.append({
                 'member_id': member_data['member_id'], 
@@ -741,6 +782,10 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                 'enacted_by_member_id': staff_member_id
             })
             report_success.append(member_data['original_rsn'])
+            successful_discord_members.append({
+                "rsn": member_data['original_rsn'],
+                "discord_id": member_data['discord_id']
+            })
 
         if member_ids_to_update:
             log.info(f"Updating {len(member_ids_to_update)} members to rank {new_rank_name}...")
@@ -750,21 +795,66 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         else:
             log.info("No members valid for update.")
 
+        # Discord roles update for bulkrankup
+        discord_summary = ""
+        if successful_discord_members and not bypass_discord:
+            rank_config = next((r for r in DISCORD_RANKS if r["role_name"] == rank_name), None)
+            if rank_config and rank_config.get("auto_apply_discord") is False:
+                discord_summary = "ℹ️ Discord role auto-apply is disabled for staff ranks."
+            elif rank_config and rank_config.get("role_id"):
+                role_id = rank_config["role_id"]
+                guild = interaction.guild
+                if guild:
+                    role = guild.get_role(int(role_id))
+                    if role:
+                        role_assigned_count = 0
+                        role_skipped_count = 0
+                        role_failed_count = 0
+                        for s_member in successful_discord_members:
+                            d_id = s_member["discord_id"]
+                            if not d_id:
+                                continue
+                            try:
+                                discord_member = guild.get_member(int(d_id))
+                                if not discord_member:
+                                    discord_member = await guild.fetch_member(int(d_id))
+                                if role not in discord_member.roles:
+                                    await discord_member.add_roles(role, reason=f"Bulk rankup to {new_rank_name} by {interaction.user}")
+                                    role_assigned_count += 1
+                                else:
+                                    role_skipped_count += 1
+                            except Exception as de:
+                                log.error(f"Failed to assign role to {s_member['rsn']} (discord_id: {d_id}): {de}")
+                                role_failed_count += 1
+                        
+                        discord_summary = f"**Discord Roles ({role.name}):** Assigned {role_assigned_count}, Already had {role_skipped_count}, Failed {role_failed_count}"
+                    else:
+                        discord_summary = f"⚠️ Discord role ID `{role_id}` not found in this server."
+                else:
+                    discord_summary = "⚠️ Command not run in server; skipped Discord roles."
+            elif rank_config:
+                discord_summary = "ℹ️ Discord role ID not configured yet."
+        elif bypass_discord:
+            discord_summary = "ℹ️ Bypassed Discord roles update."
+
         embed = discord.Embed(
             title=f"Bulk Rank Update to '{new_rank_name}' Complete",
-            color=discord.Color.green() if not report_fail_not_found else discord.Color.orange()
+            description=discord_summary if discord_summary else None,
+            color=discord.Color.green() if not report_fail_not_found and not report_fail_no_discord else discord.Color.orange()
         )
         
         if report_success:
             embed.add_field(name=f"✅ Success ({len(report_success)})", value="```\n" + "\n".join(report_success) + "\n```", inline=False)
         if report_fail_already_rank:
             embed.add_field(name=f"ℹ️ No Change ({len(report_fail_already_rank)})", value="```\n" + "\n".join(report_fail_already_rank) + "\n```", inline=False)
+        if report_fail_no_discord:
+            embed.add_field(name=f"❌ Failed: No Discord Linked ({len(report_fail_no_discord)})", value="```\n" + "\n".join(report_fail_no_discord) + "\n```\n*Use `bypass_discord=True` to update database-only, or link them using `/linkrsn` first.*", inline=False)
         if report_fail_not_found:
             embed.add_field(name=f"❌ Failed: RSN Not Found ({len(report_fail_not_found)})", value="```\n" + "\n".join(report_fail_not_found) + "\n```", inline=False)
         if report_fail_permission:
             embed.add_field(name=f"⛔ Failed: Permission Denied ({len(report_fail_permission)})", value="```\n" + "\n".join(report_fail_permission) + "\n```", inline=False)
         
-        if not report_success and not report_fail_already_rank and not report_fail_not_found and not report_fail_permission:
+        if not report_success and not report_fail_already_rank and not report_fail_not_found and not report_fail_permission and not report_fail_no_discord:
             embed.description = "No RSNs were provided or found."
 
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
@@ -782,13 +872,8 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
     publish="True to post the report publicly."
 )
 @app_commands.choices(rank_name=[
-    app_commands.Choice(name="Diamond", value="Diamond"),
-    app_commands.Choice(name="Dragonstone", value="Dragonstone"),
-    app_commands.Choice(name="Onyx", value="Onyx"),
-    app_commands.Choice(name="Zenyte", value="Zenyte"),
-    app_commands.Choice(name="Maxed (Elite Skiller)", value="Maxed"),
-    app_commands.Choice(name="TzKal (Elite PvMer)", value="TzKal"),
-    app_commands.Choice(name="Myth (Living Legend)", value="Myth"),
+    app_commands.Choice(name=rank["display_name"], value=rank["role_name"])
+    for rank in DISCORD_RANKS if rank["is_rankup_check"]
 ])
 @check_staff_role("Captain")
 async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False):
