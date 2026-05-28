@@ -272,7 +272,8 @@ async def help(interaction: discord.Interaction, publish: bool = False):
             "`/bulkaddpoints <points> <reason> <rsn_list> [publish]`\nAdds Event Points to multiple members at once.",
             "`/addpointsbotm <first> <second> <third> <participants> [publish]`\nAdds points for Boss of the Month.",
             "`/addpointssotm <first> <second> <third> <participants> [publish]`\nAdds points for Skill of the Month.",
-            "`/addpointsbigbooty <first> <second> <third> <participants> [publish]`\nAdds points for Big Booty (Clue of the Month)."
+            "`/addpointsbigbooty <first> <second> <third> <participants> [publish]`\nAdds points for Big Booty (Clue of the Month).",
+            "`/check-no-discord [publish]`\nChecks for active clan members with no linked Discord ID."
         ]
         
         embed.add_field(
@@ -1538,6 +1539,73 @@ async def check_inactives(interaction: discord.Interaction, publish: bool = Fals
     except Exception as e:
         log.error(f"CRITICAL Error in /check-inactives command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
+
+
+# --- 16.5 /CHECK-NO-DISCORD COMMAND ---
+@client.tree.command(name="check-no-discord", description="Checks for active clan members with no linked Discord ID")
+@app_commands.describe(
+    publish="False (default). True to post the report publicly."
+)
+@check_staff_role("Captain")
+async def check_no_discord(interaction: discord.Interaction, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /check-no-discord publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /check-no-discord publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        # 1. Fetch active members with no discord_id
+        members_res = supabase.table('members') \
+            .select('id') \
+            .eq('status', 'Active') \
+            .is_('discord_id', 'null') \
+            .execute()
+            
+        if not members_res.data:
+            embed = discord.Embed(
+                title="Active Members with No Discord",
+                description="✅ All active clan members have a linked Discord ID!",
+                color=discord.Color.green()
+            )
+            await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+            return
+
+        member_ids = [m['id'] for m in members_res.data]
+        
+        # 2. Fetch primary RSNs for these members
+        rsn_res = supabase.table('member_rsns') \
+            .select('rsn') \
+            .eq('is_primary', True) \
+            .in_('member_id', member_ids) \
+            .execute()
+            
+        rsns = [r['rsn'] for r in rsn_res.data]
+        rsns.sort(key=str.lower)
+        
+        # 3. Format and send the response
+        embed = discord.Embed(
+            title=f"Active Members with No Discord ({len(rsns)})",
+            color=discord.Color.orange()
+        )
+        
+        if rsns:
+            rsns_list_str = "\n".join(f"• {rsn}" for rsn in rsns)
+            if len(rsns_list_str) > 4000:
+                embed.description = "Here is the list of active members with no linked Discord ID (truncated due to length):\n\n" + rsns_list_str[:3800] + "\n... (list truncated)"
+            else:
+                embed.description = "Here is the list of active members with no linked Discord ID:\n\n" + rsns_list_str
+        else:
+            embed.description = "No RSNs found for these active members."
+            
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+        
+    except Exception as e:
+        log.error(f"Error in /check-no-discord command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
 # --- 17. /UPDATE-EP-LEADERBOARD COMMAND ---
