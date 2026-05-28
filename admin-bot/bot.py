@@ -102,6 +102,33 @@ async def log_command_use(message: str):
     except Exception as e:
         log.error(f"Failed to send log to admin logging channel: {e}")
 
+# --- Discord Ranks Configuration ---
+DISCORD_RANKS = [
+    {"role_id": 1509529699255320657, "role_name": "Sapphire", "display_name": "Sapphire", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1509530886616518737, "role_name": "Emerald", "display_name": "Emerald", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1509530851854258306, "role_name": "Ruby", "display_name": "Ruby", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1225511074514604095, "role_name": "Diamond", "display_name": "Diamond", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1225511118005604453, "role_name": "Dragonstone", "display_name": "Dragonstone", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1225511151526346844, "role_name": "Onyx", "display_name": "Onyx", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1225511181528334346, "role_name": "Zenyte", "display_name": "Zenyte", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1282755027399868468, "role_name": "Maxed", "display_name": "Maxed (Elite Skiller)", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1282755185013166100, "role_name": "TzKal", "display_name": "TzKal (Elite PvMer)", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1419123726015922297, "role_name": "Myth", "display_name": "Myth (Living Legend)", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1170648724968587324, "role_name": "Beast", "display_name": "Beast (BOTM Winner)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1170648918414082120, "role_name": "Skiller", "display_name": "Skiller (SOTM Winner)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1233048247069708298, "role_name": "Merchant", "display_name": "Merchant (Big Booty/COTM Winner)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1170649282039251074, "role_name": "Adventurer", "display_name": "Adventurer (Event Winner)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1171851424372625459, "role_name": "Gamer", "display_name": "Gamer (Event Champion)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1394777556280021204, "role_name": "Raider", "display_name": "Raider (Event Overlord)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1418803591602245633, "role_name": "Administrator", "display_name": "Administrator (Retired Key)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1059330179094302760, "role_name": "Captain", "display_name": "Captain", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False},
+    {"role_id": 1059330194139250698, "role_name": "General", "display_name": "General", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False},
+    {"role_id": 1471345801430302892, "role_name": "Master", "display_name": "Master", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False},
+    {"role_id": 1171576313862164590, "role_name": "Commander", "display_name": "Commander", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False},
+    {"role_id": 1054602889122812025, "role_name": "Deputy Owner", "display_name": "Deputy Owner", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False},
+    {"role_id": 1054602889122812025, "role_name": "Owner", "display_name": "Owner", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False}
+]
+
 # --- Role-Based Permission System ---
 STAFF_ROLES = ["Owner", "Deputy Owner", "Commander", "Master", "General", "Captain"] # Ordered Highest to Lowest
 ROLE_HIERARCHY_LEVELS = {
@@ -162,6 +189,7 @@ def check_staff_role(required_role: str):
 
 intents = discord.Intents.default()
 intents.message_content = True 
+intents.members = True 
 
 # --- Define the bot (UPDATED) ---
 class MyClient(discord.Client):
@@ -193,8 +221,10 @@ async def on_ready():
         scheduled_clan_sync.start()
         scheduled_inactivity_check.start()
         scheduled_overachievers_check.start()
+        scheduled_no_discord_check.start()
+        scheduled_clan_veteran_check.start()
 
-        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily)")
+        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily), no_discord_check (00:05 UTC weekly on Sundays), clan_veteran_check (00:10 UTC monthly on the 1st)")
     log.info(f'Logged in as {client.user} (ID: {client.user.id})')
     log.info('Bot is ready and online.')
 
@@ -244,7 +274,9 @@ async def help(interaction: discord.Interaction, publish: bool = False):
             "`/bulkaddpoints <points> <reason> <rsn_list> [publish]`\nAdds Event Points to multiple members at once.",
             "`/addpointsbotm <first> <second> <third> <participants> [publish]`\nAdds points for Boss of the Month.",
             "`/addpointssotm <first> <second> <third> <participants> [publish]`\nAdds points for Skill of the Month.",
-            "`/addpointsbigbooty <first> <second> <third> <participants> [publish]`\nAdds points for Big Booty (Clue of the Month)."
+            "`/addpointsbigbooty <first> <second> <third> <participants> [publish]`\nAdds points for Big Booty (Clue of the Month).",
+            "`/check-no-discord [publish]`\nChecks for active clan members with no linked Discord ID.",
+            "`/clan-veteran-check [publish]`\nChecks and updates Clan Veteran roles for members with >2y in the clan."
         ]
         
         embed.add_field(
@@ -527,41 +559,21 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
 @app_commands.describe(
     rsn="The member's RSN (current or past).",
     rank_name="The new rank to assign (e.g., 'Ruby', 'Beast').",
-    publish="True to post the confirmation publicly."
+    publish="True to post the confirmation publicly.",
+    bypass_discord="True to bypass updating the Discord role (useful if member has no Discord)."
 )
 @app_commands.choices(rank_name=[
-    app_commands.Choice(name="Sapphire", value="Sapphire"),
-    app_commands.Choice(name="Emerald", value="Emerald"),
-    app_commands.Choice(name="Ruby", value="Ruby"),
-    app_commands.Choice(name="Diamond", value="Diamond"),
-    app_commands.Choice(name="Dragonstone", value="Dragonstone"),
-    app_commands.Choice(name="Onyx", value="Onyx"),
-    app_commands.Choice(name="Zenyte", value="Zenyte"),
-    app_commands.Choice(name="Maxed (Elite Skiller)", value="Maxed"),
-    app_commands.Choice(name="TzKal (Elite PvMer)", value="TzKal"),
-    app_commands.Choice(name="Myth (Living Legend)", value="Myth"),
-    app_commands.Choice(name="Beast (BOTM Winner)", value="Beast"),
-    app_commands.Choice(name="Skiller (SOTM Winner)", value="Skiller"),
-    app_commands.Choice(name="Merchant (Big Booty/COTM Winner)", value="Merchant"),
-    app_commands.Choice(name="Adventurer (Event Winner)", value="Adventurer"),
-    app_commands.Choice(name="Gamer (Event Champion)", value="Gamer"),
-    app_commands.Choice(name="Raider (Event Overlord)", value="Raider"),
-    app_commands.Choice(name="Administrator (Retired Key)", value="Administrator"),
-    app_commands.Choice(name="Captain", value="Captain"),
-    app_commands.Choice(name="General", value="General"),
-    app_commands.Choice(name="Master", value="Master"),
-    app_commands.Choice(name="Commander", value="Commander"),
-    app_commands.Choice(name="Deputy Owner", value="Deputy Owner"),
-    app_commands.Choice(name="Owner", value="Owner")
+    app_commands.Choice(name=rank["display_name"], value=rank["role_name"])
+    for rank in DISCORD_RANKS
 ])
 
 @check_staff_role("Captain")
-async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False):
+async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False, bypass_discord: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
     if not publish:
-        await log_command_use(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} used by {interaction.user}")
+        await log_command_use(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -585,7 +597,7 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         new_rank_name = new_rank['name'] 
 
         member_res = supabase.table('member_rsns') \
-            .select('member_id, rsn, members(current_rank_id, ranks(hierarchy_level))') \
+            .select('member_id, rsn, members(current_rank_id, discord_id, ranks(hierarchy_level))') \
             .ilike('rsn', rsn) \
             .limit(1) \
             .execute()
@@ -597,7 +609,18 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         member_id = member_res.data[0]['member_id']
         member_rsn = member_res.data[0]['rsn']
         old_rank_id = member_res.data[0]['members']['current_rank_id']
+        discord_id = member_res.data[0]['members'].get('discord_id')
         
+        # Check for linked Discord account
+        if not discord_id and not bypass_discord:
+            await interaction.followup.send(
+                f"⛔ **Linked Discord Account Required**: `{member_rsn}` does not have a linked Discord account. "
+                f"Please link their account using `/linkrsn` first, or re-run this command with `bypass_discord=True` "
+                f"to update their database rank only.",
+                ephemeral=True
+            )
+            return
+            
         old_hierarchy = 0
         if member_res.data[0].get('members') and member_res.data[0]['members'].get('ranks'):
             old_hierarchy = member_res.data[0]['members']['ranks'].get('hierarchy_level', 0)
@@ -619,7 +642,60 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
             'enacted_by_member_id': staff_member_id
         }).execute()
         
-        await interaction.followup.send(f"✅ Success! `{member_rsn}`'s rank has been updated to **{new_rank_name}**.", ephemeral=is_ephemeral)
+        # Update Discord role if linked and role_id is configured
+        discord_msg = ""
+        if discord_id and not bypass_discord:
+            rank_config = next((r for r in DISCORD_RANKS if r["role_name"] == rank_name), None)
+            if rank_config and rank_config.get("auto_apply_discord") is False:
+                discord_msg = " (Discord role auto-apply is disabled for staff ranks.)"
+            elif rank_config and rank_config.get("role_id"):
+                role_id = rank_config["role_id"]
+                guild = interaction.guild
+                if guild:
+                    role = guild.get_role(int(role_id))
+                    if role:
+                        try:
+                            discord_member = guild.get_member(int(discord_id))
+                            if not discord_member:
+                                discord_member = await guild.fetch_member(int(discord_id))
+                            
+                            # Clean up old exclusive roles
+                            roles_to_remove = []
+                            if rank_config.get("is_exclusive"):
+                                for r_cfg in DISCORD_RANKS:
+                                    if r_cfg.get("is_exclusive") and r_cfg.get("role_id") and int(r_cfg["role_id"]) != int(role_id):
+                                        role_obj = guild.get_role(int(r_cfg["role_id"]))
+                                        if role_obj and role_obj in discord_member.roles:
+                                            roles_to_remove.append(role_obj)
+                            
+                            removed_msg = ""
+                            if roles_to_remove:
+                                await discord_member.remove_roles(*roles_to_remove, reason=f"Rankup to {new_rank_name} (exclusive ranks cleanup)")
+                                removed_names = ", ".join([r.name for r in roles_to_remove])
+                                removed_msg = f" and removed **{removed_names}**"
+                            
+                            if role not in discord_member.roles:
+                                await discord_member.add_roles(role, reason=f"Rankup to {new_rank_name} by {interaction.user}")
+                                discord_msg = f" Also added Discord role **{role.name}**{removed_msg}."
+                            else:
+                                if removed_msg:
+                                    discord_msg = f" (Removed old exclusive rank(s): {', '.join([r.name for r in roles_to_remove])}.)"
+                                else:
+                                    discord_msg = f" (Already has Discord role **{role.name}**.)"
+                        except discord.Forbidden:
+                            discord_msg = " ⚠️ Could not assign Discord role (Bot lacks 'Manage Roles' permission or role is higher than Bot's role)."
+                        except discord.HTTPException as de:
+                            discord_msg = f" ⚠️ Failed to assign Discord role: {de}"
+                    else:
+                        discord_msg = f" ⚠️ Discord role ID `{role_id}` not found in this server."
+                else:
+                    discord_msg = " ⚠️ Command was not run in a server, cannot assign Discord role."
+            elif rank_config:
+                discord_msg = " (Discord role ID not configured yet.)"
+        elif bypass_discord:
+            discord_msg = " (Bypassed Discord role update.)"
+        
+        await interaction.followup.send(f"✅ Success! `{member_rsn}`'s rank has been updated to **{new_rank_name}**.{discord_msg}", ephemeral=is_ephemeral)
 
     except Exception as e:
         log.error(f"Error in /rankup command: {e}\n{traceback.format_exc()}")
@@ -631,40 +707,20 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
 @app_commands.describe(
     rank_name="The new rank to assign all members (e.g., 'Beast').",
     rsn_list="A comma-separated list of RSNs.",
-    publish="True to post the confirmation publicly."
+    publish="True to post the confirmation publicly.",
+    bypass_discord="True to bypass updating Discord roles (useful if members have no Discord)."
 )
 @app_commands.choices(rank_name=[
-    app_commands.Choice(name="Sapphire", value="Sapphire"),
-    app_commands.Choice(name="Emerald", value="Emerald"),
-    app_commands.Choice(name="Ruby", value="Ruby"),
-    app_commands.Choice(name="Diamond", value="Diamond"),
-    app_commands.Choice(name="Dragonstone", value="Dragonstone"),
-    app_commands.Choice(name="Onyx", value="Onyx"),
-    app_commands.Choice(name="Zenyte", value="Zenyte"),
-    app_commands.Choice(name="Maxed (Elite Skiller)", value="Maxed"),
-    app_commands.Choice(name="TzKal (Elite PvMer)", value="TzKal"),
-    app_commands.Choice(name="Myth (Living Legend)", value="Myth"),
-    app_commands.Choice(name="Beast (BOTM Winner)", value="Beast"),
-    app_commands.Choice(name="Skiller (SOTM Winner)", value="Skiller"),
-    app_commands.Choice(name="Merchant (Big Booty/COTM Winner)", value="Merchant"),
-    app_commands.Choice(name="Adventurer (Event Winner)", value="Adventurer"),
-    app_commands.Choice(name="Gamer (Event Champion)", value="Gamer"),
-    app_commands.Choice(name="Raider (Event Overlord)", value="Raider"),
-    app_commands.Choice(name="Administrator (Retired Key)", value="Administrator"),
-    app_commands.Choice(name="Captain", value="Captain"),
-    app_commands.Choice(name="General", value="General"),
-    app_commands.Choice(name="Master", value="Master"),
-    app_commands.Choice(name="Commander", value="Commander"),
-    app_commands.Choice(name="Deputy Owner", value="Deputy Owner"),
-    app_commands.Choice(name="Owner", value="Owner")
+    app_commands.Choice(name=rank["display_name"], value=rank["role_name"])
+    for rank in DISCORD_RANKS
 ])
 @check_staff_role("Captain")
-async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = False):
+async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = False, bypass_discord: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
     if not publish:
-        await log_command_use(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
+        await log_command_use(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -689,7 +745,7 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
 
         log.info("Building RSN map for bulk rankup...")
         rsns_res = supabase.table('member_rsns') \
-            .select('rsn, member_id, members(current_rank_id, ranks(hierarchy_level))') \
+            .select('rsn, member_id, members(current_rank_id, discord_id, ranks(hierarchy_level))') \
             .execute()
         
         rsn_map = {}
@@ -702,7 +758,8 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                     "member_id": item['member_id'],
                     "original_rsn": item['rsn'],
                     "old_rank_id": item['members']['current_rank_id'],
-                    "old_hierarchy": old_h
+                    "old_hierarchy": old_h,
+                    "discord_id": item['members'].get('discord_id')
                 }
         log.info("RSN map built.")
 
@@ -710,10 +767,12 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         
         member_ids_to_update = []
         history_payload = []
+        successful_discord_members = []
         report_success = []
         report_fail_not_found = []
         report_fail_already_rank = []
         report_fail_permission = []
+        report_fail_no_discord = []
 
         for rsn in rsns_to_process:
             if not rsn: continue
@@ -733,6 +792,10 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                 report_fail_already_rank.append(member_data['original_rsn'])
                 continue
                 
+            if not member_data['discord_id'] and not bypass_discord:
+                report_fail_no_discord.append(member_data['original_rsn'])
+                continue
+                
             member_ids_to_update.append(member_data['member_id'])
             history_payload.append({
                 'member_id': member_data['member_id'], 
@@ -741,6 +804,10 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                 'enacted_by_member_id': staff_member_id
             })
             report_success.append(member_data['original_rsn'])
+            successful_discord_members.append({
+                "rsn": member_data['original_rsn'],
+                "discord_id": member_data['discord_id']
+            })
 
         if member_ids_to_update:
             log.info(f"Updating {len(member_ids_to_update)} members to rank {new_rank_name}...")
@@ -750,21 +817,79 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         else:
             log.info("No members valid for update.")
 
+        # Discord roles update for bulkrankup
+        discord_summary = ""
+        if successful_discord_members and not bypass_discord:
+            rank_config = next((r for r in DISCORD_RANKS if r["role_name"] == rank_name), None)
+            if rank_config and rank_config.get("auto_apply_discord") is False:
+                discord_summary = "ℹ️ Discord role auto-apply is disabled for staff ranks."
+            elif rank_config and rank_config.get("role_id"):
+                role_id = rank_config["role_id"]
+                guild = interaction.guild
+                if guild:
+                    role = guild.get_role(int(role_id))
+                    if role:
+                        role_assigned_count = 0
+                        role_skipped_count = 0
+                        role_failed_count = 0
+                        for s_member in successful_discord_members:
+                            d_id = s_member["discord_id"]
+                            if not d_id:
+                                continue
+                            try:
+                                discord_member = guild.get_member(int(d_id))
+                                if not discord_member:
+                                    discord_member = await guild.fetch_member(int(d_id))
+                                
+                                # Clean up old exclusive roles
+                                roles_to_remove = []
+                                if rank_config.get("is_exclusive"):
+                                    for r_cfg in DISCORD_RANKS:
+                                        if r_cfg.get("is_exclusive") and r_cfg.get("role_id") and int(r_cfg["role_id"]) != int(role_id):
+                                            role_obj = guild.get_role(int(r_cfg["role_id"]))
+                                            if role_obj and role_obj in discord_member.roles:
+                                                roles_to_remove.append(role_obj)
+                                
+                                if roles_to_remove:
+                                    await discord_member.remove_roles(*roles_to_remove, reason=f"Bulk rankup to {new_rank_name} (exclusive ranks cleanup)")
+                                
+                                if role not in discord_member.roles:
+                                    await discord_member.add_roles(role, reason=f"Bulk rankup to {new_rank_name} by {interaction.user}")
+                                    role_assigned_count += 1
+                                else:
+                                    role_skipped_count += 1
+                            except Exception as de:
+                                log.error(f"Failed to assign role to {s_member['rsn']} (discord_id: {d_id}): {de}")
+                                role_failed_count += 1
+                        
+                        discord_summary = f"**Discord Roles ({role.name}):** Assigned {role_assigned_count}, Already had {role_skipped_count}, Failed {role_failed_count}"
+                    else:
+                        discord_summary = f"⚠️ Discord role ID `{role_id}` not found in this server."
+                else:
+                    discord_summary = "⚠️ Command not run in server; skipped Discord roles."
+            elif rank_config:
+                discord_summary = "ℹ️ Discord role ID not configured yet."
+        elif bypass_discord:
+            discord_summary = "ℹ️ Bypassed Discord roles update."
+
         embed = discord.Embed(
             title=f"Bulk Rank Update to '{new_rank_name}' Complete",
-            color=discord.Color.green() if not report_fail_not_found else discord.Color.orange()
+            description=discord_summary if discord_summary else None,
+            color=discord.Color.green() if not report_fail_not_found and not report_fail_no_discord else discord.Color.orange()
         )
         
         if report_success:
             embed.add_field(name=f"✅ Success ({len(report_success)})", value="```\n" + "\n".join(report_success) + "\n```", inline=False)
         if report_fail_already_rank:
             embed.add_field(name=f"ℹ️ No Change ({len(report_fail_already_rank)})", value="```\n" + "\n".join(report_fail_already_rank) + "\n```", inline=False)
+        if report_fail_no_discord:
+            embed.add_field(name=f"❌ Failed: No Discord Linked ({len(report_fail_no_discord)})", value="```\n" + "\n".join(report_fail_no_discord) + "\n```\n*Use `bypass_discord=True` to update database-only, or link them using `/linkrsn` first.*", inline=False)
         if report_fail_not_found:
             embed.add_field(name=f"❌ Failed: RSN Not Found ({len(report_fail_not_found)})", value="```\n" + "\n".join(report_fail_not_found) + "\n```", inline=False)
         if report_fail_permission:
             embed.add_field(name=f"⛔ Failed: Permission Denied ({len(report_fail_permission)})", value="```\n" + "\n".join(report_fail_permission) + "\n```", inline=False)
         
-        if not report_success and not report_fail_already_rank and not report_fail_not_found and not report_fail_permission:
+        if not report_success and not report_fail_already_rank and not report_fail_not_found and not report_fail_permission and not report_fail_no_discord:
             embed.description = "No RSNs were provided or found."
 
         await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
@@ -782,13 +907,8 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
     publish="True to post the report publicly."
 )
 @app_commands.choices(rank_name=[
-    app_commands.Choice(name="Diamond", value="Diamond"),
-    app_commands.Choice(name="Dragonstone", value="Dragonstone"),
-    app_commands.Choice(name="Onyx", value="Onyx"),
-    app_commands.Choice(name="Zenyte", value="Zenyte"),
-    app_commands.Choice(name="Maxed (Elite Skiller)", value="Maxed"),
-    app_commands.Choice(name="TzKal (Elite PvMer)", value="TzKal"),
-    app_commands.Choice(name="Myth (Living Legend)", value="Myth"),
+    app_commands.Choice(name=rank["display_name"], value=rank["role_name"])
+    for rank in DISCORD_RANKS if rank["is_rankup_check"]
 ])
 @check_staff_role("Captain")
 async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False):
@@ -1424,6 +1544,198 @@ async def check_inactives(interaction: discord.Interaction, publish: bool = Fals
         await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
 
 
+# --- 16.5 /CHECK-NO-DISCORD COMMAND ---
+async def generate_no_discord_embed() -> discord.Embed:
+    """Helper to query active members with no linked Discord and generate the embed."""
+    # 1. Fetch active members with no discord_id
+    members_res = supabase.table('members') \
+        .select('id') \
+        .eq('status', 'Active') \
+        .is_('discord_id', 'null') \
+        .execute()
+        
+    if not members_res.data:
+        return discord.Embed(
+            title="Active Members with No Discord",
+            description="✅ All active clan members have a linked Discord ID!",
+            color=discord.Color.green()
+        )
+
+    member_ids = [m['id'] for m in members_res.data]
+    
+    # 2. Fetch primary RSNs for these members
+    rsn_res = supabase.table('member_rsns') \
+        .select('rsn') \
+        .eq('is_primary', True) \
+        .in_('member_id', member_ids) \
+        .execute()
+        
+    rsns = [r['rsn'] for r in rsn_res.data]
+    rsns.sort(key=str.lower)
+    
+    # 3. Format the response
+    embed = discord.Embed(
+        title=f"Active Members with No Discord ({len(rsns)})",
+        color=discord.Color.orange()
+    )
+    
+    if rsns:
+        rsns_list_str = "\n".join(f"• {rsn}" for rsn in rsns)
+        if len(rsns_list_str) > 4000:
+            embed.description = "Here is the list of active members with no linked Discord ID (truncated due to length):\n\n" + rsns_list_str[:3800] + "\n... (list truncated)"
+        else:
+            embed.description = "Here is the list of active members with no linked Discord ID:\n\n" + rsns_list_str
+    else:
+        embed.description = "No RSNs found for these active members."
+        
+    return embed
+
+
+@client.tree.command(name="check-no-discord", description="Checks for active clan members with no linked Discord ID")
+@app_commands.describe(
+    publish="False (default). True to post the report publicly."
+)
+@check_staff_role("Captain")
+async def check_no_discord(interaction: discord.Interaction, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /check-no-discord publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /check-no-discord publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        embed = await generate_no_discord_embed()
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+    except Exception as e:
+        log.error(f"Error in /check-no-discord command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
+# --- 16.7 /CLAN-VETERAN-CHECK COMMAND ---
+async def run_clan_veteran_check(guild: discord.Guild) -> discord.Embed:
+    CLAN_VETERAN_ROLE_ID = 1191649334438133820
+    role = guild.get_role(CLAN_VETERAN_ROLE_ID)
+    if not role:
+        return discord.Embed(
+            title="Clan Veteran Check Failed",
+            description=f"❌ Could not find Clan Veteran role with ID `{CLAN_VETERAN_ROLE_ID}` in this server.",
+            color=discord.Color.red()
+        )
+        
+    try:
+        response = supabase.rpc('get_active_members_time_in_clan').execute()
+        members = response.data or []
+    except Exception as e:
+        log.error(f"Failed to fetch members from database: {e}")
+        return discord.Embed(
+            title="Clan Veteran Check Failed",
+            description=f"❌ Database error: {e}",
+            color=discord.Color.red()
+        )
+
+    added_members = []
+    no_discord_members = []
+    failed_members = []
+    already_had_role = 0
+    not_eligible_yet = 0
+    
+    now = datetime.now(ZoneInfo('UTC'))
+    
+    for m in members:
+        rsn = m.get('primary_rsn') or "Unknown RSN"
+        days_in_clan = m.get('days_in_clan', 0)
+        discord_id = m.get('discord_id')
+        
+        if days_in_clan > 730:
+            if not discord_id:
+                no_discord_members.append(f"• **{rsn}** ({days_in_clan} days in clan)")
+                continue
+                
+            try:
+                discord_member = guild.get_member(int(discord_id))
+                if not discord_member:
+                    discord_member = await guild.fetch_member(int(discord_id))
+                    
+                if not discord_member:
+                    failed_members.append((rsn, f"Could not find Discord user with ID `{discord_id}` in this server"))
+                    continue
+                    
+                if role in discord_member.roles:
+                    already_had_role += 1
+                else:
+                    try:
+                        await discord_member.add_roles(role, reason="Clan Veteran check (automatic promotion for >2y in clan)")
+                        added_members.append(f"• **{rsn}** (<@{discord_id}>) - {days_in_clan} days")
+                    except discord.Forbidden:
+                        failed_members.append((rsn, "Bot lacks 'Manage Roles' permission or role is higher than Bot's role"))
+                    except Exception as role_err:
+                        failed_members.append((rsn, f"Failed to add role: {role_err}"))
+            except discord.NotFound:
+                failed_members.append((rsn, f"Discord user ID `{discord_id}` not found in this server"))
+            except Exception as member_err:
+                failed_members.append((rsn, f"Error fetching member: {member_err}"))
+        else:
+            not_eligible_yet += 1
+            
+    embed = discord.Embed(
+        title="🛡️ Clan Veteran Role Check Report",
+        timestamp=datetime.now(),
+        color=discord.Color.gold()
+    )
+    embed.add_field(name="✅ Roles Added", value=str(len(added_members)), inline=True)
+    embed.add_field(name="✨ Already Had Role", value=str(already_had_role), inline=True)
+    embed.add_field(name="⏳ Not Eligible Yet (<2y)", value=str(not_eligible_yet), inline=True)
+    
+    if added_members:
+        added_str = "\n".join(added_members)
+        if len(added_str) > 1024:
+            added_str = added_str[:1000] + "\n... (truncated)"
+        embed.add_field(name="🎉 Added Role To", value=added_str, inline=False)
+    else:
+        embed.add_field(name="🎉 Added Role To", value="No new members needed the role.", inline=False)
+        
+    if no_discord_members:
+        no_discord_str = "\n".join(no_discord_members)
+        if len(no_discord_str) > 1024:
+            no_discord_str = no_discord_str[:1000] + "\n... (truncated)"
+        embed.add_field(name="⚠️ Eligible but No Discord Linked", value=no_discord_str, inline=False)
+        
+    if failed_members:
+        failed_str = "\n".join(f"• **{r}**: {err}" for r, err in failed_members)
+        if len(failed_str) > 1024:
+            failed_str = failed_str[:1000] + "\n... (truncated)"
+        embed.add_field(name="❌ Errors", value=failed_str, inline=False)
+        
+    embed.set_footer(text="OnlyFEs Clan Veteran Check Utility")
+    return embed
+
+
+@client.tree.command(name="clan-veteran-check", description="Checks and updates Clan Veteran roles for members with >2y in the clan.")
+@app_commands.describe(
+    publish="False (default). True to post the report publicly."
+)
+@check_staff_role("Captain")
+async def clan_veteran_check(interaction: discord.Interaction, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /clan-veteran-check publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /clan-veteran-check publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        embed = await run_clan_veteran_check(interaction.guild)
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+    except Exception as e:
+        log.error(f"Error in /clan-veteran-check command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
 # --- 17. /UPDATE-EP-LEADERBOARD COMMAND ---
 @client.tree.command(name="updateepleaderboard", description="Manually update the EP leaderboard on GitHub Pages.")
 @app_commands.describe(
@@ -1713,6 +2025,92 @@ async def scheduled_overachievers_check():
 async def before_scheduled_overachievers_check():
     await client.wait_until_ready()
     log.info("Bot is ready. Starting scheduled overachievers task.")
+
+
+@tasks.loop(time=[time(hour=0, minute=5)])
+async def scheduled_no_discord_check():
+    """Runs check-no-discord weekly on Sundays at 00:05 UTC"""
+    log.info("=== Starting scheduled no discord check ===")
+    
+    # Check if today is Sunday (6)
+    if datetime.now(ZoneInfo('UTC')).weekday() != 6:
+        log.info("Not Sunday. Skipping no discord check.")
+        return
+        
+    try:
+        if not SYNC_REPORT_CHANNEL_ID:
+            log.error("SYNC_REPORT_CHANNEL_ID not configured. Skipping scheduled no discord check.")
+            return
+            
+        channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+        if not channel:
+            log.error(f"Could not find channel with ID {SYNC_REPORT_CHANNEL_ID}")
+            return
+            
+        embed = await generate_no_discord_embed()
+        embed.title = f"Weekly Discord Link Check: {embed.title}"
+        embed.timestamp = datetime.now()
+        
+        await channel.send(embed=embed)
+        log.info("Scheduled no discord check report posted successfully.")
+        
+    except Exception as e:
+        log.error(f"ERROR in scheduled_no_discord_check: {e}\n{traceback.format_exc()}")
+        try:
+            if SYNC_REPORT_CHANNEL_ID:
+                channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+                if channel:
+                    await channel.send(f"⚠️ **Scheduled Discord Link Check Failed**\nError: `{e}`\nCheck bot logs for details.")
+        except:
+            pass
+
+@scheduled_no_discord_check.before_loop
+async def before_scheduled_no_discord_check():
+    await client.wait_until_ready()
+    log.info("Bot is ready. Starting scheduled no discord check task.")
+
+
+@tasks.loop(time=[time(hour=0, minute=10)])
+async def scheduled_clan_veteran_check():
+    """Runs clan veteran check daily at 00:10 UTC but executes ONLY on the 1st of the month"""
+    log.info("=== Starting scheduled clan veteran check ===")
+    
+    # Check if today is the 1st of the month
+    if datetime.now(ZoneInfo('UTC')).day != 1:
+        log.info("Not the 1st of the month. Skipping scheduled clan veteran check.")
+        return
+        
+    try:
+        if not SYNC_REPORT_CHANNEL_ID:
+            log.error("SYNC_REPORT_CHANNEL_ID not configured. Skipping scheduled clan veteran check.")
+            return
+            
+        channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+        if not channel:
+            log.error(f"Could not find channel with ID {SYNC_REPORT_CHANNEL_ID}")
+            return
+            
+        embed = await run_clan_veteran_check(channel.guild)
+        embed.title = f"Monthly Clan Veteran Check: {embed.title}"
+        embed.timestamp = datetime.now()
+        
+        await channel.send(embed=embed)
+        log.info("Scheduled clan veteran check report posted successfully.")
+        
+    except Exception as e:
+        log.error(f"ERROR in scheduled_clan_veteran_check: {e}\n{traceback.format_exc()}")
+        try:
+            if SYNC_REPORT_CHANNEL_ID:
+                channel = client.get_channel(int(SYNC_REPORT_CHANNEL_ID))
+                if channel:
+                    await channel.send(f"⚠️ **Scheduled Clan Veteran Check Failed**\nError: `{e}`\nCheck bot logs for details.")
+        except:
+            pass
+
+@scheduled_clan_veteran_check.before_loop
+async def before_scheduled_clan_veteran_check():
+    await client.wait_until_ready()
+    log.info("Bot is ready. Starting scheduled clan veteran check task.")
 
 
 # --- 19. RUN THE BOT ---
