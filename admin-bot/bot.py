@@ -104,29 +104,29 @@ async def log_command_use(message: str):
 
 # --- Discord Ranks Configuration ---
 DISCORD_RANKS = [
-    {"role_id": 1509529699255320657, "role_name": "Sapphire", "display_name": "Sapphire", "is_rankup_check": False, "auto_apply_discord": True},
-    {"role_id": 1509530886616518737, "role_name": "Emerald", "display_name": "Emerald", "is_rankup_check": False, "auto_apply_discord": True},
-    {"role_id": 1509530851854258306, "role_name": "Ruby", "display_name": "Ruby", "is_rankup_check": False, "auto_apply_discord": True},
-    {"role_id": 1225511074514604095, "role_name": "Diamond", "display_name": "Diamond", "is_rankup_check": True, "auto_apply_discord": True},
-    {"role_id": 1225511118005604453, "role_name": "Dragonstone", "display_name": "Dragonstone", "is_rankup_check": True, "auto_apply_discord": True},
-    {"role_id": 1225511151526346844, "role_name": "Onyx", "display_name": "Onyx", "is_rankup_check": True, "auto_apply_discord": True},
-    {"role_id": 1225511181528334346, "role_name": "Zenyte", "display_name": "Zenyte", "is_rankup_check": True, "auto_apply_discord": True},
-    {"role_id": 1282755027399868468, "role_name": "Maxed", "display_name": "Maxed (Elite Skiller)", "is_rankup_check": True, "auto_apply_discord": True},
-    {"role_id": 1282755185013166100, "role_name": "TzKal", "display_name": "TzKal (Elite PvMer)", "is_rankup_check": True, "auto_apply_discord": True},
-    {"role_id": 1419123726015922297, "role_name": "Myth", "display_name": "Myth (Living Legend)", "is_rankup_check": True, "auto_apply_discord": True},
-    {"role_id": 1170648724968587324, "role_name": "Beast", "display_name": "Beast (BOTM Winner)", "is_rankup_check": False, "auto_apply_discord": True},
-    {"role_id": 1170648918414082120, "role_name": "Skiller", "display_name": "Skiller (SOTM Winner)", "is_rankup_check": False, "auto_apply_discord": True},
-    {"role_id": 1233048247069708298, "role_name": "Merchant", "display_name": "Merchant (Big Booty/COTM Winner)", "is_rankup_check": False, "auto_apply_discord": True},
-    {"role_id": 1170649282039251074, "role_name": "Adventurer", "display_name": "Adventurer (Event Winner)", "is_rankup_check": False, "auto_apply_discord": True},
-    {"role_id": 1171851424372625459, "role_name": "Gamer", "display_name": "Gamer (Event Champion)", "is_rankup_check": False, "auto_apply_discord": True},
-    {"role_id": 1394777556280021204, "role_name": "Raider", "display_name": "Raider (Event Overlord)", "is_rankup_check": False, "auto_apply_discord": True},
-    {"role_id": 1418803591602245633, "role_name": "Administrator", "display_name": "Administrator (Retired Key)", "is_rankup_check": False, "auto_apply_discord": True},
-    {"role_id": 1059330179094302760, "role_name": "Captain", "display_name": "Captain", "is_rankup_check": False, "auto_apply_discord": False},
-    {"role_id": 1059330194139250698, "role_name": "General", "display_name": "General", "is_rankup_check": False, "auto_apply_discord": False},
-    {"role_id": 1471345801430302892, "role_name": "Master", "display_name": "Master", "is_rankup_check": False, "auto_apply_discord": False},
-    {"role_id": 1171576313862164590, "role_name": "Commander", "display_name": "Commander", "is_rankup_check": False, "auto_apply_discord": False},
-    {"role_id": 1054602889122812025, "role_name": "Deputy Owner", "display_name": "Deputy Owner", "is_rankup_check": False, "auto_apply_discord": False},
-    {"role_id": 1054602889122812025, "role_name": "Owner", "display_name": "Owner", "is_rankup_check": False, "auto_apply_discord": False}
+    {"role_id": 1509529699255320657, "role_name": "Sapphire", "display_name": "Sapphire", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1509530886616518737, "role_name": "Emerald", "display_name": "Emerald", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1509530851854258306, "role_name": "Ruby", "display_name": "Ruby", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1225511074514604095, "role_name": "Diamond", "display_name": "Diamond", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1225511118005604453, "role_name": "Dragonstone", "display_name": "Dragonstone", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1225511151526346844, "role_name": "Onyx", "display_name": "Onyx", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1225511181528334346, "role_name": "Zenyte", "display_name": "Zenyte", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1282755027399868468, "role_name": "Maxed", "display_name": "Maxed (Elite Skiller)", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1282755185013166100, "role_name": "TzKal", "display_name": "TzKal (Elite PvMer)", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1419123726015922297, "role_name": "Myth", "display_name": "Myth (Living Legend)", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1170648724968587324, "role_name": "Beast", "display_name": "Beast (BOTM Winner)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1170648918414082120, "role_name": "Skiller", "display_name": "Skiller (SOTM Winner)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1233048247069708298, "role_name": "Merchant", "display_name": "Merchant (Big Booty/COTM Winner)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1170649282039251074, "role_name": "Adventurer", "display_name": "Adventurer (Event Winner)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1171851424372625459, "role_name": "Gamer", "display_name": "Gamer (Event Champion)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1394777556280021204, "role_name": "Raider", "display_name": "Raider (Event Overlord)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1418803591602245633, "role_name": "Administrator", "display_name": "Administrator (Retired Key)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
+    {"role_id": 1059330179094302760, "role_name": "Captain", "display_name": "Captain", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False},
+    {"role_id": 1059330194139250698, "role_name": "General", "display_name": "General", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False},
+    {"role_id": 1471345801430302892, "role_name": "Master", "display_name": "Master", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False},
+    {"role_id": 1171576313862164590, "role_name": "Commander", "display_name": "Commander", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False},
+    {"role_id": 1054602889122812025, "role_name": "Deputy Owner", "display_name": "Deputy Owner", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False},
+    {"role_id": 1054602889122812025, "role_name": "Owner", "display_name": "Owner", "is_rankup_check": False, "auto_apply_discord": False, "is_exclusive": False}
 ]
 
 # --- Role-Based Permission System ---
@@ -655,11 +655,29 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
                             if not discord_member:
                                 discord_member = await guild.fetch_member(int(discord_id))
                             
+                            # Clean up old exclusive roles
+                            roles_to_remove = []
+                            if rank_config.get("is_exclusive"):
+                                for r_cfg in DISCORD_RANKS:
+                                    if r_cfg.get("is_exclusive") and r_cfg.get("role_id") and int(r_cfg["role_id"]) != int(role_id):
+                                        role_obj = guild.get_role(int(r_cfg["role_id"]))
+                                        if role_obj and role_obj in discord_member.roles:
+                                            roles_to_remove.append(role_obj)
+                            
+                            removed_msg = ""
+                            if roles_to_remove:
+                                await discord_member.remove_roles(*roles_to_remove, reason=f"Rankup to {new_rank_name} (exclusive ranks cleanup)")
+                                removed_names = ", ".join([r.name for r in roles_to_remove])
+                                removed_msg = f" and removed **{removed_names}**"
+                            
                             if role not in discord_member.roles:
                                 await discord_member.add_roles(role, reason=f"Rankup to {new_rank_name} by {interaction.user}")
-                                discord_msg = f" Also added Discord role **{role.name}**."
+                                discord_msg = f" Also added Discord role **{role.name}**{removed_msg}."
                             else:
-                                discord_msg = f" (Already has Discord role **{role.name}**.)"
+                                if removed_msg:
+                                    discord_msg = f" (Removed old exclusive rank(s): {', '.join([r.name for r in roles_to_remove])}.)"
+                                else:
+                                    discord_msg = f" (Already has Discord role **{role.name}**.)"
                         except discord.Forbidden:
                             discord_msg = " ⚠️ Could not assign Discord role (Bot lacks 'Manage Roles' permission or role is higher than Bot's role)."
                         except discord.HTTPException as de:
@@ -818,6 +836,19 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                                 discord_member = guild.get_member(int(d_id))
                                 if not discord_member:
                                     discord_member = await guild.fetch_member(int(d_id))
+                                
+                                # Clean up old exclusive roles
+                                roles_to_remove = []
+                                if rank_config.get("is_exclusive"):
+                                    for r_cfg in DISCORD_RANKS:
+                                        if r_cfg.get("is_exclusive") and r_cfg.get("role_id") and int(r_cfg["role_id"]) != int(role_id):
+                                            role_obj = guild.get_role(int(r_cfg["role_id"]))
+                                            if role_obj and role_obj in discord_member.roles:
+                                                roles_to_remove.append(role_obj)
+                                
+                                if roles_to_remove:
+                                    await discord_member.remove_roles(*roles_to_remove, reason=f"Bulk rankup to {new_rank_name} (exclusive ranks cleanup)")
+                                
                                 if role not in discord_member.roles:
                                     await discord_member.add_roles(role, reason=f"Bulk rankup to {new_rank_name} by {interaction.user}")
                                     role_assigned_count += 1
