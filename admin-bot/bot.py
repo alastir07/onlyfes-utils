@@ -229,85 +229,244 @@ async def on_ready():
     log.info('Bot is ready and online.')
 
 # --- 3. /HELP COMMAND ---
+COMMANDS_HELP = {
+    "help": {
+        "syntax": "`/help [command] [publish]`",
+        "description": "Shows a list of all available commands, or details about a specific command.",
+        "category": "User Commands",
+        "min_role": None
+    },
+    "memberinfo": {
+        "syntax": "`/memberinfo <rsn> [publish]`",
+        "description": "Gets a member's rank, join date, current EP, and past RSNs.",
+        "category": "User Commands",
+        "min_role": None
+    },
+    "rankhistory": {
+        "syntax": "`/rankhistory <rsn> [num_changes] [publish]`",
+        "description": "Gets a member's recent rank changes.",
+        "category": "User Commands",
+        "min_role": None
+    },
+    "overachievers": {
+        "syntax": "`/overachievers <query> [publish]`",
+        "description": "Look up which metrics an RSN holds, or who holds a specific metric.",
+        "category": "User Commands",
+        "min_role": None
+    },
+    "rankup": {
+        "syntax": "`/rankup <rsn> <rank_name> [publish] [bypass_discord]`",
+        "description": "Manually promotes/demotes a single member.",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "bulkrankup": {
+        "syntax": "`/bulkrankup <rank_name> <rsn_list> [publish] [bypass_discord]`",
+        "description": "Updates multiple members to the same rank.",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "rankup-check": {
+        "syntax": "`/rankup-check <rsn> <rank_name> [publish]`",
+        "description": "Checks if a member meets the requirements for a rank.",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "linkrsn": {
+        "syntax": "`/linkrsn <rsn> <@user> [publish]`",
+        "description": "Links a member's RSN to their Discord account.",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "addpoints": {
+        "syntax": "`/addpoints <rsn> <points> <reason> [publish]`",
+        "description": "Adds Event Points for a member.",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "removepoints": {
+        "syntax": "`/removepoints <rsn> <points> <reason> [publish]`",
+        "description": "Removes Event Points from a member.",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "bulkaddpoints": {
+        "syntax": "`/bulkaddpoints <points> <reason> <rsn_list> [publish]`",
+        "description": "Adds Event Points to multiple members at once.",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "addpointsbotm": {
+        "syntax": "`/addpointsbotm <first> <second> <third> <participants> [publish]`",
+        "description": "Adds points for Boss of the Month.",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "addpointssotm": {
+        "syntax": "`/addpointssotm <first> <second> <third> <participants> [publish]`",
+        "description": "Adds points for Skill of the Month.",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "addpointsbigbooty": {
+        "syntax": "`/addpointsbigbooty <first> <second> <third> <participants> [publish]`",
+        "description": "Adds points for Big Booty (Clue of the Month).",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "check-no-discord": {
+        "syntax": "`/check-no-discord [publish]`",
+        "description": "Checks for active clan members with no linked Discord ID.",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "clan-veteran-check": {
+        "syntax": "`/clan-veteran-check [publish]`",
+        "description": "Checks and updates Clan Veteran roles for members with >2y in the clan.",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
+    "syncclan": {
+        "syntax": "`/syncclan [dry_run] [force_run] [publish]`",
+        "description": "Runs the clan sync with WOM.",
+        "category": "General & Master Commands",
+        "min_role": "General"
+    },
+    "addexempt": {
+        "syntax": "`/addexempt <rsn> <reason> [days] [publish]`",
+        "description": "Grants a member immunity from inactivity tracking for a set number of days (default 90).",
+        "category": "General & Master Commands",
+        "min_role": "General"
+    },
+    "checkinactives": {
+        "syntax": "`/checkinactives [publish]`",
+        "description": "Checks for members with 0 XP gain in their check period.",
+        "category": "General & Master Commands",
+        "min_role": "General"
+    },
+    "purgemember": {
+        "syntax": "`/purgemember <rsn>`",
+        "description": "**⚠️ IRREVERSIBLE.** Deletes a member and all their associated data from the database.",
+        "category": "Commander Commands",
+        "min_role": "Commander"
+    },
+    "updateepleaderboard": {
+        "syntax": "`/updateepleaderboard [publish]`",
+        "description": "Manually update the EP leaderboard on GitHub Pages.",
+        "category": "Commander Commands",
+        "min_role": "Commander"
+    },
+    "overachievers-sync": {
+        "syntax": "`/overachievers-sync [dry_run] [publish]`",
+        "description": "Run the Overachievers check (1st of month typically).",
+        "category": "Commander Commands",
+        "min_role": "Commander"
+    }
+}
+
+def is_authorized(user_role: str | None, min_role: str | None) -> bool:
+    if not min_role:
+        return True
+    if not user_role:
+        return False
+    try:
+        req_index = STAFF_ROLES.index(min_role)
+        allowed_roles = STAFF_ROLES[:req_index+1]
+        return user_role in allowed_roles
+    except ValueError:
+        return False
+
 @client.tree.command(name="help", description="Shows a list of all available commands.")
-@app_commands.describe(publish="True to post the help message publicly.")
-async def help(interaction: discord.Interaction, publish: bool = False):
+@app_commands.describe(
+    command="The specific command to get detailed help for.",
+    publish="True to post the help message publicly."
+)
+async def help(interaction: discord.Interaction, command: str = None, publish: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /help publish={publish} used by {interaction.user}")
+    log.info(f"[{timestamp}] /help command={command} publish={publish} used by {interaction.user}")
     if not publish:
-        await log_command_use(f"[{timestamp}] /help publish={publish} used by {interaction.user}")
+        await log_command_use(f"[{timestamp}] /help command={command} publish={publish} used by {interaction.user}")
     
     # Determine user's role level
     user_role = get_user_role_level(interaction)
     
+    if command:
+        cmd_name = command.lower().strip().lstrip('/')
+        if cmd_name not in COMMANDS_HELP:
+            await interaction.response.send_message(f"❌ Command `/{cmd_name}` not found. Use `/help` to see all available commands.", ephemeral=True)
+            return
+            
+        cmd_info = COMMANDS_HELP[cmd_name]
+        
+        # Check authorization
+        if not is_authorized(user_role, cmd_info["min_role"]):
+            await interaction.response.send_message(f"⛔ You do not have permission to view help for the `/{cmd_name}` command.", ephemeral=True)
+            return
+            
+        # Create premium help embed for specific command
+        embed = discord.Embed(
+            title=f"IronAssistant Help: /{cmd_name}",
+            description=cmd_info["description"],
+            color=discord.Color.blue()
+        )
+        embed.set_thumbnail(url=client.user.avatar.url if client.user.avatar else None)
+        embed.add_field(name="📋 Category", value=cmd_info["category"], inline=True)
+        embed.add_field(name="🔑 Required Role", value=cmd_info["min_role"] or "None (All Users)", inline=True)
+        embed.add_field(name="💻 Usage Syntax", value=cmd_info["syntax"], inline=False)
+        embed.set_footer(text="Tip: Commands in brackets [like_this] are optional. Angle brackets <like_this> are required.")
+        
+        is_ephemeral = not publish
+        await interaction.response.send_message(embed=embed, ephemeral=is_ephemeral)
+        return
+
+    # Default /help (no command argument)
     embed = discord.Embed(
         title="IronAssistant Help",
-        description="Here are the commands you can use.\n`[publish:True]` can be added to any command to make the reply public.",
         color=discord.Color.greyple()
     )
     embed.set_thumbnail(url=client.user.avatar.url if client.user.avatar else None)
     
-    # All users can see these commands
-    user_commands = [
-        "`/help [publish]`\nShows this help message.",
-        "`/memberinfo <rsn> [publish]`\nGets a member's rank, join date, current EP, and past RSNs.",
-        "`/rankhistory <rsn> [num_changes] [publish]`\nGets a member's recent rank changes.",
-        "`/overachievers <query> [publish]`\nLook up which metrics an RSN holds, or who holds a specific metric."
-    ]
+    is_staff = user_role in STAFF_ROLES
     
-    embed.add_field(
-        name="📋 User Commands",
-        value="\n\n".join(user_commands),
-        inline=False
-    )
+    if is_staff:
+        embed.description = "Here are the commands you can use. Run `/help <command>` for detailed info on a specific command.\n`[publish:True]` can be added to any command to make the reply public."
+    else:
+        embed.description = "Here are the commands you can use.\n`[publish:True]` can be added to any command to make the reply public."
     
-    # Captain commands (and higher)
-    if user_role in ["Captain", "General", "Master", "Commander", "Owner"]:
-        captain_commands = [
-            "`/rankup <rsn> <rank_name> [publish]`\nManually promotes/demotes a single member.",
-            "`/bulkrankup <rank_name> <rsn_list> [publish]`\nUpdates multiple members to the same rank.",
-            "`/rankup-check <rsn> <rank_name> [publish]`\nChecks if a member meets the requirements for a rank.",
-            "`/linkrsn <rsn> <@user> [publish]`\nLinks a member's RSN to their Discord account.",
-            "`/addpoints <rsn> <points> <reason> [publish]`\nAdds Event Points for a member.",
-            "`/removepoints <rsn> <points> <reason> [publish]`\nRemoves Event Points from a member.",
-            "`/bulkaddpoints <points> <reason> <rsn_list> [publish]`\nAdds Event Points to multiple members at once.",
-            "`/addpointsbotm <first> <second> <third> <participants> [publish]`\nAdds points for Boss of the Month.",
-            "`/addpointssotm <first> <second> <third> <participants> [publish]`\nAdds points for Skill of the Month.",
-            "`/addpointsbigbooty <first> <second> <third> <participants> [publish]`\nAdds points for Big Booty (Clue of the Month).",
-            "`/check-no-discord [publish]`\nChecks for active clan members with no linked Discord ID.",
-            "`/clan-veteran-check [publish]`\nChecks and updates Clan Veteran roles for members with >2y in the clan."
-        ]
-        
+    # Categorize commands by category
+    categories_data = {
+        "User Commands": [],
+        "Captain Commands": [],
+        "General & Master Commands": [],
+        "Commander Commands": []
+    }
+    
+    for cmd_name, cmd_info in COMMANDS_HELP.items():
+        if is_authorized(user_role, cmd_info["min_role"]):
+            categories_data[cmd_info["category"]].append(cmd_info)
+            
+    for category_name, cmd_list in categories_data.items():
+        if not cmd_list:
+            continue
+            
+        formatted_cmds = []
+        for cmd in cmd_list:
+            if is_staff:
+                # Remove description, list only the syntax/signature
+                formatted_cmds.append(cmd["syntax"])
+            else:
+                # Include description
+                formatted_cmds.append(f"{cmd['syntax']}\n{cmd['description']}")
+                
+        emoji_prefix = "📋" if category_name == "User Commands" else \
+                       "👮" if category_name == "Captain Commands" else \
+                       "⭐" if category_name == "General & Master Commands" else \
+                       "🔥"
+                       
         embed.add_field(
-            name="👮 Captain Commands",
-            value="\n\n".join(captain_commands),
-            inline=False
-        )
-    
-    # General and Master commands (and higher)
-    if user_role in ["General", "Master", "Commander", "Owner"]:
-        general_commands = [
-            "`/syncclan [dry_run] [force_run] [publish]`\nRuns the clan sync with WOM.",
-            "`/addexempt <rsn> <reason> [days] [publish]`\nGrants a member immunity from inactivity tracking for a set number of days (default 90).",
-            "`/checkinactives [publish]`\nChecks for members with 0 XP gain in their check period."
-        ]
-        
-        embed.add_field(
-            name="⭐ General & Master Commands",
-            value="\n\n".join(general_commands),
-            inline=False
-        )
-    
-    # Commander commands (and higher)
-    if user_role in ["Commander", "Owner"]:
-        commander_commands = [
-            "`/purgemember <rsn>`\n**⚠️ IRREVERSIBLE.** Deletes a member and all their associated data from the database."
-        ]
-        
-        embed.add_field(
-            name="🔥 Commander Commands",
-            value="\n\n".join(commander_commands),
+            name=f"{emoji_prefix} {category_name}",
+            value="\n".join(formatted_cmds) if is_staff else "\n\n".join(formatted_cmds),
             inline=False
         )
     
@@ -319,6 +478,16 @@ async def help(interaction: discord.Interaction, publish: bool = False):
     
     is_ephemeral = not publish
     await interaction.response.send_message(embed=embed, ephemeral=is_ephemeral)
+
+@help.autocomplete("command")
+async def help_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    user_role = get_user_role_level(interaction)
+    choices = []
+    for cmd_name, cmd_info in COMMANDS_HELP.items():
+        if is_authorized(user_role, cmd_info["min_role"]):
+            if current.lower() in cmd_name.lower():
+                choices.append(app_commands.Choice(name=f"/{cmd_name}", value=cmd_name))
+    return choices[:25]
 
 # --- 4. /MEMBERINFO COMMAND (UPDATED) ---
 @client.tree.command(name="memberinfo", description="Get info for a clan member (shows primary RSN).")
