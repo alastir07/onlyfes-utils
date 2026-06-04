@@ -5,6 +5,9 @@ from discord.ext import tasks
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import asyncio
+import aiohttp
+import re
+import json
 from io import StringIO
 import traceback
 from datetime import datetime, time
@@ -52,6 +55,12 @@ SYNC_REPORT_CHANNEL_ID = os.getenv("SYNC_REPORT_CHANNEL_ID")
 INACTIVITY_REPORT_CHANNEL_ID = os.getenv("INACTIVITY_REPORT_CHANNEL_ID")
 INACTIVITY_REPORT_THREAD_ID = os.getenv("INACTIVITY_REPORT_THREAD_ID")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+
+SUMMARIZE_PROMPT = "Briefly summarize the conversation contained in these discord messages. \
+All conversation participants are staff for an Old School Runescape Clan and are friendly with each other. \
+Keep your summary to 3-5 sentences. Do not include any additional information not present in the conversation."
+GEMINI_MODEL = "gemini-1.5-flash"
+SUMMARIZE_MIN_MESSAGES_THRESHOLD = 25
 
 if not all([DISCORD_TOKEN, SUPABASE_URL, SUPABASE_KEY, IA_LOGGING_OUTPUT_CHANNEL_ID, SYNC_REPORT_CHANNEL_ID, INACTIVITY_REPORT_CHANNEL_ID, INACTIVITY_REPORT_THREAD_ID, GITHUB_TOKEN]):
     log.error("Missing one or more .env variables!")
@@ -101,6 +110,93 @@ async def log_command_use(message: str):
                 log.warning(f"Could not find admin logging channel ID {IA_LOGGING_OUTPUT_CHANNEL_ID}")
     except Exception as e:
         log.error(f"Failed to send log to admin logging channel: {e}")
+
+def parse_duration(time_str: str) -> datetime | None:
+    """
+    Parses relative duration strings (e.g. '2h', '1d 4h', '30m')
+    and returns a UTC datetime threshold (now - duration).
+    """
+    time_str = time_str.strip().lower()
+    pattern = re.compile(r'(\d+)\s*(s|sec|second|m|min|minute|h|hr|hour|d|day|w|wk|week)s?')
+    matches = pattern.findall(time_str)
+    
+    if not matches:
+        return None
+        
+    from datetime import timedelta
+    delta = timedelta()
+    for amount_str, unit in matches:
+        amount = int(amount_str)
+        if unit in ('s', 'sec', 'second'):
+            delta += timedelta(seconds=amount)
+        elif unit in ('m', 'min', 'minute'):
+            delta += timedelta(minutes=amount)
+        elif unit in ('h', 'hr', 'hour'):
+            delta += timedelta(hours=amount)
+        elif unit in ('d', 'day'):
+            delta += timedelta(days=amount)
+        elif unit in ('w', 'wk', 'week'):
+            delta += timedelta(weeks=amount)
+            
+    return datetime.now(ZoneInfo('UTC')) - delta
+
+async def check_gemini_quota(api_key: str) -> bool:
+    """
+    Verifies Gemini API quota / key validity using a lightweight token count call.
+    Returns True if request succeeds, False otherwise.
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:countTokens?key={api_key}"
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": "ping"
+                    }
+                ]
+            }
+        ]
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, headers={"Content-Type": "application/json"}) as resp:
+                if resp.status == 200:
+                    return True
+                else:
+                    error_text = await resp.text()
+                    log.error(f"Gemini API quota check failed with status {resp.status}: {error_text}")
+                    return False
+    except Exception as e:
+        log.error(f"Gemini API quota check error: {e}")
+        return False
+
+async def discord_api_request(session: aiohttp.ClientSession, method: str, url: str) -> any:
+    """
+    Helper to execute Discord REST API requests with built-in retry logic for rate limits.
+    """
+    headers = {
+        "Authorization": f"Bot {DISCORD_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    for attempt in range(3):
+        async with session.request(method, url, headers=headers) as resp:
+            if resp.status == 429:
+                retry_after = 1.0
+                try:
+                    retry_after_hdr = resp.headers.get("Retry-After")
+                    if retry_after_hdr:
+                        retry_after = float(retry_after_hdr)
+                except Exception:
+                    pass
+                log.warning(f"Discord API Rate Limited (429). Retrying in {retry_after}s...")
+                await asyncio.sleep(retry_after)
+                continue
+            elif resp.status == 200:
+                return await resp.json()
+            else:
+                log.error(f"Discord API request to {url} failed with status {resp.status}")
+                return None
+    return None
 
 # --- Discord Ranks Configuration ---
 DISCORD_RANKS = [
@@ -359,6 +455,18 @@ COMMANDS_HELP = {
     "overachievers-sync": {
         "syntax": "`/overachievers-sync [dry_run] [publish]`",
         "description": "Run the Overachievers check (1st of month typically).",
+        "category": "Commander Commands",
+        "min_role": "Commander"
+    },
+    "summarise": {
+        "syntax": "`/summarise [time] [message_id]`",
+        "description": "Summarizes the staff channel conversation from a time/message ID to current.",
+        "category": "Commander Commands",
+        "min_role": "Commander"
+    },
+    "summarize": {
+        "syntax": "`/summarize [time] [message_id]`",
+        "description": "Alias for /summarise. Summarizes the staff channel conversation.",
         "category": "Commander Commands",
         "min_role": "Commander"
     }
@@ -1941,6 +2049,208 @@ async def update_ep_leaderboard_command(interaction: discord.Interaction, publis
     except Exception as e:
         log.error(f"Error in /updateepleaderboard command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+# --- 17.5 /SUMMARISE COMMAND ---
+@client.tree.command(name="summarise", description="Summarize the staff channel conversation from a relative time or message ID.")
+@app_commands.describe(
+    time="Relative time window to summarize (e.g., 2h, 1d 4h, 30m).",
+    message_id="Discord message ID representing the start of the summary window.",
+    testing="True to dump the conversation array as a JSON file and skip Gemini."
+)
+@check_staff_role("Commander")
+async def summarise(interaction: discord.Interaction, time: str = None, message_id: str = None, testing: bool = False):
+    # Log usage
+    timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp_str}] /summarise time={time} message_id={message_id} testing={testing} used by {interaction.user}")
+    
+    # 1. Quota check first (if not testing)
+    gemini_key = None
+    if not testing:
+        gemini_key = os.getenv("IA_SUMMARIZE_GEMINI_API_KEY")
+        if not gemini_key:
+            log.error("Gemini API key (IA_SUMMARIZE_GEMINI_API_KEY) is missing.")
+            await interaction.response.send_message("Gemini Quota Reached, Guess you have to read it now", ephemeral=True)
+            return
+
+        quota_ok = await check_gemini_quota(gemini_key)
+        if not quota_ok:
+            await interaction.response.send_message("Gemini Quota Reached, Guess you have to read it now", ephemeral=True)
+            return
+
+    # 2. Check channel second
+    channel = interaction.channel
+    channel_parent_id = getattr(channel, 'parent_id', None)
+    if channel_parent_id is None or int(channel_parent_id) != 1059296867663491233:
+        await interaction.response.send_message("I can only summarize staff channels, you're going to have to read that channel yourself!", ephemeral=True)
+        return
+
+    # 3. Check arguments
+    if not time and not message_id:
+        await interaction.response.send_message("You must provide at least one of time or message_id to start your summary window.", ephemeral=True)
+        return
+
+    # Defer interaction
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        # Determine start snowflake
+        start_snowflake = None
+        if message_id:
+            try:
+                start_snowflake = int(message_id)
+            except ValueError:
+                await interaction.followup.send("❌ Invalid `message_id` format. Please provide a valid integer message ID.", ephemeral=True)
+                return
+        else:
+            # Parse time
+            dt_threshold = parse_duration(time)
+            if not dt_threshold:
+                await interaction.followup.send("❌ Invalid `time` format. Please use formats like '2h', '1d 4h', '30m'.", ephemeral=True)
+                return
+            start_snowflake = discord.utils.time_snowflake(dt_threshold)
+
+        # Get all messages using Direct REST endpoint with pagination
+        all_messages = []
+        after_id = start_snowflake
+        
+        async with aiohttp.ClientSession() as session:
+            # Pagination loop
+            while True:
+                url = f"https://discord.com/api/v10/channels/{channel.id}/messages?limit=100&after={after_id}"
+                data = await discord_api_request(session, "GET", url)
+                if not data:
+                    break
+                
+                all_messages.extend(data)
+                
+                # Find maximum message ID in this batch to progress
+                max_id = max(int(m['id']) for m in data)
+                after_id = max_id
+                
+                if len(data) < 100:
+                    break
+            
+            # Sort messages chronologically by ID/timestamp
+            all_messages.sort(key=lambda m: int(m['id']))
+            
+            if not all_messages:
+                await interaction.followup.send("No messages found in the specified window.", ephemeral=True)
+                return
+
+            if len(all_messages) < SUMMARIZE_MIN_MESSAGES_THRESHOLD:
+                caller_id = interaction.user.id
+                caller_name = interaction.user.display_name
+                msg_count = len(all_messages)
+                if caller_id == 288564337218682892:
+                    response_text = f"Really? You want to use an LLM to summarize {msg_count} messages? I expected better.. Oh, wait, {caller_name}? I was warned about you. Read it yourself."
+                else:
+                    response_text = f"Really? You want to use an LLM to summarize {msg_count} messages? I expected this from Bristle, not from you, {caller_name}"
+                await interaction.followup.send(response_text, ephemeral=True)
+                return
+
+            # Grab user display names via /guilds/{guild_id}/members/{user_id} with cache
+            guild_id = channel.guild.id
+            display_name_cache = {}
+            conversation_array = []
+            
+            for msg in all_messages:
+                # Strip metadata: keep content, timestamp, author.id
+                content = msg.get('content', '')
+                timestamp_val = msg.get('timestamp')
+                author_id = msg.get('author', {}).get('id')
+                
+                if not author_id:
+                    continue
+                    
+                if author_id not in display_name_cache:
+                    member_url = f"https://discord.com/api/v10/guilds/{guild_id}/members/{author_id}"
+                    member_data = await discord_api_request(session, "GET", member_url)
+                    if member_data:
+                        nick = member_data.get('nick')
+                        user = member_data.get('user', {})
+                        global_name = user.get('global_name')
+                        username = user.get('username')
+                        display_name = nick or global_name or username or str(author_id)
+                    else:
+                        display_name = msg.get('author', {}).get('username') or str(author_id)
+                    display_name_cache[author_id] = display_name
+                
+                display_name = display_name_cache[author_id]
+                
+                # Assemble conversation turn
+                conversation_array.append({
+                    "message": content,
+                    "timestamp": timestamp_val,
+                    "display_name": display_name
+                })
+            
+            if testing:
+                convo_json_str = json.dumps(conversation_array, indent=2)
+                file_data = StringIO(convo_json_str)
+                discord_file = discord.File(file_data, filename="conversation_dump.json")
+                await interaction.followup.send(
+                    content=f"🧪 **Testing Mode:** Fetched {len(all_messages)} messages successfully. Below is the conversation array dump:",
+                    file=discord_file,
+                    ephemeral=True
+                )
+                return
+            
+            # Pass conversation array to Gemini API along with prompt
+            conversation_json = json.dumps(conversation_array, indent=2)
+            prompt_text = f"{SUMMARIZE_PROMPT}\n\nConversation data:\n{conversation_json}"
+            
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={gemini_key}"
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {
+                                "text": prompt_text
+                            }
+                        ]
+                    }
+                ]
+            }
+            
+            async with session.post(gemini_url, json=payload, headers={"Content-Type": "application/json"}) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    log.error(f"Gemini API generateContent call failed with status {resp.status}: {error_text}")
+                    await interaction.followup.send("Gemini Quota Reached, Guess you have to read it now", ephemeral=True)
+                    return
+                
+                res_data = await resp.json()
+                try:
+                    summary_text = res_data['candidates'][0]['content']['parts'][0]['text']
+                except (KeyError, IndexError, TypeError) as e:
+                    log.error(f"Error parsing Gemini response: {e}\nResponse: {res_data}")
+                    await interaction.followup.send("❌ Error parsing the summary from Gemini API.", ephemeral=True)
+                    return
+            
+            # Build and send Embed
+            embed = discord.Embed(
+                title="📝 Staff Conversation Summary",
+                description=summary_text,
+                color=discord.Color.blurple(),
+                timestamp=datetime.now()
+            )
+            embed.set_footer(text=f"Summarized {len(all_messages)} messages. Credit to Boolaa for the idea 🧡")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+    except Exception as e:
+        log.error(f"Error in /summarise command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
+
+
+@client.tree.command(name="summarize", description="Alias for /summarise. Summarize the staff channel conversation.")
+@app_commands.describe(
+    time="Relative time window to summarize (e.g., 2h, 1d 4h, 30m).",
+    message_id="Discord message ID representing the start of the summary window.",
+    testing="True to dump the conversation array as a JSON file and skip Gemini."
+)
+@check_staff_role("Commander")
+async def summarize(interaction: discord.Interaction, time: str = None, message_id: str = None, testing: bool = False):
+    await summarise(interaction, time=time, message_id=message_id, testing=testing)
 
 # --- 18. SCHEDULED TASKS ---
 @tasks.loop(time=[time(hour=0, minute=15), time(hour=12, minute=15)])
