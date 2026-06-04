@@ -145,7 +145,7 @@ async def check_gemini_quota(api_key: str) -> bool:
     Verifies Gemini API quota / key validity using a lightweight token count call.
     Returns True if request succeeds, False otherwise.
     """
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:countTokens?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_MODEL}:countTokens?key={api_key}"
     payload = {
         "contents": [
             {
@@ -164,8 +164,16 @@ async def check_gemini_quota(api_key: str) -> bool:
                     return True
                 else:
                     error_text = await resp.text()
-                    log.error(f"Gemini API quota check failed with status {resp.status}: {error_text}")
-                    return False
+                    log.info(f"Gemini API quota check on v1 failed (status {resp.status}), attempting v1beta fallback: {error_text}")
+                    
+                    fallback_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:countTokens?key={api_key}"
+                    async with session.post(fallback_url, json=payload, headers={"Content-Type": "application/json"}) as resp_fb:
+                        if resp_fb.status == 200:
+                            return True
+                        else:
+                            error_text_fb = await resp_fb.text()
+                            log.error(f"Gemini API quota check failed on fallback with status {resp_fb.status}: {error_text_fb}")
+                            return False
     except Exception as e:
         log.error(f"Gemini API quota check error: {e}")
         return False
@@ -2091,8 +2099,8 @@ async def update_ep_leaderboard_command(interaction: discord.Interaction, publis
 async def summarise(interaction: discord.Interaction, time: str = None, message_id: str = None, testing: bool = False):
     # Log usage
     timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp_str}] /summarise time={time} message_id={message_id} testing={testing} used by {interaction.user}")
-    await log_command_use(f"[{timestamp_str}] /summarise time={time} message_id={message_id} testing={testing} used by {interaction.user}")
+    log.info(f"[{timestamp_str}] /summarise time={time} message_id={message_id} testing={testing} used by {interaction.user} in #{interaction.channel}")
+    await log_command_use(f"[{timestamp_str}] /summarise time={time} message_id={message_id} testing={testing} used by {interaction.user} in #{interaction.channel}")
     
     # 1. Quota check first (if not testing)
     gemini_key = None
@@ -2230,7 +2238,7 @@ async def summarise(interaction: discord.Interaction, time: str = None, message_
             conversation_json = json.dumps(conversation_array, indent=2)
             prompt_text = f"{SUMMARIZE_PROMPT}\n\nConversation data:\n{conversation_json}"
             
-            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={gemini_key}"
+            gemini_url = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_MODEL}:generateContent?key={gemini_key}"
             payload = {
                 "contents": [
                     {
@@ -2246,11 +2254,19 @@ async def summarise(interaction: discord.Interaction, time: str = None, message_
             async with session.post(gemini_url, json=payload, headers={"Content-Type": "application/json"}) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
-                    log.error(f"Gemini API generateContent call failed with status {resp.status}: {error_text}")
-                    await interaction.followup.send("Gemini Quota Reached, Guess you have to read it now", ephemeral=True)
-                    return
+                    log.info(f"Gemini API generateContent on v1 failed (status {resp.status}), attempting v1beta fallback: {error_text}")
+                    
+                    fallback_gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={gemini_key}"
+                    async with session.post(fallback_gemini_url, json=payload, headers={"Content-Type": "application/json"}) as resp_fb:
+                        if resp_fb.status != 200:
+                            error_text_fb = await resp_fb.text()
+                            log.error(f"Gemini API generateContent failed on fallback with status {resp_fb.status}: {error_text_fb}")
+                            await interaction.followup.send("Gemini Quota Reached, Guess you have to read it now", ephemeral=True)
+                            return
+                        res_data = await resp_fb.json()
+                else:
+                    res_data = await resp.json()
                 
-                res_data = await resp.json()
                 try:
                     summary_text = res_data['candidates'][0]['content']['parts'][0]['text']
                 except (KeyError, IndexError, TypeError) as e:
