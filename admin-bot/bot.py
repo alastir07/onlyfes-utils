@@ -1923,6 +1923,151 @@ async def check_no_discord(interaction: discord.Interaction, publish: bool = Fal
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
+# --- 16.6 /CHECK-INACTIVITY-EXEMPTIONS COMMAND ---
+@client.tree.command(name="check-inactivity-exemptions", description="Check for current inactivity exemptions.")
+@app_commands.describe(
+    publish="False (default). True to post the report publicly."
+)
+@check_staff_role("Captain")
+async def check_inactivity_exemptions(interaction: discord.Interaction, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /check-inactivity-exemptions publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /check-inactivity-exemptions publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        now_str = datetime.now().isoformat()
+        exemptions_res = supabase.table('inactivity_exemptions') \
+            .select('member_id, expiration_date, granted_by_member_id, granted_date, reason') \
+            .gt('expiration_date', now_str) \
+            .execute()
+            
+        exemptions_data = exemptions_res.data or []
+        
+        if not exemptions_data:
+            await interaction.followup.send("✅ No active inactivity exemptions found.", ephemeral=is_ephemeral)
+            return
+
+        # Fetch all primary RSNs to build a mapping from member_id -> RSN
+        rsn_res = supabase.table('member_rsns') \
+            .select('member_id, rsn') \
+            .eq('is_primary', True) \
+            .execute()
+        
+        rsn_map = {item['member_id']: item['rsn'] for item in rsn_res.data or []}
+        
+        # Sort exemptions by expiration_date ascending (closest to expire first)
+        exemptions_data = sorted(exemptions_data, key=lambda x: x.get('expiration_date') or '')
+
+        def format_db_date(date_str: str) -> str:
+            if not date_str:
+                return "Unknown"
+            try:
+                parsed = discord.utils.parse_time(date_str)
+                if parsed:
+                    return parsed.strftime('%Y-%m-%d')
+            except Exception:
+                pass
+            return date_str
+
+        # Format rows
+        lines = [
+            "rsn | expiration date | who granted it (rsn) | granted date | reason",
+            "------------------------------------------------------------------"
+        ]
+        
+        for ex in exemptions_data:
+            member_rsn = rsn_map.get(ex['member_id'], "Unknown")
+            granter_id = ex.get('granted_by_member_id')
+            granter_rsn = rsn_map.get(granter_id, "Unknown") if granter_id else "Unknown"
+            
+            exp_date = format_db_date(ex.get('expiration_date'))
+            grant_date = format_db_date(ex.get('granted_date'))
+            reason = ex.get('reason') or "None"
+            
+            lines.append(f"{member_rsn} | {exp_date} | {granter_rsn} | {grant_date} | {reason}")
+            
+        report_string = "\n".join(lines)
+        
+        if len(report_string) > 1900:
+            await interaction.followup.send(
+                "Inactivity exemptions report is too long, so it's attached as a file.",
+                file=discord.File(StringIO(report_string), "inactivity_exemptions.txt"),
+                ephemeral=is_ephemeral
+            )
+        else:
+            await interaction.followup.send(
+                f"```\n{report_string}\n```",
+                ephemeral=is_ephemeral
+            )
+            
+    except Exception as e:
+        log.error(f"Error in /check-inactivity-exemptions command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
+# --- 16.65 /EXPIRE-EXEMPTION COMMAND ---
+@client.tree.command(name="expire-exemption", description="Expires an active inactivity exemption for a member.")
+@app_commands.describe(
+    rsn="The member's RSN.",
+    publish="False (default). True to post the confirmation publicly."
+)
+@check_staff_role("Captain")
+async def expire_exemption(interaction: discord.Interaction, rsn: str, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /expire-exemption rsn='{rsn}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /expire-exemption rsn='{rsn}' publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        # 1. Find the member by RSN
+        member_res = supabase.table('member_rsns') \
+            .select('member_id, rsn') \
+            .ilike('rsn', rsn) \
+            .limit(1) \
+            .execute()
+            
+        if not member_res.data:
+            await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
+            return
+            
+        member_id = member_res.data[0]['member_id']
+        member_rsn = member_res.data[0]['rsn']
+        
+        # 2. Check if they have an active exemption
+        now_str = datetime.now().isoformat()
+        existing_exemption = supabase.table('inactivity_exemptions') \
+            .select('id, expiration_date') \
+            .eq('member_id', member_id) \
+            .gte('expiration_date', now_str) \
+            .execute()
+            
+        if not existing_exemption.data:
+            await interaction.followup.send(f"ℹ️ `{member_rsn}` does not have an active inactivity exemption.", ephemeral=is_ephemeral)
+            return
+            
+        # 3. Update the active exemption(s) expiration date to now
+        supabase.table('inactivity_exemptions') \
+            .update({'expiration_date': now_str}) \
+            .eq('member_id', member_id) \
+            .gte('expiration_date', now_str) \
+            .execute()
+            
+        await interaction.followup.send(f"✅ Successfully expired inactivity exemption for `{member_rsn}`.", ephemeral=is_ephemeral)
+        
+    except Exception as e:
+        log.error(f"Error in /expire-exemption command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
 # --- 16.7 /CLAN-VETERAN-CHECK COMMAND ---
 async def run_clan_veteran_check(guild: discord.Guild) -> discord.Embed:
     CLAN_VETERAN_ROLE_ID = 1191649334438133820
@@ -2122,8 +2267,8 @@ async def tldr(interaction: discord.Interaction, time: str = None, message_id: s
         await interaction.response.send_message("You must provide at least one of time or message_id to start your summary window.", ephemeral=True)
         return
 
-    # Defer interaction: ephemeral when testing, public when summarizing
-    await interaction.response.defer(ephemeral=testing)
+    # Defer interaction: always non-ephemeral to allow conditional public followups
+    await interaction.response.defer(ephemeral=False)
 
     try:
         # Determine start snowflake
