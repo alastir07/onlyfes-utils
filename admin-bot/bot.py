@@ -59,7 +59,7 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 SUMMARIZE_PROMPT = "Briefly summarize the conversation contained in these discord messages. \
 All conversation participants are staff for an Old School Runescape Clan and are friendly with each other. \
 Keep your summary to 3-5 sentences. Do not include any additional information not present in the conversation."
-GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_MODEL = "gemini-3.5-flash"
 SUMMARIZE_MIN_MESSAGES_THRESHOLD = 25
 
 if not all([DISCORD_TOKEN, SUPABASE_URL, SUPABASE_KEY, IA_LOGGING_OUTPUT_CHANNEL_ID, SYNC_REPORT_CHANNEL_ID, INACTIVITY_REPORT_CHANNEL_ID, INACTIVITY_REPORT_THREAD_ID, GITHUB_TOKEN]):
