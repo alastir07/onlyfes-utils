@@ -198,6 +198,36 @@ async def discord_api_request(session: aiohttp.ClientSession, method: str, url: 
                 return None
     return None
 
+def get_matriarch_id(channel) -> int:
+    """
+    Finds the highest-level parent ID (like category ID) for a channel or thread.
+    Chains parents / categories until we reach the top-level parent ID.
+    """
+    curr = channel
+    while curr:
+        parent = getattr(curr, 'parent', None)
+        category = getattr(curr, 'category', None)
+        
+        if parent:
+            curr = parent
+        elif category:
+            curr = category
+        else:
+            parent_id = getattr(curr, 'parent_id', None)
+            category_id = getattr(curr, 'category_id', None)
+            next_id = parent_id or category_id
+            
+            if next_id:
+                guild = getattr(curr, 'guild', None)
+                resolved = guild.get_channel(int(next_id)) if guild else None
+                if resolved:
+                    curr = resolved
+                else:
+                    return int(next_id)
+            else:
+                break
+    return curr.id
+
 # --- Discord Ranks Configuration ---
 DISCORD_RANKS = [
     {"role_id": 1509529699255320657, "role_name": "Sapphire", "display_name": "Sapphire", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": True},
@@ -2062,6 +2092,7 @@ async def summarise(interaction: discord.Interaction, time: str = None, message_
     # Log usage
     timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp_str}] /summarise time={time} message_id={message_id} testing={testing} used by {interaction.user}")
+    await log_command_use(f"[{timestamp_str}] /summarise time={time} message_id={message_id} testing={testing} used by {interaction.user}")
     
     # 1. Quota check first (if not testing)
     gemini_key = None
@@ -2079,8 +2110,8 @@ async def summarise(interaction: discord.Interaction, time: str = None, message_
 
     # 2. Check channel second
     channel = interaction.channel
-    channel_parent_id = getattr(channel, 'parent_id', None)
-    if channel_parent_id is None or int(channel_parent_id) != 1059296867663491233:
+    matriarch_id = get_matriarch_id(channel)
+    if matriarch_id != 1059296867663491233:
         await interaction.response.send_message("I can only summarize staff channels, you're going to have to read that channel yourself!", ephemeral=True)
         return
 
