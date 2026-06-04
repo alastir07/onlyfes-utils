@@ -496,15 +496,9 @@ COMMANDS_HELP = {
         "category": "Commander Commands",
         "min_role": "Commander"
     },
-    "summarise": {
-        "syntax": "`/summarise [time] [message_id]`",
+    "tldr": {
+        "syntax": "`/tldr [time] [message_id] [testing]`",
         "description": "Summarizes the staff channel conversation from a time/message ID to current.",
-        "category": "Commander Commands",
-        "min_role": "Commander"
-    },
-    "summarize": {
-        "syntax": "`/summarize [time] [message_id]`",
-        "description": "Alias for /summarise. Summarizes the staff channel conversation.",
         "category": "Commander Commands",
         "min_role": "Commander"
     }
@@ -2088,19 +2082,19 @@ async def update_ep_leaderboard_command(interaction: discord.Interaction, publis
         log.error(f"Error in /updateepleaderboard command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
-# --- 17.5 /SUMMARISE COMMAND ---
-@client.tree.command(name="summarise", description="Summarize the staff channel conversation from a relative time or message ID.")
+# --- 17.5 /TLDR COMMAND ---
+@client.tree.command(name="tldr", description="Summarize the staff channel conversation from a relative time or message ID.")
 @app_commands.describe(
     time="Relative time window to summarize (e.g., 2h, 1d 4h, 30m).",
     message_id="Discord message ID representing the start of the summary window.",
     testing="True to dump the conversation array as a JSON file and skip Gemini."
 )
 @check_staff_role("Commander")
-async def summarise(interaction: discord.Interaction, time: str = None, message_id: str = None, testing: bool = False):
+async def tldr(interaction: discord.Interaction, time: str = None, message_id: str = None, testing: bool = False):
     # Log usage
     timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp_str}] /summarise time={time} message_id={message_id} testing={testing} used by {interaction.user} in #{interaction.channel}")
-    await log_command_use(f"[{timestamp_str}] /summarise time={time} message_id={message_id} testing={testing} used by {interaction.user} in #{interaction.channel}")
+    log.info(f"[{timestamp_str}] /tldr time={time} message_id={message_id} testing={testing} used by {interaction.user} in #{interaction.channel}")
+    await log_command_use(f"[{timestamp_str}] /tldr time={time} message_id={message_id} testing={testing} used by {interaction.user} in #{interaction.channel}")
     
     # 1. Quota check first (if not testing)
     gemini_key = None
@@ -2128,8 +2122,8 @@ async def summarise(interaction: discord.Interaction, time: str = None, message_
         await interaction.response.send_message("You must provide at least one of time or message_id to start your summary window.", ephemeral=True)
         return
 
-    # Defer interaction
-    await interaction.response.defer(ephemeral=True)
+    # Defer interaction: ephemeral when testing, public when summarizing
+    await interaction.response.defer(ephemeral=testing)
 
     try:
         # Determine start snowflake
@@ -2230,7 +2224,7 @@ async def summarise(interaction: discord.Interaction, time: str = None, message_
                 await interaction.followup.send(
                     content=f"🧪 **Testing Mode:** Fetched {len(all_messages)} messages successfully. Below is the conversation array dump:",
                     file=discord_file,
-                    ephemeral=True
+                    ephemeral=testing
                 )
                 return
             
@@ -2282,22 +2276,11 @@ async def summarise(interaction: discord.Interaction, time: str = None, message_
                 timestamp=datetime.now()
             )
             embed.set_footer(text=f"Summarized {len(all_messages)} messages. Credit to Boolaa for the idea 🧡")
-            await interaction.followup.send(embed=embed, ephemeral=True)
-
+            await interaction.followup.send(embed=embed, ephemeral=testing)
+ 
     except Exception as e:
-        log.error(f"Error in /summarise command: {e}\n{traceback.format_exc()}")
+        log.error(f"Error in /tldr command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
-
-
-@client.tree.command(name="summarize", description="Alias for /summarise. Summarize the staff channel conversation.")
-@app_commands.describe(
-    time="Relative time window to summarize (e.g., 2h, 1d 4h, 30m).",
-    message_id="Discord message ID representing the start of the summary window.",
-    testing="True to dump the conversation array as a JSON file and skip Gemini."
-)
-@check_staff_role("Commander")
-async def summarize(interaction: discord.Interaction, time: str = None, message_id: str = None, testing: bool = False):
-    await summarise(interaction, time=time, message_id=message_id, testing=testing)
 
 # --- 18. SCHEDULED TASKS ---
 @tasks.loop(time=[time(hour=0, minute=15), time(hour=12, minute=15)])
