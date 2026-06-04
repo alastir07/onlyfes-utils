@@ -2234,7 +2234,7 @@ async def update_ep_leaderboard_command(interaction: discord.Interaction, publis
     message_id="Discord message ID representing the start of the summary window.",
     testing="True to dump the conversation array as a JSON file and skip Gemini."
 )
-@check_staff_role("Commander")
+@check_staff_role("Captain")
 async def tldr(interaction: discord.Interaction, time: str = None, message_id: str = None, testing: bool = False):
     # Log usage
     timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
