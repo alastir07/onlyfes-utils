@@ -61,6 +61,7 @@ All conversation participants are staff for an Old School Runescape Clan and are
 Keep your summary to 3-5 sentences. Do not include any additional information not present in the conversation."
 GEMINI_MODEL = "gemini-3.5-flash"
 SUMMARIZE_MIN_MESSAGES_THRESHOLD = 25
+SUMMARIZE_MAX_MESSAGES_THRESHOLD = 1000
 
 if not all([DISCORD_TOKEN, SUPABASE_URL, SUPABASE_KEY, IA_LOGGING_OUTPUT_CHANNEL_ID, SYNC_REPORT_CHANNEL_ID, INACTIVITY_REPORT_CHANNEL_ID, INACTIVITY_REPORT_THREAD_ID, GITHUB_TOKEN]):
     log.error("Missing one or more .env variables!")
@@ -2324,6 +2325,10 @@ async def tldr(interaction: discord.Interaction, time: str = None, message_id: s
                 else:
                     response_text = f"Really? You want to use an LLM to summarize {msg_count} messages? I expected this from Bristle, not from you, {caller_name}"
                 await interaction.followup.send(response_text, ephemeral=True)
+                return
+
+            if len(all_messages) > SUMMARIZE_MAX_MESSAGES_THRESHOLD:
+                await interaction.followup.send(f"That's too many messages to summarize. Please try again with a smaller time window.", ephemeral=True)
                 return
 
             # Grab user display names via /guilds/{guild_id}/members/{user_id} with cache
