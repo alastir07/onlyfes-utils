@@ -5,6 +5,9 @@ from discord.ext import tasks
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import asyncio
+import aiohttp
+import re
+import json
 from io import StringIO
 import traceback
 from datetime import datetime, time
@@ -52,6 +55,13 @@ SYNC_REPORT_CHANNEL_ID = os.getenv("SYNC_REPORT_CHANNEL_ID")
 INACTIVITY_REPORT_CHANNEL_ID = os.getenv("INACTIVITY_REPORT_CHANNEL_ID")
 INACTIVITY_REPORT_THREAD_ID = os.getenv("INACTIVITY_REPORT_THREAD_ID")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+
+SUMMARIZE_PROMPT = "Briefly summarize the conversation contained in these discord messages. \
+All conversation participants are staff for an Old School Runescape Clan and are friendly with each other. \
+Keep your summary to 3-5 sentences. Do not include any additional information not present in the conversation."
+GEMINI_MODEL = "gemini-3.5-flash"
+SUMMARIZE_MIN_MESSAGES_THRESHOLD = 25
+SUMMARIZE_MAX_MESSAGES_THRESHOLD = 1000
 
 if not all([DISCORD_TOKEN, SUPABASE_URL, SUPABASE_KEY, IA_LOGGING_OUTPUT_CHANNEL_ID, SYNC_REPORT_CHANNEL_ID, INACTIVITY_REPORT_CHANNEL_ID, INACTIVITY_REPORT_THREAD_ID, GITHUB_TOKEN]):
     log.error("Missing one or more .env variables!")
@@ -101,6 +111,131 @@ async def log_command_use(message: str):
                 log.warning(f"Could not find admin logging channel ID {IA_LOGGING_OUTPUT_CHANNEL_ID}")
     except Exception as e:
         log.error(f"Failed to send log to admin logging channel: {e}")
+
+def parse_duration(time_str: str) -> datetime | None:
+    """
+    Parses relative duration strings (e.g. '2h', '1d 4h', '30m')
+    and returns a UTC datetime threshold (now - duration).
+    """
+    time_str = time_str.strip().lower()
+    pattern = re.compile(r'(\d+)\s*(s|sec|second|m|min|minute|h|hr|hour|d|day|w|wk|week)s?')
+    matches = pattern.findall(time_str)
+    
+    if not matches:
+        return None
+        
+    from datetime import timedelta
+    delta = timedelta()
+    for amount_str, unit in matches:
+        amount = int(amount_str)
+        if unit in ('s', 'sec', 'second'):
+            delta += timedelta(seconds=amount)
+        elif unit in ('m', 'min', 'minute'):
+            delta += timedelta(minutes=amount)
+        elif unit in ('h', 'hr', 'hour'):
+            delta += timedelta(hours=amount)
+        elif unit in ('d', 'day'):
+            delta += timedelta(days=amount)
+        elif unit in ('w', 'wk', 'week'):
+            delta += timedelta(weeks=amount)
+            
+    return datetime.now(ZoneInfo('UTC')) - delta
+
+async def check_gemini_quota(api_key: str) -> bool:
+    """
+    Verifies Gemini API quota / key validity using a lightweight token count call.
+    Returns True if request succeeds, False otherwise.
+    """
+    url = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_MODEL}:countTokens?key={api_key}"
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": "ping"
+                    }
+                ]
+            }
+        ]
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, headers={"Content-Type": "application/json"}) as resp:
+                if resp.status == 200:
+                    return True
+                else:
+                    error_text = await resp.text()
+                    log.info(f"Gemini API quota check on v1 failed (status {resp.status}), attempting v1beta fallback: {error_text}")
+                    
+                    fallback_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:countTokens?key={api_key}"
+                    async with session.post(fallback_url, json=payload, headers={"Content-Type": "application/json"}) as resp_fb:
+                        if resp_fb.status == 200:
+                            return True
+                        else:
+                            error_text_fb = await resp_fb.text()
+                            log.error(f"Gemini API quota check failed on fallback with status {resp_fb.status}: {error_text_fb}")
+                            return False
+    except Exception as e:
+        log.error(f"Gemini API quota check error: {e}")
+        return False
+
+async def discord_api_request(session: aiohttp.ClientSession, method: str, url: str) -> any:
+    """
+    Helper to execute Discord REST API requests with built-in retry logic for rate limits.
+    """
+    headers = {
+        "Authorization": f"Bot {DISCORD_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    for attempt in range(3):
+        async with session.request(method, url, headers=headers) as resp:
+            if resp.status == 429:
+                retry_after = 1.0
+                try:
+                    retry_after_hdr = resp.headers.get("Retry-After")
+                    if retry_after_hdr:
+                        retry_after = float(retry_after_hdr)
+                except Exception:
+                    pass
+                log.warning(f"Discord API Rate Limited (429). Retrying in {retry_after}s...")
+                await asyncio.sleep(retry_after)
+                continue
+            elif resp.status == 200:
+                return await resp.json()
+            else:
+                log.error(f"Discord API request to {url} failed with status {resp.status}")
+                return None
+    return None
+
+def get_matriarch_id(channel) -> int:
+    """
+    Finds the highest-level parent ID (like category ID) for a channel or thread.
+    Chains parents / categories until we reach the top-level parent ID.
+    """
+    curr = channel
+    while curr:
+        parent = getattr(curr, 'parent', None)
+        category = getattr(curr, 'category', None)
+        
+        if parent:
+            curr = parent
+        elif category:
+            curr = category
+        else:
+            parent_id = getattr(curr, 'parent_id', None)
+            category_id = getattr(curr, 'category_id', None)
+            next_id = parent_id or category_id
+            
+            if next_id:
+                guild = getattr(curr, 'guild', None)
+                resolved = guild.get_channel(int(next_id)) if guild else None
+                if resolved:
+                    curr = resolved
+                else:
+                    return int(next_id)
+            else:
+                break
+    return curr.id
 
 # --- Discord Ranks Configuration ---
 DISCORD_RANKS = [
@@ -359,6 +494,12 @@ COMMANDS_HELP = {
     "overachievers-sync": {
         "syntax": "`/overachievers-sync [dry_run] [publish]`",
         "description": "Run the Overachievers check (1st of month typically).",
+        "category": "Commander Commands",
+        "min_role": "Commander"
+    },
+    "tldr": {
+        "syntax": "`/tldr [time] [message_id] [testing]`",
+        "description": "Summarizes the staff channel conversation from a time/message ID to current.",
         "category": "Commander Commands",
         "min_role": "Commander"
     }
@@ -1783,6 +1924,151 @@ async def check_no_discord(interaction: discord.Interaction, publish: bool = Fal
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
+# --- 16.6 /CHECK-INACTIVITY-EXEMPTIONS COMMAND ---
+@client.tree.command(name="check-inactivity-exemptions", description="Check for current inactivity exemptions.")
+@app_commands.describe(
+    publish="False (default). True to post the report publicly."
+)
+@check_staff_role("Captain")
+async def check_inactivity_exemptions(interaction: discord.Interaction, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /check-inactivity-exemptions publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /check-inactivity-exemptions publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        now_str = datetime.now().isoformat()
+        exemptions_res = supabase.table('inactivity_exemptions') \
+            .select('member_id, expiration_date, granted_by_member_id, granted_date, reason') \
+            .gt('expiration_date', now_str) \
+            .execute()
+            
+        exemptions_data = exemptions_res.data or []
+        
+        if not exemptions_data:
+            await interaction.followup.send("✅ No active inactivity exemptions found.", ephemeral=is_ephemeral)
+            return
+
+        # Fetch all primary RSNs to build a mapping from member_id -> RSN
+        rsn_res = supabase.table('member_rsns') \
+            .select('member_id, rsn') \
+            .eq('is_primary', True) \
+            .execute()
+        
+        rsn_map = {item['member_id']: item['rsn'] for item in rsn_res.data or []}
+        
+        # Sort exemptions by expiration_date ascending (closest to expire first)
+        exemptions_data = sorted(exemptions_data, key=lambda x: x.get('expiration_date') or '')
+
+        def format_db_date(date_str: str) -> str:
+            if not date_str:
+                return "Unknown"
+            try:
+                parsed = discord.utils.parse_time(date_str)
+                if parsed:
+                    return parsed.strftime('%Y-%m-%d')
+            except Exception:
+                pass
+            return date_str
+
+        # Format rows
+        lines = [
+            "rsn | expiration date | who granted it (rsn) | granted date | reason",
+            "------------------------------------------------------------------"
+        ]
+        
+        for ex in exemptions_data:
+            member_rsn = rsn_map.get(ex['member_id'], "Unknown")
+            granter_id = ex.get('granted_by_member_id')
+            granter_rsn = rsn_map.get(granter_id, "Unknown") if granter_id else "Unknown"
+            
+            exp_date = format_db_date(ex.get('expiration_date'))
+            grant_date = format_db_date(ex.get('granted_date'))
+            reason = ex.get('reason') or "None"
+            
+            lines.append(f"{member_rsn} | {exp_date} | {granter_rsn} | {grant_date} | {reason}")
+            
+        report_string = "\n".join(lines)
+        
+        if len(report_string) > 1900:
+            await interaction.followup.send(
+                "Inactivity exemptions report is too long, so it's attached as a file.",
+                file=discord.File(StringIO(report_string), "inactivity_exemptions.txt"),
+                ephemeral=is_ephemeral
+            )
+        else:
+            await interaction.followup.send(
+                f"```\n{report_string}\n```",
+                ephemeral=is_ephemeral
+            )
+            
+    except Exception as e:
+        log.error(f"Error in /check-inactivity-exemptions command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
+# --- 16.65 /EXPIRE-EXEMPTION COMMAND ---
+@client.tree.command(name="expire-exemption", description="Expires an active inactivity exemption for a member.")
+@app_commands.describe(
+    rsn="The member's RSN.",
+    publish="False (default). True to post the confirmation publicly."
+)
+@check_staff_role("Captain")
+async def expire_exemption(interaction: discord.Interaction, rsn: str, publish: bool = False):
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /expire-exemption rsn='{rsn}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /expire-exemption rsn='{rsn}' publish={publish} used by {interaction.user}")
+    
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+    
+    try:
+        # 1. Find the member by RSN
+        member_res = supabase.table('member_rsns') \
+            .select('member_id, rsn') \
+            .ilike('rsn', rsn) \
+            .limit(1) \
+            .execute()
+            
+        if not member_res.data:
+            await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
+            return
+            
+        member_id = member_res.data[0]['member_id']
+        member_rsn = member_res.data[0]['rsn']
+        
+        # 2. Check if they have an active exemption
+        now_str = datetime.now().isoformat()
+        existing_exemption = supabase.table('inactivity_exemptions') \
+            .select('id, expiration_date') \
+            .eq('member_id', member_id) \
+            .gte('expiration_date', now_str) \
+            .execute()
+            
+        if not existing_exemption.data:
+            await interaction.followup.send(f"ℹ️ `{member_rsn}` does not have an active inactivity exemption.", ephemeral=is_ephemeral)
+            return
+            
+        # 3. Update the active exemption(s) expiration date to now
+        supabase.table('inactivity_exemptions') \
+            .update({'expiration_date': now_str}) \
+            .eq('member_id', member_id) \
+            .gte('expiration_date', now_str) \
+            .execute()
+            
+        await interaction.followup.send(f"✅ Successfully expired inactivity exemption for `{member_rsn}`.", ephemeral=is_ephemeral)
+        
+    except Exception as e:
+        log.error(f"Error in /expire-exemption command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
 # --- 16.7 /CLAN-VETERAN-CHECK COMMAND ---
 async def run_clan_veteran_check(guild: discord.Guild) -> discord.Embed:
     CLAN_VETERAN_ROLE_ID = 1191649334438133820
@@ -1941,6 +2227,210 @@ async def update_ep_leaderboard_command(interaction: discord.Interaction, publis
     except Exception as e:
         log.error(f"Error in /updateepleaderboard command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+# --- 17.5 /TLDR COMMAND ---
+@client.tree.command(name="tldr", description="Summarize the staff channel conversation from a relative time or message ID.")
+@app_commands.describe(
+    time="Relative time window to summarize (e.g., 2h, 1d 4h, 30m).",
+    message_id="Discord message ID representing the start of the summary window.",
+    testing="True to dump the conversation array as a JSON file and skip Gemini."
+)
+@check_staff_role("Captain")
+async def tldr(interaction: discord.Interaction, time: str = None, message_id: str = None, testing: bool = False):
+    # Log usage
+    timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp_str}] /tldr time={time} message_id={message_id} testing={testing} used by {interaction.user} in #{interaction.channel}")
+    await log_command_use(f"[{timestamp_str}] /tldr time={time} message_id={message_id} testing={testing} used by {interaction.user} in #{interaction.channel}")
+    
+    # 1. Quota check first (if not testing)
+    gemini_key = None
+    if not testing:
+        gemini_key = os.getenv("IA_SUMMARIZE_GEMINI_API_KEY")
+        if not gemini_key:
+            log.error("Gemini API key (IA_SUMMARIZE_GEMINI_API_KEY) is missing.")
+            await interaction.response.send_message("Gemini Quota Reached, Guess you have to read it now", ephemeral=True)
+            return
+
+        quota_ok = await check_gemini_quota(gemini_key)
+        if not quota_ok:
+            await interaction.response.send_message("Gemini Quota Reached, Guess you have to read it now", ephemeral=True)
+            return
+
+    # 2. Check channel second
+    channel = interaction.channel
+    matriarch_id = get_matriarch_id(channel)
+    if matriarch_id != 1059296867663491233:
+        await interaction.response.send_message("I can only summarize staff channels, you're going to have to read that channel yourself!", ephemeral=True)
+        return
+
+    # 3. Check arguments
+    if not time and not message_id:
+        await interaction.response.send_message("You must provide at least one of time or message_id to start your summary window.", ephemeral=True)
+        return
+
+    # Defer interaction: always non-ephemeral to allow conditional public followups
+    await interaction.response.defer(ephemeral=False)
+
+    try:
+        # Determine start snowflake
+        start_snowflake = None
+        if message_id:
+            try:
+                start_snowflake = int(message_id)
+            except ValueError:
+                await interaction.followup.send("❌ Invalid `message_id` format. Please provide a valid integer message ID.", ephemeral=True)
+                return
+        else:
+            # Parse time
+            dt_threshold = parse_duration(time)
+            if not dt_threshold:
+                await interaction.followup.send("❌ Invalid `time` format. Please use formats like '2h', '1d 4h', '30m'.", ephemeral=True)
+                return
+            start_snowflake = discord.utils.time_snowflake(dt_threshold)
+
+        # Get all messages using Direct REST endpoint with pagination
+        all_messages = []
+        after_id = start_snowflake
+        
+        async with aiohttp.ClientSession() as session:
+            # Pagination loop
+            while True:
+                url = f"https://discord.com/api/v10/channels/{channel.id}/messages?limit=100&after={after_id}"
+                data = await discord_api_request(session, "GET", url)
+                if not data:
+                    break
+                
+                all_messages.extend(data)
+                
+                # Find maximum message ID in this batch to progress
+                max_id = max(int(m['id']) for m in data)
+                after_id = max_id
+                
+                if len(data) < 100:
+                    break
+            
+            # Sort messages chronologically by ID/timestamp
+            all_messages.sort(key=lambda m: int(m['id']))
+            
+            if not all_messages:
+                await interaction.followup.send("No messages found in the specified window.", ephemeral=True)
+                return
+
+            if len(all_messages) < SUMMARIZE_MIN_MESSAGES_THRESHOLD:
+                caller_id = interaction.user.id
+                caller_name = interaction.user.display_name
+                msg_count = len(all_messages)
+                if caller_id == 288564337218682892:
+                    response_text = f"Really? You want to use an LLM to summarize {msg_count} messages? I expected better.. Oh, wait, {caller_name}? I was warned about you. Read it yourself."
+                else:
+                    response_text = f"Really? You want to use an LLM to summarize {msg_count} messages? I expected this from Bristle, not from you, {caller_name}"
+                await interaction.followup.send(response_text, ephemeral=True)
+                return
+
+            if len(all_messages) > SUMMARIZE_MAX_MESSAGES_THRESHOLD:
+                await interaction.followup.send(f"That's too many messages to summarize. Please try again with a smaller time window.", ephemeral=True)
+                return
+
+            # Grab user display names via /guilds/{guild_id}/members/{user_id} with cache
+            guild_id = channel.guild.id
+            display_name_cache = {}
+            conversation_array = []
+            
+            for msg in all_messages:
+                # Strip metadata: keep content, timestamp, author.id
+                content = msg.get('content', '')
+                timestamp_val = msg.get('timestamp')
+                author_id = msg.get('author', {}).get('id')
+                
+                if not author_id:
+                    continue
+                    
+                if author_id not in display_name_cache:
+                    member_url = f"https://discord.com/api/v10/guilds/{guild_id}/members/{author_id}"
+                    member_data = await discord_api_request(session, "GET", member_url)
+                    if member_data:
+                        nick = member_data.get('nick')
+                        user = member_data.get('user', {})
+                        global_name = user.get('global_name')
+                        username = user.get('username')
+                        display_name = nick or global_name or username or str(author_id)
+                    else:
+                        display_name = msg.get('author', {}).get('username') or str(author_id)
+                    display_name_cache[author_id] = display_name
+                
+                display_name = display_name_cache[author_id]
+                
+                # Assemble conversation turn
+                conversation_array.append({
+                    "message": content,
+                    "timestamp": timestamp_val,
+                    "display_name": display_name
+                })
+            
+            if testing:
+                convo_json_str = json.dumps(conversation_array, indent=2)
+                file_data = StringIO(convo_json_str)
+                discord_file = discord.File(file_data, filename="conversation_dump.json")
+                await interaction.followup.send(
+                    content=f"🧪 **Testing Mode:** Fetched {len(all_messages)} messages successfully. Below is the conversation array dump:",
+                    file=discord_file,
+                    ephemeral=testing
+                )
+                return
+            
+            # Pass conversation array to Gemini API along with prompt
+            conversation_json = json.dumps(conversation_array, indent=2)
+            prompt_text = f"{SUMMARIZE_PROMPT}\n\nConversation data:\n{conversation_json}"
+            
+            gemini_url = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_MODEL}:generateContent?key={gemini_key}"
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {
+                                "text": prompt_text
+                            }
+                        ]
+                    }
+                ]
+            }
+            
+            async with session.post(gemini_url, json=payload, headers={"Content-Type": "application/json"}) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    log.info(f"Gemini API generateContent on v1 failed (status {resp.status}), attempting v1beta fallback: {error_text}")
+                    
+                    fallback_gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={gemini_key}"
+                    async with session.post(fallback_gemini_url, json=payload, headers={"Content-Type": "application/json"}) as resp_fb:
+                        if resp_fb.status != 200:
+                            error_text_fb = await resp_fb.text()
+                            log.error(f"Gemini API generateContent failed on fallback with status {resp_fb.status}: {error_text_fb}")
+                            await interaction.followup.send("Gemini Quota Reached, Guess you have to read it now", ephemeral=True)
+                            return
+                        res_data = await resp_fb.json()
+                else:
+                    res_data = await resp.json()
+                
+                try:
+                    summary_text = res_data['candidates'][0]['content']['parts'][0]['text']
+                except (KeyError, IndexError, TypeError) as e:
+                    log.error(f"Error parsing Gemini response: {e}\nResponse: {res_data}")
+                    await interaction.followup.send("❌ Error parsing the summary from Gemini API.", ephemeral=True)
+                    return
+            
+            # Build and send Embed
+            embed = discord.Embed(
+                title="📝 Staff Conversation Summary",
+                description=summary_text,
+                color=discord.Color.blurple(),
+                timestamp=datetime.now()
+            )
+            embed.set_footer(text=f"Summarized {len(all_messages)} messages. Credit to Boolaa for the idea 🧡")
+            await interaction.followup.send(embed=embed, ephemeral=testing)
+ 
+    except Exception as e:
+        log.error(f"Error in /tldr command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
 
 # --- 18. SCHEDULED TASKS ---
 @tasks.loop(time=[time(hour=0, minute=15), time(hour=12, minute=15)])
