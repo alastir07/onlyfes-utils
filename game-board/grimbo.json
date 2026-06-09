@@ -1,7 +1,7 @@
 {
-  "viewportX": 838,
-  "viewportY": 613.5,
-  "zoom": 0.8264462809917362,
+  "viewportX": 943,
+  "viewportY": 712.5,
+  "zoom": 1.000000000000001,
   "isEditMode": true,
   "gridType": "square",
   "tiles": [
@@ -165,7 +165,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Twisted_buckler_detail.png?75ade\")",
       "details": {
         "name": "Tile -3,-2",
-        "description": "<p>Obtain 1 of the below off-hand drops from Raids:</p>\n<ul>\n<li>Twisted Buckler</li>\n<li>Elidins Ward</li>\n<li>Avernic Defender</li>\n</ul>\n<p>&nbsp;</p>\n<p>&nbsp;</p>",
+        "description": "<p>Obtain 1 of the below off-hand drops from Raids:</p>\n<ul>\n<li>Twisted Buckler</li>\n<li>Elidinis' Ward</li>\n<li>Avernic Defender</li>\n</ul></p>",
         "title": "Off-hander"
       },
       "number": "A4"
@@ -177,7 +177,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Venator_bow_%28uncharged%29_detail.png?6167b\")",
       "details": {
         "name": "Tile -3,-1",
-        "description": "<p>Obtain 3 Venetor Shards</p>",
+        "description": "<p>Obtain 3 Venator Shards</p>",
         "title": "Money dog"
       },
       "number": "A5"
@@ -298,7 +298,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Aranea_boots_detail.png?43deb\")",
       "details": {
         "name": "Tile -2,1",
-        "description": "<p>Obtain 1 Arenea Boots</p>",
+        "description": "<p>Obtain 1 Aranea Boots OR 1x Noxious Halberd piece OR 1x Araxxyte Fang</p>",
         "title": "Webbed Feet kinda guy"
       },
       "number": "B7"
@@ -359,7 +359,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Glacial_temotli_detail.png?37b7e\")",
       "details": {
         "name": "Tile -1,-2",
-        "description": "<p>Obtain all of the below from Naguas:</p>\n<ul>\n<li>Glacial Temotli</li>\n<li>Earthbound Tecpatl</li>\n<li>Sulpher Blades</li>\n</ul>",
+        "description": "<p>Obtain all of the below from Naguas:</p>\n<ul>\n<li>Glacial Temotli</li>\n<li>Earthbound Tecpatl</li>\n<li>Sulphur Blades</li>\n</ul>",
         "title": "Bopperino"
       },
       "number": "C4"
@@ -368,7 +368,7 @@
       "key": "-1,-1",
       "q": -1,
       "r": -1,
-      "backgroundImage": "url(\"https://static.wikia.nocookie.net/surrealmemes/images/f/ff/Noggin.png/revision/latest/thumbnail/width/360/height/360?cb=20190114192842\")",
+      "backgroundImage": "url(\"https://static.wikia.nocookie.net/surrealmemes/images/f/ff/Noggin.png\")",
       "details": {
         "name": "Tile -1,-1",
         "description": "<p>Obtain 2 of any of the below from Gnome Restaurant:</p>\n<ul>\n<li>Gnome Scarf</li>\n<li>Mint Cake</li>\n<li>Gnome Goggles</li>\n</ul>",
@@ -456,7 +456,7 @@
       "backgroundImage": "url(\"https://oldschool.runescape.wiki/images/Combat_achievements_detail.png?d8b9a\")",
       "details": {
         "name": "Tile 0,-2",
-        "description": "<p>Obtain 500 CA points using only Perfection or Restriction type Combat Acheivements.&nbsp;<br><br>Each Team Member can only submit 50 points Maximum.</p>",
+        "description": "<p>Obtain 500 CA points using only Perfection or Restriction type Combat Achievements.&nbsp;<br><br>Each Team Member can only submit 50 points Maximum.</p>",
         "title": "Combat Task, Completed"
       },
       "number": "D4"
