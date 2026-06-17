@@ -221,12 +221,13 @@ def get_overachiever_lookup(supabase: Client, query: str) -> tuple[discord.Embed
         
     else:
         # It's an RSN query
-        rsn_res = supabase.table('member_rsns').select('member_id, rsn, is_primary').ilike('rsn', query).execute()
+        rsn_res = supabase.table('member_rsns').select('member_id, rsn, is_primary').execute()
+        matched_rows = [row for row in rsn_res.data if normalize_string(row['rsn']) == normalized_query]
         
-        if not rsn_res.data:
+        if not matched_rows:
             return None, f"Could not find any member with RSN: '{query}' or any metric called '{query}'."
             
-        member_record = next((r for r in rsn_res.data if r['is_primary']), rsn_res.data[0])
+        member_record = next((r for r in matched_rows if r['is_primary']), matched_rows[0])
         member_id = member_record['member_id']
         display_rsn = member_record['rsn']
         

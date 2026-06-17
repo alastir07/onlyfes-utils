@@ -90,6 +90,29 @@ def get_normalized_rank_from_db(rank_name_input: str) -> dict | None:
         log.error(f"Error fetching ranks for normalization: {e}")
         return None
 
+def resolve_rsn_to_member(rsn: str) -> dict | None:
+    """
+    Looks up a member by their RSN (case-insensitive, space/underscore-insensitive).
+    Returns a dict containing 'member_id' and 'rsn' (original casing from DB) if found, else None.
+    """
+    try:
+        normalized_input = normalize_string(rsn)
+        if not normalized_input:
+            return None
+            
+        res = supabase.table('member_rsns').select('member_id, rsn').execute()
+        for row in res.data:
+            if normalize_string(row['rsn']) == normalized_input:
+                return {
+                    'member_id': row['member_id'],
+                    'rsn': row['rsn']
+                }
+        return None
+    except Exception as e:
+        log.error(f"Error resolving RSN '{rsn}': {e}")
+        return None
+
+
 def get_staff_member_id(interaction: discord.Interaction) -> str | None:
     try:
         user_id_int = interaction.user.id
@@ -647,11 +670,12 @@ async def member_info(interaction: discord.Interaction, rsn: str, publish: bool 
     await interaction.response.defer(ephemeral=is_ephemeral) 
 
     try:
-        response = supabase.rpc('get_member_info', {'rsn_query': rsn}).execute()
-        
-        if not response.data:
+        resolved = resolve_rsn_to_member(rsn)
+        if not resolved:
             await interaction.followup.send(f"Sorry, I couldn't find anyone with an RSN matching `{rsn}`.", ephemeral=True)
             return
+
+        response = supabase.rpc('get_member_info', {'rsn_query': resolved['rsn']}).execute()
 
         member = response.data[0]
         
@@ -716,7 +740,12 @@ async def rankhistory(interaction: discord.Interaction, rsn: str, num_changes: i
     await interaction.response.defer(ephemeral=is_ephemeral) 
 
     try:
-        response = supabase.rpc('get_rank_history', {'rsn_query': rsn, 'limit_count': num_changes}).execute()
+        resolved = resolve_rsn_to_member(rsn)
+        if not resolved:
+            await interaction.followup.send(f"Sorry, I couldn't find anyone with an RSN matching `{rsn}` (or they have no rank history).", ephemeral=True)
+            return
+
+        response = supabase.rpc('get_rank_history', {'rsn_query': resolved['rsn'], 'limit_count': num_changes}).execute()
         if not response.data:
             await interaction.followup.send(f"Sorry, I couldn't find anyone with an RSN matching `{rsn}` (or they have no rank history).", ephemeral=True)
             return
@@ -907,33 +936,22 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         new_rank_name = new_rank['name'] 
 
         member_res = supabase.table('member_rsns') \
-            .select('member_id, rsn, members(current_rank_id, discord_id, ranks(hierarchy_level))') \
+            .select('member_id, rsn, members(current_rank_id, ranks(hierarchy_level))') \
             .ilike('rsn', rsn) \
             .limit(1) \
             .execute()
 
         if not member_res.data:
-            await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
+            await interaction.followup.send(f"Error: Member data not found in the database.", ephemeral=True)
             return
 
         member_id = member_res.data[0]['member_id']
         member_rsn = member_res.data[0]['rsn']
         old_rank_id = member_res.data[0]['members']['current_rank_id']
-        discord_id = member_res.data[0]['members'].get('discord_id')
         
-        # Check for linked Discord account
-        if not discord_id and not bypass_discord:
-            await interaction.followup.send(
-                f"⛔ **Linked Discord Account Required**: `{member_rsn}` does not have a linked Discord account. "
-                f"Please link their account using `/linkrsn` first, or re-run this command with `bypass_discord=True` "
-                f"to update their database rank only.",
-                ephemeral=True
-            )
-            return
-            
         old_hierarchy = 0
-        if member_res.data[0].get('members') and member_res.data[0]['members'].get('ranks'):
-            old_hierarchy = member_res.data[0]['members']['ranks'].get('hierarchy_level', 0)
+        if member_res.data[0].get('ranks'):
+            old_hierarchy = member_res.data[0]['ranks'].get('hierarchy_level', 0)
             
         if old_hierarchy > staff_max_hierarchy:
             await interaction.followup.send(f"⛔ Permission Denied: You cannot modify the rank of a member whose current hierarchy level ({old_hierarchy}) is higher than your own staff role.", ephemeral=True)
@@ -1237,17 +1255,17 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
             await interaction.followup.send(f"Error: Rank `{rank_name}` not found in database.", ephemeral=True)
             return
         
-        member_res = supabase.table('member_rsns').select('member_id, rsn').ilike('rsn', rsn).limit(1).execute()
-        if not member_res.data:
+        resolved = resolve_rsn_to_member(rsn)
+        if not resolved:
             await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
             return
 
-        member_id = member_res.data[0]['member_id']
-        member_rsn = member_res.data[0]['rsn']
+        member_id = resolved['member_id']
+        member_rsn = resolved['rsn']
 
-        info_res = supabase.rpc('get_member_info', {'rsn_query': rsn}).execute()
+        info_res = supabase.rpc('get_member_info', {'rsn_query': member_rsn}).execute()
         if not info_res.data:
-            await interaction.followup.send(f"Error: Could not retrieve info for `{rsn}`.", ephemeral=True)
+            await interaction.followup.send(f"Error: Could not retrieve info for `{member_rsn}`.", ephemeral=True)
             return
             
         member_info = info_res.data[0]
@@ -1325,22 +1343,22 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
     
     try:
         # 1. Find the member by RSN
-        member_res = supabase.table('member_rsns') \
-            .select('member_id, rsn, members(discord_id)') \
-            .ilike('rsn', rsn) \
-            .limit(1) \
-            .execute()
-
-        if not member_res.data:
+        resolved = resolve_rsn_to_member(rsn)
+        if not resolved:
             await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
             return
 
-        member_id = member_res.data[0]['member_id']
-        member_rsn = member_res.data[0]['rsn']
+        member_id = resolved['member_id']
+        member_rsn = resolved['rsn']
         
         # 2. Check if they are already linked
-        if member_res.data[0].get('members') and member_res.data[0]['members'].get('discord_id'):
-            old_discord_id = member_res.data[0]['members']['discord_id']
+        member_res = supabase.table('members').select('discord_id').eq('id', member_id).limit(1).execute()
+        if not member_res.data:
+            await interaction.followup.send(f"Error: Member data not found in the database.", ephemeral=True)
+            return
+
+        if member_res.data[0].get('discord_id'):
+            old_discord_id = member_res.data[0]['discord_id']
             if old_discord_id == user.id:
                 await interaction.followup.send(f"ℹ️ No change: `{member_rsn}` is already linked to {user.mention}.", ephemeral=True)
                 return
@@ -1383,18 +1401,13 @@ async def add_points(interaction: discord.Interaction, rsn: str, points: int, re
 
     try:
         # 1. Find the member
-        member_res = supabase.table('member_rsns') \
-            .select('member_id, rsn') \
-            .ilike('rsn', rsn) \
-            .limit(1) \
-            .execute()
-
-        if not member_res.data:
+        resolved = resolve_rsn_to_member(rsn)
+        if not resolved:
             await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
             return
 
-        member_id = member_res.data[0]['member_id']
-        member_rsn = member_res.data[0]['rsn']
+        member_id = resolved['member_id']
+        member_rsn = resolved['rsn']
         
         # 2. Insert Transaction
         supabase.table('event_point_transactions').insert({
@@ -1451,18 +1464,13 @@ async def remove_points(interaction: discord.Interaction, rsn: str, points: int,
 
     try:
         # 1. Find the member
-        member_res = supabase.table('member_rsns') \
-            .select('member_id, rsn') \
-            .ilike('rsn', rsn) \
-            .limit(1) \
-            .execute()
-
-        if not member_res.data:
+        resolved = resolve_rsn_to_member(rsn)
+        if not resolved:
             await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
             return
 
-        member_id = member_res.data[0]['member_id']
-        member_rsn = member_res.data[0]['rsn']
+        member_id = resolved['member_id']
+        member_rsn = resolved['rsn']
         
         # 2. Insert Transaction (Negative modification)
         supabase.table('event_point_transactions').insert({
@@ -1599,16 +1607,12 @@ async def add_exempt(interaction: discord.Interaction, rsn: str, reason: str, da
     
     try:
         # 1. Find the member by RSN
-        member_res = supabase.table('member_rsns') \
-            .select('member_id, rsn') \
-            .ilike('rsn', rsn) \
-            .limit(1) \
-            .execute()
-        if not member_res.data:
+        resolved = resolve_rsn_to_member(rsn)
+        if not resolved:
             await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
             return
-        member_id = member_res.data[0]['member_id']
-        member_rsn = member_res.data[0]['rsn']
+        member_id = resolved['member_id']
+        member_rsn = resolved['rsn']
         
         # 2. Check if they already have an active exemption
         existing_exemption = supabase.table('inactivity_exemptions') \
