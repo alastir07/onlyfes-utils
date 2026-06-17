@@ -169,13 +169,14 @@ def fetch_all_db_members(supabase: Client) -> dict:
     """Fetch ALL members (active and inactive) for detecting returning members"""
     log.info("Fetching all members from DB (including inactive)...")
     try:
-        response = supabase.table('members').select('id, current_rank_id, status').execute()
+        response = supabase.table('members').select('id, current_rank_id, status, discord_id').execute()
         all_members = {}
         for member in response.data:
             all_members[member['id']] = {
                 "member_id": member['id'],
                 "current_rank_id": member['current_rank_id'],
-                "status": member['status']
+                "status": member['status'],
+                "discord_id": member.get('discord_id')
             }
         log.info(f"Found {len(all_members)} total members in DB.")
         return all_members
@@ -492,7 +493,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
     
     if not all([wom_members, ranks_map_normalized, db_member_data, db_rsn_map_normalized, all_db_members]):
         report_lines.append("CRITICAL ERROR: Halting sync due to data fetching error. Check console logs.")
-        return "\n".join(report_lines)
+        return "\n".join(report_lines), {"active_discord_ids": [], "deactivated_discord_ids": []}
     
     # 1.5. INSERT GROUP SNAPSHOT
     if group_snapshot_data:
@@ -714,7 +715,7 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
         for report in report_rank_mismatches:
             report_lines.append(f"  - {report}")
         report_lines.append("\n--- NO CHANGES HAVE BEEN MADE TO THE DATABASE ---")
-        return "\n".join(report_lines)
+        return "\n".join(report_lines), {"active_discord_ids": [], "deactivated_discord_ids": []}
 
     else:
         report_lines.append(f"Found {mismatch_count} mismatches. (Under threshold of {MISMATCH_THRESHOLD}). Proceeding with sync.")
@@ -905,9 +906,40 @@ def run_sync(supabase: Client, dry_run: bool = True, force_run: bool = False) ->
     if not report_promo_emerald and not report_promo_ruby:
         report_lines.append("  No pending auto-promotions found.")
         
+    # Calculate active discord IDs after sync
+    active_member_ids = (all_active_db_member_ids - departed_member_ids)
+    for item in returning_members_payload:
+        active_member_ids.add(item['member_id'])
+    
+    active_discord_ids = []
+    for m_id in active_member_ids:
+        m_info = all_db_members.get(m_id)
+        if m_info and m_info.get('discord_id'):
+            active_discord_ids.append(int(m_info['discord_id']))
+            
+    # Calculate deactivated discord IDs
+    deactivated_discord_ids = []
+    for m_id in departed_member_ids:
+        m_info = all_db_members.get(m_id)
+        if m_info and m_info.get('discord_id'):
+            deactivated_discord_ids.append(int(m_info['discord_id']))
+            
+    sync_metadata = {
+        "active_discord_ids": active_discord_ids,
+        "deactivated_discord_ids": deactivated_discord_ids
+    }
+
+    if deactivated_discord_ids:
+        action_word = "Would remove" if dry_run else "Removing"
+        report_lines.append(f"\nDiscord Role Sync: {action_word} Clan Members role (1516942589503340604) from {len(deactivated_discord_ids)} deactivated member(s).")
+    if active_discord_ids:
+        prefix = "\n" if not deactivated_discord_ids else ""
+        action_word = "Would ensure" if dry_run else "Ensuring"
+        report_lines.append(f"{prefix}Discord Role Sync: {action_word} {len(active_discord_ids)} active member(s) have Clan Members role.")
+        
     report_lines.append(f"\n--- Sync Complete ({run_mode}) ---")
     
-    return "\n".join(report_lines)
+    return "\n".join(report_lines), sync_metadata
 
 # --- 6. RUN THE SCRIPT (for manual testing) ---
 if __name__ == "__main__":
@@ -926,7 +958,7 @@ if __name__ == "__main__":
         supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         log.info("Supabase connection successful for manual run.")
         
-        report = run_sync(supabase_client, dry_run=is_dry_run, force_run=is_force_run)
+        report, _ = run_sync(supabase_client, dry_run=is_dry_run, force_run=is_force_run)
         
         # Write to file explicitly to avoid encoding issues
         with open("sync_report.txt", "w", encoding="utf-8") as f:

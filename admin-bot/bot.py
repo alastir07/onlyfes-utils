@@ -345,6 +345,64 @@ def check_staff_role(required_role: str):
         return wrapper
     return decorator
 
+async def sync_discord_clan_member_roles(guild: discord.Guild, sync_metadata: dict, dry_run: bool) -> str:
+    """
+    Syncs the Clan Members role (1516942589503340604) for active/deactivated members.
+    Returns a summary string of the actions taken.
+    """
+    CLAN_MEMBERS_ROLE_ID = 1516942589503340604
+    role = guild.get_role(CLAN_MEMBERS_ROLE_ID)
+    if not role:
+        log.error(f"Could not find Clan Members role with ID {CLAN_MEMBERS_ROLE_ID}")
+        return f"⚠️ Error: Clan Members role with ID `{CLAN_MEMBERS_ROLE_ID}` not found in this server."
+
+    active_ids = sync_metadata.get("active_discord_ids", [])
+    deactivated_ids = sync_metadata.get("deactivated_discord_ids", [])
+    
+    if dry_run:
+        return (f"Discord Role Sync (DRY RUN): Would ensure {len(active_ids)} active member(s) have the role "
+                f"and remove it from {len(deactivated_ids)} deactivated member(s).")
+
+    added_count = 0
+    removed_count = 0
+    failed_count = 0
+
+    # 1. Remove role from deactivated members
+    for d_id in deactivated_ids:
+        try:
+            member = guild.get_member(int(d_id))
+            if not member:
+                member = await guild.fetch_member(int(d_id))
+            if member and role in member.roles:
+                await member.remove_roles(role, reason="Clan sync: Member deactivated")
+                removed_count += 1
+        except discord.NotFound:
+            log.info(f"Deactivated user {d_id} not found in guild.")
+        except Exception as e:
+            log.error(f"Failed to remove role from deactivated user {d_id}: {e}")
+            failed_count += 1
+
+    # 2. Add role to active members if they don't have it
+    for a_id in active_ids:
+        try:
+            member = guild.get_member(int(a_id))
+            if not member:
+                member = await guild.fetch_member(int(a_id))
+            if member and role not in member.roles:
+                await member.add_roles(role, reason="Clan sync: Ensure active member has role")
+                added_count += 1
+        except discord.NotFound:
+            log.info(f"Active user {a_id} not found in guild.")
+        except Exception as e:
+            log.error(f"Failed to add role to active user {a_id}: {e}")
+            failed_count += 1
+
+    summary = f"**Discord Role Sync:** Added to {added_count} member(s), Removed from {removed_count} member(s)."
+    if failed_count > 0:
+        summary += f" Failed for {failed_count} member(s)."
+    return summary
+
+
 intents = discord.Intents.default()
 intents.message_content = True 
 intents.members = True 
@@ -795,13 +853,27 @@ async def sync_clan(
         await interaction.followup.send("Error: Cannot use `force_run=True` with `dry_run=True`. No action taken.", ephemeral=True)
         return
     try:
-        report_string = await asyncio.to_thread(
+        report_string, sync_metadata = await asyncio.to_thread(
             clan_sync_logic.run_sync, 
             supabase, 
             dry_run=dry_run, 
             force_run=force_run
         )
-        log.info("Sync function complete. Sending report.")
+        log.info("Sync function complete. Synchronizing Discord roles...")
+        
+        role_sync_summary = ""
+        guild = interaction.guild
+        if guild:
+            try:
+                role_sync_summary = await sync_discord_clan_member_roles(guild, sync_metadata, dry_run=dry_run)
+            except Exception as re:
+                log.error(f"Error in sync_discord_clan_member_roles: {re}")
+                role_sync_summary = f"⚠️ Discord Role Sync Error: {re}"
+        
+        if role_sync_summary:
+            report_string += f"\n\n{role_sync_summary}"
+
+        log.info("Sending report.")
         if len(report_string) > 1900:
             await interaction.followup.send(
                 "Sync complete. The report is too long, so it's attached as a file.",
@@ -1369,7 +1441,26 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
         # 3. Execute the update
         supabase.table('members').update({'discord_id': user.id}).eq('id', member_id).execute()
         
-        await interaction.followup.send(f"✅ Success! `{member_rsn}` is now linked to {user.mention}.", ephemeral=is_ephemeral)
+        # 4. Assign Clan Members role immediately
+        role_msg = ""
+        CLAN_MEMBERS_ROLE_ID = 1516942589503340604
+        guild = interaction.guild
+        if guild:
+            role = guild.get_role(CLAN_MEMBERS_ROLE_ID)
+            if role:
+                if role not in user.roles:
+                    try:
+                        await user.add_roles(role, reason=f"RSN {member_rsn} linked by {interaction.user}")
+                        role_msg = f" Also added **{role.name}** role."
+                    except Exception as de:
+                        log.warning(f"Could not assign Clan Members role: {de}")
+                        role_msg = " ⚠️ Could not assign Clan Members role (lacks permission)."
+                else:
+                    role_msg = f" (Already has **{role.name}** role.)"
+            else:
+                log.error(f"Could not find Clan Members role with ID {CLAN_MEMBERS_ROLE_ID}")
+                
+        await interaction.followup.send(f"✅ Success! `{member_rsn}` is now linked to {user.mention}.{role_msg}", ephemeral=is_ephemeral)
 
     except Exception as e:
         log.error(f"Error in /link-rsn command: {e}\n{traceback.format_exc()}")
@@ -2480,13 +2571,30 @@ async def scheduled_clan_sync():
             return
         
         # Run the sync (live run, no force)
-        report_string = await asyncio.to_thread(
+        report_string, sync_metadata = await asyncio.to_thread(
             clan_sync_logic.run_sync,
             supabase,
             dry_run=False,
             force_run=False
         )
         
+        log.info("Scheduled sync complete. Synchronizing Discord roles...")
+        
+        role_sync_summary = ""
+        guild = channel.guild if channel else None
+        if not guild and client.guilds:
+            guild = client.guilds[0]
+            
+        if guild:
+            try:
+                role_sync_summary = await sync_discord_clan_member_roles(guild, sync_metadata, dry_run=False)
+            except Exception as re:
+                log.error(f"Error in sync_discord_clan_member_roles: {re}")
+                role_sync_summary = f"⚠️ Discord Role Sync Error: {re}"
+        
+        if role_sync_summary:
+            report_string += f"\n\n{role_sync_summary}"
+
         log.info("Scheduled sync complete. Posting report to channel.")
         
         # Post the report
