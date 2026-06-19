@@ -1008,7 +1008,7 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         new_rank_name = new_rank['name'] 
 
         member_res = supabase.table('member_rsns') \
-            .select('member_id, rsn, members(current_rank_id, ranks(hierarchy_level))') \
+            .select('member_id, rsn, members(current_rank_id, discord_id, ranks(hierarchy_level))') \
             .ilike('rsn', rsn) \
             .limit(1) \
             .execute()
@@ -1020,10 +1020,11 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         member_id = member_res.data[0]['member_id']
         member_rsn = member_res.data[0]['rsn']
         old_rank_id = member_res.data[0]['members']['current_rank_id']
+        discord_id = member_res.data[0]['members'].get('discord_id')
         
         old_hierarchy = 0
-        if member_res.data[0].get('ranks'):
-            old_hierarchy = member_res.data[0]['ranks'].get('hierarchy_level', 0)
+        if member_res.data[0].get('members') and member_res.data[0]['members'].get('ranks'):
+            old_hierarchy = member_res.data[0]['members']['ranks'].get('hierarchy_level', 0)
             
         if old_hierarchy > staff_max_hierarchy:
             await interaction.followup.send(f"⛔ Permission Denied: You cannot modify the rank of a member whose current hierarchy level ({old_hierarchy}) is higher than your own staff role.", ephemeral=True)

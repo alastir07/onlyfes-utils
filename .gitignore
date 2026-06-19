@@ -5,3 +5,5 @@
 /admin-bot/OnlyFEs Event Points Tracker - Tracker.csv
 /admin-bot/OnlyFEs Join Dates - Table.csv
 /admin-bot/__pycache__
+*.txt
+*.csv
