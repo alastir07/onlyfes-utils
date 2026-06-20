@@ -2928,7 +2928,15 @@ async def fetch_bounty_items() -> list[str]:
         if not data:
             return []
         content = data.get("content", "")
-        items = [line.strip() for line in content.splitlines() if line.strip()]
+        items = []
+        for line in content.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            # Strip markdown list prefixes (-, *, •) so items can be formatted as a list
+            line = line.lstrip("-*•").strip()
+            if line:
+                items.append(line)
         return items
 
 
@@ -3026,9 +3034,9 @@ async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
 
     winners: dict[int, str] = {}  # user_id -> display_name
 
-    async for message in thread.history(limit=None, oldest_first=True):
-        if not message.reactions:
-            continue
+    def _check_message(message: discord.Message):
+        if not message or not message.reactions:
+            return
         for reaction in message.reactions:
             emoji = reaction.emoji
             is_green = isinstance(emoji, discord.PartialEmoji | discord.Emoji) and emoji.name == GREEN_CHECK_NAME
@@ -3038,6 +3046,17 @@ async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
                 if author and not author.bot:
                     winners[author.id] = author.display_name
                 break
+
+    # In forum threads the starter message shares the thread's ID and is excluded
+    # from history() — fetch it explicitly and check it too.
+    try:
+        starter = await thread.fetch_message(thread.id)
+        _check_message(starter)
+    except Exception:
+        pass
+
+    async for message in thread.history(limit=None, oldest_first=True):
+        _check_message(message)
 
     # Look up RSNs from DB by discord_id
     result = []
