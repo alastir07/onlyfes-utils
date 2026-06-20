@@ -1,0 +1,22 @@
+--- Starting Roster Reconciliation (DRY RUN) ---
+
+--- Checking for Promotions ---
+
+--- Running Safety Checks ---
+Found 1 rank mismatches.
+  - toter: DB says 'Skiller', WOM says 'beast'
+Found 1 mismatches. (Under threshold of 15). Proceeding with sync.
+
+--- (DRY RUN) SKIPPING ALL DATABASE WRITES ---
+Would add 0 new members.
+Would reactivate 0 returning members.
+Would deactivate 0 members.
+Would insert 0 stat snapshots.
+
+--- Staff Action Required: Pending Promotions ---
+Promote in-game, then run /rankup <rsn> <rank>
+
+  Emerald -> Ruby (>= 56 days & 1250+ total):
+    - bam fe (56 days, 1568 TL)
+
+--- Sync Complete (DRY RUN) ---
