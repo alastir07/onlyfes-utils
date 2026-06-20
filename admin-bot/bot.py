@@ -3030,6 +3030,7 @@ async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
     RSN is looked up from the database via discord_id; falls back to display_name if not found.
     """
     GREEN_CHECK_NAME = "Green_Check"
+    WHITE_CHECK_UNICODE = "✅"
     WHITE_CHECK_NAME = "white_check_mark"
 
     winners: dict[int, str] = {}  # user_id -> display_name
@@ -3040,7 +3041,7 @@ async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
         for reaction in message.reactions:
             emoji = reaction.emoji
             is_green = isinstance(emoji, discord.PartialEmoji | discord.Emoji) and emoji.name == GREEN_CHECK_NAME
-            is_white = emoji == WHITE_CHECK_NAME or (hasattr(emoji, "name") and emoji.name == WHITE_CHECK_NAME)
+            is_white = emoji == WHITE_CHECK_UNICODE or (hasattr(emoji, "name") and emoji.name == WHITE_CHECK_NAME)
             if is_green or is_white:
                 author = message.author
                 if author and not author.bot:
