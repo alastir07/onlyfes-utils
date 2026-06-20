@@ -583,6 +583,24 @@ COMMANDS_HELP = {
         "description": "Summarizes the staff channel conversation from a time/message ID to current.",
         "category": "Commander Commands",
         "min_role": "Commander"
+    },
+    "generate-new-bounty-quest": {
+        "syntax": "`/generate-new-bounty-quest [item_name]`",
+        "description": "Creates a new weekly bounty thread and announcement. Optionally specify an item; otherwise one is chosen randomly.",
+        "category": "Owner Commands",
+        "min_role": "Owner"
+    },
+    "close-bounty-quest": {
+        "syntax": "`/close-bounty-quest <thread_id>`",
+        "description": "Locks and archives a bounty quest thread.",
+        "category": "Owner Commands",
+        "min_role": "Owner"
+    },
+    "check-bounty-completion": {
+        "syntax": "`/check-bounty-completion <thread_id>`",
+        "description": "Checks a bounty thread for messages with a ✅ reaction and lists the confirmed completions.",
+        "category": "Owner Commands",
+        "min_role": "Owner"
     }
 }
 
@@ -661,7 +679,8 @@ async def help(interaction: discord.Interaction, command: str = None, publish: b
         "User Commands": [],
         "Captain Commands": [],
         "General & Master Commands": [],
-        "Commander Commands": []
+        "Commander Commands": [],
+        "Owner Commands": []
     }
     
     for cmd_name, cmd_info in COMMANDS_HELP.items():
@@ -684,7 +703,8 @@ async def help(interaction: discord.Interaction, command: str = None, publish: b
         emoji_prefix = "📋" if category_name == "User Commands" else \
                        "👮" if category_name == "Captain Commands" else \
                        "⭐" if category_name == "General & Master Commands" else \
-                       "🔥"
+                       "🔥" if category_name == "Commander Commands" else \
+                       "👑"
                        
         embed.add_field(
             name=f"{emoji_prefix} {category_name}",
@@ -2885,6 +2905,236 @@ async def before_scheduled_clan_veteran_check():
     log.info("Bot is ready. Starting scheduled clan veteran check task.")
 
 
-# --- 19. RUN THE BOT ---
+# --- 19. WEEKLY BOUNTY QUEST ---
+
+# Channel and message config — swap these out when moving from test to production
+BOUNTY_ANNOUNCEMENT_CHANNEL_ID = 1173640617453174835   # test channel; swap for prod
+BOUNTY_THREADS_CHANNEL_ID = 1517972125246292178        # #weekly-bounty threads channel
+BOUNTY_ITEMS_CHANNEL_ID = 1412086157973655572          # channel containing the reference message
+BOUNTY_ITEMS_MESSAGE_ID = 1517971878550175957          # message containing the item list
+BOUNTY_CHECK_EMOJI_GREEN = "<:Green_Check:1234544560831729725>"
+BOUNTY_CHECK_EMOJI_WHITE = "✅"
+
+
+async def fetch_bounty_items() -> list[str]:
+    """
+    Fetches the bounty item list from BOUNTY_ITEMS_MESSAGE_ID in BOUNTY_ITEMS_CHANNEL_ID.
+    The message is expected to have one item per line (blank lines ignored).
+    Returns a list of item name strings.
+    """
+    async with aiohttp.ClientSession() as session:
+        url = f"https://discord.com/api/v10/channels/{BOUNTY_ITEMS_CHANNEL_ID}/messages/{BOUNTY_ITEMS_MESSAGE_ID}"
+        data = await discord_api_request(session, "GET", url)
+        if not data:
+            return []
+        content = data.get("content", "")
+        items = [line.strip() for line in content.splitlines() if line.strip()]
+        return items
+
+
+async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = None) -> tuple[bool, str]:
+    """
+    Core logic: picks an item, creates a thread in BOUNTY_THREADS_CHANNEL_ID,
+    and posts an announcement in BOUNTY_ANNOUNCEMENT_CHANNEL_ID.
+    Returns (success, message).
+    """
+    import random
+
+    chosen_item = item_name
+
+    if not chosen_item:
+        items = await fetch_bounty_items()
+        if not items:
+            return False, "Could not fetch bounty items list. Check that the reference message is accessible."
+        chosen_item = random.choice(items)
+
+    threads_channel = guild.get_channel(BOUNTY_THREADS_CHANNEL_ID)
+    if not threads_channel:
+        return False, f"Could not find bounty threads channel (ID `{BOUNTY_THREADS_CHANNEL_ID}`)."
+
+    now = datetime.now(ZoneInfo("UTC"))
+    week_label = now.strftime("Week of %b %d, %Y")
+    thread_name = f"Weekly Bounty – {chosen_item} ({week_label})"
+
+    # Create thread in the threads channel
+    try:
+        thread = await threads_channel.create_thread(
+            name=thread_name,
+            auto_archive_duration=10080,  # 7 days
+            type=discord.ChannelType.public_thread,
+        )
+    except Exception as e:
+        return False, f"Failed to create thread: {e}"
+
+    opening_post = (
+        f"## Weekly Bounty: **{chosen_item}**\n\n"
+        f"This week's bounty is **{chosen_item}**!\n\n"
+        f"Post a screenshot of your drop here. Staff will react with ✅ to confirm it counts.\n\n"
+        f"*Thread closes at the end of the week.*"
+    )
+    await thread.send(opening_post)
+
+    # Post announcement
+    announcement_channel = guild.get_channel(BOUNTY_ANNOUNCEMENT_CHANNEL_ID)
+    if announcement_channel:
+        embed = discord.Embed(
+            title="🎯 New Weekly Bounty!",
+            description=(
+                f"This week's bounty item is **{chosen_item}**!\n\n"
+                f"Head over to {thread.mention} to submit your drop screenshot.\n"
+                f"Staff will react with ✅ to confirm eligible submissions."
+            ),
+            color=discord.Color.gold(),
+            timestamp=now,
+        )
+        embed.set_footer(text="Good luck, everyone!")
+        await announcement_channel.send(embed=embed)
+
+    return True, f"Created thread **{thread_name}** and posted announcement. Thread: {thread.mention}"
+
+
+async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
+    """
+    Scans all messages in a bounty thread.
+    Returns a list of dicts {user_id, display_name} for each unique user whose
+    message has a Green_Check or white_check_mark reaction from staff.
+    """
+    GREEN_CHECK_NAME = "Green_Check"
+    WHITE_CHECK_NAME = "white_check_mark"
+
+    winners: dict[int, str] = {}  # user_id -> display_name
+
+    async for message in thread.history(limit=None, oldest_first=True):
+        if not message.reactions:
+            continue
+        for reaction in message.reactions:
+            emoji = reaction.emoji
+            # Match custom emoji by name or unicode white check
+            is_green = isinstance(emoji, discord.PartialEmoji | discord.Emoji) and emoji.name == GREEN_CHECK_NAME
+            is_white = emoji == WHITE_CHECK_NAME or (hasattr(emoji, "name") and emoji.name == WHITE_CHECK_NAME)
+            if is_green or is_white:
+                author = message.author
+                if author and not author.bot:
+                    winners[author.id] = author.display_name
+                break  # no need to check other reactions on this message
+
+    return [{"user_id": uid, "display_name": name} for uid, name in winners.items()]
+
+
+@client.tree.command(name="generate-new-bounty-quest", description="Generate a new weekly bounty quest thread and announcement.")
+@app_commands.describe(
+    item_name="Optional: specify the bounty item. If omitted, one is chosen randomly from the list."
+)
+@check_staff_role("Owner")
+async def generate_new_bounty_quest(interaction: discord.Interaction, item_name: str = None):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /generate-new-bounty-quest item_name='{item_name}' used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /generate-new-bounty-quest item_name='{item_name}' used by {interaction.user}")
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        success, msg = await _run_generate_bounty(interaction.guild, item_name)
+        if success:
+            await interaction.followup.send(f"✅ {msg}", ephemeral=True)
+        else:
+            await interaction.followup.send(f"❌ {msg}", ephemeral=True)
+    except Exception as e:
+        log.error(f"Error in /generate-new-bounty-quest: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
+
+
+@client.tree.command(name="close-bounty-quest", description="Lock a bounty quest thread.")
+@app_commands.describe(
+    thread_id="The ID of the bounty thread to lock."
+)
+@check_staff_role("Owner")
+async def close_bounty_quest(interaction: discord.Interaction, thread_id: str):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /close-bounty-quest thread_id='{thread_id}' used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /close-bounty-quest thread_id='{thread_id}' used by {interaction.user}")
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        thread_id_int = int(thread_id)
+    except ValueError:
+        await interaction.followup.send("❌ Invalid thread ID — must be a numeric Discord snowflake.", ephemeral=True)
+        return
+
+    try:
+        thread = interaction.guild.get_channel(thread_id_int)
+        if not thread:
+            thread = await interaction.guild.fetch_channel(thread_id_int)
+
+        if not isinstance(thread, discord.Thread):
+            await interaction.followup.send(f"❌ Channel `{thread_id}` is not a thread.", ephemeral=True)
+            return
+
+        await thread.edit(locked=True, archived=True)
+        await interaction.followup.send(f"✅ Thread **{thread.name}** has been locked and archived.", ephemeral=True)
+    except discord.NotFound:
+        await interaction.followup.send(f"❌ Could not find a thread with ID `{thread_id}`.", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.followup.send("❌ Bot lacks permission to lock that thread.", ephemeral=True)
+    except Exception as e:
+        log.error(f"Error in /close-bounty-quest: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
+
+
+@client.tree.command(name="check-bounty-completion", description="Check a bounty thread for confirmed submissions (✅ reactions).")
+@app_commands.describe(
+    thread_id="The ID of the bounty thread to check."
+)
+@check_staff_role("Owner")
+async def check_bounty_completion(interaction: discord.Interaction, thread_id: str):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /check-bounty-completion thread_id='{thread_id}' used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /check-bounty-completion thread_id='{thread_id}' used by {interaction.user}")
+
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        thread_id_int = int(thread_id)
+    except ValueError:
+        await interaction.followup.send("❌ Invalid thread ID — must be a numeric Discord snowflake.", ephemeral=True)
+        return
+
+    try:
+        thread = interaction.guild.get_channel(thread_id_int)
+        if not thread:
+            thread = await interaction.guild.fetch_channel(thread_id_int)
+
+        if not isinstance(thread, discord.Thread):
+            await interaction.followup.send(f"❌ Channel `{thread_id}` is not a thread.", ephemeral=True)
+            return
+
+        winners = await _check_bounty_completions(thread)
+
+        embed = discord.Embed(
+            title=f"Bounty Completions: {thread.name}",
+            color=discord.Color.green() if winners else discord.Color.orange(),
+            timestamp=datetime.now(),
+        )
+
+        if winners:
+            winner_lines = "\n".join(f"• <@{w['user_id']}> ({w['display_name']})" for w in winners)
+            embed.description = f"**{len(winners)} confirmed completion(s):**\n{winner_lines}"
+        else:
+            embed.description = "No confirmed completions found (no ✅ reactions on any messages yet)."
+
+        embed.set_footer(text=f"Thread ID: {thread_id}")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    except discord.NotFound:
+        await interaction.followup.send(f"❌ Could not find a thread with ID `{thread_id}`.", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.followup.send("❌ Bot lacks permission to read that thread.", ephemeral=True)
+    except Exception as e:
+        log.error(f"Error in /check-bounty-completion: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
+
+
+# --- 20. RUN THE BOT ---
 
 client.run(DISCORD_TOKEN)
