@@ -2984,22 +2984,13 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
         f"*Thread closes <t:{close_ts}:F>.*"
     )
 
-    # Create thread — ForumChannel and TextChannel have different signatures
     try:
-        if isinstance(threads_channel, discord.ForumChannel):
-            thread_with_msg = await threads_channel.create_thread(
-                name=thread_name,
-                content=opening_post,
-                auto_archive_duration=10080,  # 7 days
-            )
-            thread = thread_with_msg.thread
-        else:
-            thread = await threads_channel.create_thread(
-                name=thread_name,
-                auto_archive_duration=10080,
-                type=discord.ChannelType.public_thread,
-            )
-            await thread.send(opening_post)
+        thread_with_msg = await threads_channel.create_thread(
+            name=thread_name,
+            content=opening_post,
+            auto_archive_duration=10080,  # 7 days
+        )
+        thread = thread_with_msg.thread
     except Exception as e:
         return False, f"Failed to create thread: {e}"
 
