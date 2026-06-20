@@ -2977,23 +2977,31 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
     close_ts = int(close_dt.timestamp())
     wiki_link = _wiki_url(chosen_item)
 
-    # Create thread in the threads channel
-    try:
-        thread = await threads_channel.create_thread(
-            name=thread_name,
-            auto_archive_duration=10080,  # 7 days
-            type=discord.ChannelType.public_thread,
-        )
-    except Exception as e:
-        return False, f"Failed to create thread: {e}"
-
     opening_post = (
         f"## Weekly Bounty: **{chosen_item}**\n\n"
         f"This week's bounty is **[{chosen_item}]({wiki_link})**!\n\n"
         f"Post a screenshot of your drop here. Staff will react with ✅ to confirm it counts.\n\n"
         f"*Thread closes <t:{close_ts}:F>.*"
     )
-    await thread.send(opening_post)
+
+    # Create thread — ForumChannel and TextChannel have different signatures
+    try:
+        if isinstance(threads_channel, discord.ForumChannel):
+            thread_with_msg = await threads_channel.create_thread(
+                name=thread_name,
+                content=opening_post,
+                auto_archive_duration=10080,  # 7 days
+            )
+            thread = thread_with_msg.thread
+        else:
+            thread = await threads_channel.create_thread(
+                name=thread_name,
+                auto_archive_duration=10080,
+                type=discord.ChannelType.public_thread,
+            )
+            await thread.send(opening_post)
+    except Exception as e:
+        return False, f"Failed to create thread: {e}"
 
     # Post announcement
     announcement_channel = guild.get_channel(BOUNTY_ANNOUNCEMENT_CHANNEL_ID)
