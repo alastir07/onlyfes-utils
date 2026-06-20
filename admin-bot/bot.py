@@ -2932,6 +2932,23 @@ async def fetch_bounty_items() -> list[str]:
         return items
 
 
+def _wiki_url(item_name: str) -> str:
+    """Returns the OSRS wiki URL for an item, with spaces replaced by underscores."""
+    from urllib.parse import quote
+    slug = item_name.replace(" ", "_")
+    return f"https://oldschool.runescape.wiki/w/{quote(slug, safe='_')}"
+
+
+def _next_saturday_0600_utc(from_dt: datetime) -> datetime:
+    """Returns the next Saturday at 06:00 UTC on or after from_dt."""
+    from datetime import timedelta
+    days_until_saturday = (5 - from_dt.weekday()) % 7
+    if days_until_saturday == 0 and from_dt.hour >= 6:
+        days_until_saturday = 7
+    target = from_dt.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=days_until_saturday)
+    return target
+
+
 async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = None) -> tuple[bool, str]:
     """
     Core logic: picks an item, creates a thread in BOUNTY_THREADS_CHANNEL_ID,
@@ -2956,6 +2973,10 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
     week_label = now.strftime("Week of %b %d, %Y")
     thread_name = f"Weekly Bounty – {chosen_item} ({week_label})"
 
+    close_dt = _next_saturday_0600_utc(now)
+    close_ts = int(close_dt.timestamp())
+    wiki_link = _wiki_url(chosen_item)
+
     # Create thread in the threads channel
     try:
         thread = await threads_channel.create_thread(
@@ -2968,9 +2989,9 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
 
     opening_post = (
         f"## Weekly Bounty: **{chosen_item}**\n\n"
-        f"This week's bounty is **{chosen_item}**!\n\n"
+        f"This week's bounty is **[{chosen_item}]({wiki_link})**!\n\n"
         f"Post a screenshot of your drop here. Staff will react with ✅ to confirm it counts.\n\n"
-        f"*Thread closes at the end of the week.*"
+        f"*Thread closes <t:{close_ts}:F>.*"
     )
     await thread.send(opening_post)
 
@@ -2980,9 +3001,10 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
         embed = discord.Embed(
             title="🎯 New Weekly Bounty!",
             description=(
-                f"This week's bounty item is **{chosen_item}**!\n\n"
+                f"This week's bounty item is **[{chosen_item}]({wiki_link})**!\n\n"
                 f"Head over to {thread.mention} to submit your drop screenshot.\n"
-                f"Staff will react with ✅ to confirm eligible submissions."
+                f"Staff will react with ✅ to confirm eligible submissions.\n\n"
+                f"*Closes <t:{close_ts}:F>*"
             ),
             color=discord.Color.gold(),
             timestamp=now,
@@ -2996,8 +3018,9 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
 async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
     """
     Scans all messages in a bounty thread.
-    Returns a list of dicts {user_id, display_name} for each unique user whose
+    Returns a list of dicts {user_id, display_name, rsn} for each unique user whose
     message has a Green_Check or white_check_mark reaction from staff.
+    RSN is looked up from the database via discord_id; falls back to display_name if not found.
     """
     GREEN_CHECK_NAME = "Green_Check"
     WHITE_CHECK_NAME = "white_check_mark"
@@ -3009,16 +3032,35 @@ async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
             continue
         for reaction in message.reactions:
             emoji = reaction.emoji
-            # Match custom emoji by name or unicode white check
             is_green = isinstance(emoji, discord.PartialEmoji | discord.Emoji) and emoji.name == GREEN_CHECK_NAME
             is_white = emoji == WHITE_CHECK_NAME or (hasattr(emoji, "name") and emoji.name == WHITE_CHECK_NAME)
             if is_green or is_white:
                 author = message.author
                 if author and not author.bot:
                     winners[author.id] = author.display_name
-                break  # no need to check other reactions on this message
+                break
 
-    return [{"user_id": uid, "display_name": name} for uid, name in winners.items()]
+    # Look up RSNs from DB by discord_id
+    result = []
+    for uid, display_name in winners.items():
+        rsn = None
+        try:
+            member_res = supabase.table('members').select('id').eq('discord_id', uid).limit(1).execute()
+            if member_res.data:
+                member_id = member_res.data[0]['id']
+                primary_res = supabase.table('member_rsns') \
+                    .select('rsn') \
+                    .eq('member_id', member_id) \
+                    .eq('is_primary', True) \
+                    .limit(1) \
+                    .execute()
+                if primary_res.data:
+                    rsn = primary_res.data[0]['rsn']
+        except Exception as e:
+            log.warning(f"Could not look up RSN for discord_id {uid}: {e}")
+        result.append({"user_id": uid, "display_name": display_name, "rsn": rsn})
+
+    return result
 
 
 @client.tree.command(name="generate-new-bounty-quest", description="Generate a new weekly bounty quest thread and announcement.")
@@ -3118,7 +3160,10 @@ async def check_bounty_completion(interaction: discord.Interaction, thread_id: s
         )
 
         if winners:
-            winner_lines = "\n".join(f"• <@{w['user_id']}> ({w['display_name']})" for w in winners)
+            def _winner_line(w: dict) -> str:
+                rsn_part = f"`{w['rsn']}`" if w['rsn'] else f"_{w['display_name']} (no RSN linked)_"
+                return f"• <@{w['user_id']}> — {rsn_part}"
+            winner_lines = "\n".join(_winner_line(w) for w in winners)
             embed.description = f"**{len(winners)} confirmed completion(s):**\n{winner_lines}"
         else:
             embed.description = "No confirmed completions found (no ✅ reactions on any messages yet)."
