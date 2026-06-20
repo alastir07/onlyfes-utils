@@ -585,19 +585,19 @@ COMMANDS_HELP = {
         "min_role": "Commander"
     },
     "generate-new-bounty-quest": {
-        "syntax": "`/generate-new-bounty-quest [item_name]`",
+        "syntax": "`/generate-new-bounty-quest [item_name] [publish]`",
         "description": "Creates a new weekly bounty thread and announcement. Optionally specify an item; otherwise one is chosen randomly.",
         "category": "Owner Commands",
         "min_role": "Owner"
     },
     "close-bounty-quest": {
-        "syntax": "`/close-bounty-quest <thread_id>`",
+        "syntax": "`/close-bounty-quest <thread_id> [publish]`",
         "description": "Locks and archives a bounty quest thread.",
         "category": "Owner Commands",
         "min_role": "Owner"
     },
     "check-bounty-completion": {
-        "syntax": "`/check-bounty-completion <thread_id>`",
+        "syntax": "`/check-bounty-completion <thread_id> [publish]`",
         "description": "Checks a bounty thread for messages with a ✅ reaction and lists the confirmed completions.",
         "category": "Owner Commands",
         "min_role": "Owner"
@@ -3064,20 +3064,22 @@ async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
 
 @client.tree.command(name="generate-new-bounty-quest", description="Generate a new weekly bounty quest thread and announcement.")
 @app_commands.describe(
-    item_name="Optional: specify the bounty item. If omitted, one is chosen randomly from the list."
+    item_name="Optional: specify the bounty item. If omitted, one is chosen randomly from the list.",
+    publish="True to post the confirmation publicly."
 )
 @check_staff_role("Owner")
-async def generate_new_bounty_quest(interaction: discord.Interaction, item_name: str = None):
+async def generate_new_bounty_quest(interaction: discord.Interaction, item_name: str = None, publish: bool = False):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /generate-new-bounty-quest item_name='{item_name}' used by {interaction.user}")
-    await log_command_use(f"[{timestamp}] /generate-new-bounty-quest item_name='{item_name}' used by {interaction.user}")
+    log.info(f"[{timestamp}] /generate-new-bounty-quest item_name='{item_name}' publish={publish} used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /generate-new-bounty-quest item_name='{item_name}' publish={publish} used by {interaction.user}")
 
-    await interaction.response.defer(ephemeral=True)
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
 
     try:
         success, msg = await _run_generate_bounty(interaction.guild, item_name)
         if success:
-            await interaction.followup.send(f"✅ {msg}", ephemeral=True)
+            await interaction.followup.send(f"✅ {msg}", ephemeral=is_ephemeral)
         else:
             await interaction.followup.send(f"❌ {msg}", ephemeral=True)
     except Exception as e:
@@ -3087,15 +3089,17 @@ async def generate_new_bounty_quest(interaction: discord.Interaction, item_name:
 
 @client.tree.command(name="close-bounty-quest", description="Lock a bounty quest thread.")
 @app_commands.describe(
-    thread_id="The ID of the bounty thread to lock."
+    thread_id="The ID of the bounty thread to lock.",
+    publish="True to post the confirmation publicly."
 )
 @check_staff_role("Owner")
-async def close_bounty_quest(interaction: discord.Interaction, thread_id: str):
+async def close_bounty_quest(interaction: discord.Interaction, thread_id: str, publish: bool = False):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /close-bounty-quest thread_id='{thread_id}' used by {interaction.user}")
-    await log_command_use(f"[{timestamp}] /close-bounty-quest thread_id='{thread_id}' used by {interaction.user}")
+    log.info(f"[{timestamp}] /close-bounty-quest thread_id='{thread_id}' publish={publish} used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /close-bounty-quest thread_id='{thread_id}' publish={publish} used by {interaction.user}")
 
-    await interaction.response.defer(ephemeral=True)
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
 
     try:
         thread_id_int = int(thread_id)
@@ -3113,7 +3117,7 @@ async def close_bounty_quest(interaction: discord.Interaction, thread_id: str):
             return
 
         await thread.edit(locked=True, archived=True)
-        await interaction.followup.send(f"✅ Thread **{thread.name}** has been locked and archived.", ephemeral=True)
+        await interaction.followup.send(f"✅ Thread **{thread.name}** has been locked and archived.", ephemeral=is_ephemeral)
     except discord.NotFound:
         await interaction.followup.send(f"❌ Could not find a thread with ID `{thread_id}`.", ephemeral=True)
     except discord.Forbidden:
@@ -3125,15 +3129,17 @@ async def close_bounty_quest(interaction: discord.Interaction, thread_id: str):
 
 @client.tree.command(name="check-bounty-completion", description="Check a bounty thread for confirmed submissions (✅ reactions).")
 @app_commands.describe(
-    thread_id="The ID of the bounty thread to check."
+    thread_id="The ID of the bounty thread to check.",
+    publish="True to post the results publicly."
 )
 @check_staff_role("Owner")
-async def check_bounty_completion(interaction: discord.Interaction, thread_id: str):
+async def check_bounty_completion(interaction: discord.Interaction, thread_id: str, publish: bool = False):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /check-bounty-completion thread_id='{thread_id}' used by {interaction.user}")
-    await log_command_use(f"[{timestamp}] /check-bounty-completion thread_id='{thread_id}' used by {interaction.user}")
+    log.info(f"[{timestamp}] /check-bounty-completion thread_id='{thread_id}' publish={publish} used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /check-bounty-completion thread_id='{thread_id}' publish={publish} used by {interaction.user}")
 
-    await interaction.response.defer(ephemeral=True)
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
 
     try:
         thread_id_int = int(thread_id)
@@ -3168,7 +3174,7 @@ async def check_bounty_completion(interaction: discord.Interaction, thread_id: s
             embed.description = "No confirmed completions found (no ✅ reactions on any messages yet)."
 
         embed.set_footer(text=f"Thread ID: {thread_id}")
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
 
     except discord.NotFound:
         await interaction.followup.send(f"❌ Could not find a thread with ID `{thread_id}`.", ephemeral=True)
