@@ -2911,20 +2911,20 @@ async def before_scheduled_clan_veteran_check():
 # Channel and message config — swap these out when moving from test to production
 BOUNTY_ANNOUNCEMENT_CHANNEL_ID = 1173640617453174835   # test channel; swap for prod
 BOUNTY_THREADS_CHANNEL_ID = 1517972125246292178        # #weekly-bounty threads channel
-BOUNTY_ITEMS_CHANNEL_ID = 1412086157973655572          # channel containing the reference message
-BOUNTY_ITEMS_MESSAGE_ID = 1517971878550175957          # message containing the item list
+BOUNTY_ITEMS_THREAD_ID = 1517995249153081585           # "Full item list" thread in #weekly-bounties
 BOUNTY_CHECK_EMOJI_GREEN_NAME = "Green_Check"
 BOUNTY_CHECK_EMOJI_WHITE = "✅"
 
 
 async def fetch_bounty_items() -> list[str]:
     """
-    Fetches the bounty item list from BOUNTY_ITEMS_MESSAGE_ID in BOUNTY_ITEMS_CHANNEL_ID.
-    The message is expected to have one item per line (blank lines ignored).
+    Fetches the bounty item list from the starter message of BOUNTY_ITEMS_THREAD_ID.
+    The message is expected to have one item per line (blank lines and list prefixes ignored).
     Returns a list of item name strings.
     """
     async with aiohttp.ClientSession() as session:
-        url = f"https://discord.com/api/v10/channels/{BOUNTY_ITEMS_CHANNEL_ID}/messages/{BOUNTY_ITEMS_MESSAGE_ID}"
+        # The starter message of a forum thread shares the thread's ID
+        url = f"https://discord.com/api/v10/channels/{BOUNTY_ITEMS_THREAD_ID}/messages/{BOUNTY_ITEMS_THREAD_ID}"
         data = await discord_api_request(session, "GET", url)
         if not data:
             return []
