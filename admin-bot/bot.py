@@ -10,7 +10,9 @@ import re
 import json
 from io import StringIO
 import traceback
-from datetime import datetime, time
+import random
+from datetime import datetime, time, timedelta
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 import functools
 import logging
@@ -146,8 +148,7 @@ def parse_duration(time_str: str) -> datetime | None:
     
     if not matches:
         return None
-        
-    from datetime import timedelta
+
     delta = timedelta()
     for amount_str, unit in matches:
         amount = int(amount_str)
@@ -2912,7 +2913,7 @@ BOUNTY_ANNOUNCEMENT_CHANNEL_ID = 1173640617453174835   # test channel; swap for 
 BOUNTY_THREADS_CHANNEL_ID = 1517972125246292178        # #weekly-bounty threads channel
 BOUNTY_ITEMS_CHANNEL_ID = 1412086157973655572          # channel containing the reference message
 BOUNTY_ITEMS_MESSAGE_ID = 1517971878550175957          # message containing the item list
-BOUNTY_CHECK_EMOJI_GREEN = "<:Green_Check:1234544560831729725>"
+BOUNTY_CHECK_EMOJI_GREEN_NAME = "Green_Check"
 BOUNTY_CHECK_EMOJI_WHITE = "✅"
 
 
@@ -2942,14 +2943,12 @@ async def fetch_bounty_items() -> list[str]:
 
 def _wiki_url(item_name: str) -> str:
     """Returns the OSRS wiki URL for an item, with spaces replaced by underscores."""
-    from urllib.parse import quote
     slug = item_name.replace(" ", "_")
     return f"https://oldschool.runescape.wiki/w/{quote(slug, safe='_')}"
 
 
 def _next_saturday_0600_utc(from_dt: datetime) -> datetime:
     """Returns the next Saturday at 06:00 UTC on or after from_dt."""
-    from datetime import timedelta
     days_until_saturday = (5 - from_dt.weekday()) % 7
     if days_until_saturday == 0 and from_dt.hour >= 6:
         days_until_saturday = 7
@@ -2963,8 +2962,6 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
     and posts an announcement in BOUNTY_ANNOUNCEMENT_CHANNEL_ID.
     Returns (success, message).
     """
-    import random
-
     chosen_item = item_name
 
     if not chosen_item:
@@ -3029,10 +3026,6 @@ async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
     message has a Green_Check or white_check_mark reaction from staff.
     RSN is looked up from the database via discord_id; falls back to display_name if not found.
     """
-    GREEN_CHECK_NAME = "Green_Check"
-    WHITE_CHECK_UNICODE = "✅"
-    WHITE_CHECK_NAME = "white_check_mark"
-
     winners: dict[int, str] = {}  # user_id -> display_name
 
     async for message in thread.history(limit=None, oldest_first=True):
@@ -3040,8 +3033,8 @@ async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
             continue
         for reaction in message.reactions:
             emoji = reaction.emoji
-            is_green = isinstance(emoji, discord.PartialEmoji | discord.Emoji) and emoji.name == GREEN_CHECK_NAME
-            is_white = emoji == WHITE_CHECK_UNICODE or (hasattr(emoji, "name") and emoji.name == WHITE_CHECK_NAME)
+            is_green = isinstance(emoji, discord.PartialEmoji | discord.Emoji) and emoji.name == BOUNTY_CHECK_EMOJI_GREEN_NAME
+            is_white = emoji == BOUNTY_CHECK_EMOJI_WHITE or (hasattr(emoji, "name") and emoji.name == "white_check_mark")
             if is_green or is_white:
                 author = message.author
                 if author and not author.bot:
