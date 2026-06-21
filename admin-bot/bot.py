@@ -2923,7 +2923,7 @@ async def before_scheduled_clan_veteran_check():
 # --- 19. WEEKLY BOUNTY QUEST ---
 
 # Channel and message config — swap these out when moving from test to production
-BOUNTY_ANNOUNCEMENT_CHANNEL_ID = 1173640617453174835   # test channel (#admin-playground - 1173640617453174835); swap for #event (1054611693197602936) when ready
+BOUNTY_ANNOUNCEMENT_CHANNEL_ID = 1054611693197602936   # test channel (#admin-playground - 1173640617453174835); swap for #event (1054611693197602936) when ready
 BOUNTY_THREADS_CHANNEL_ID = 1517972125246292178        # #weekly-bounty threads channel
 BOUNTY_ITEMS_THREAD_ID = 1517995249153081585           # "Full item list" thread in #weekly-bounties
 BOUNTY_COMPLETIONS_CHANNEL_ID = 1077669229475663893    # #event-winners (completions are posted here)
