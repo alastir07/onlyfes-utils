@@ -3192,21 +3192,17 @@ async def check_bounty_completion(interaction: discord.Interaction, thread_id: s
         )
 
         if winners:
-            def _winner_line(w: dict) -> str:
-                if w['rsn']:
-                    return f"• <@{w['user_id']}> — `{w['rsn']}`"
-                return f"• <@{w['user_id']}>"
-            winner_lines = "\n".join(_winner_line(w) for w in winners)
+            winner_lines = "\n".join(f"• <@{w['user_id']}>" for w in winners)
 
             close_dt = _next_saturday_0600_utc(now)
             next_bounty_dt = _monday_after(close_dt)
             next_bounty_ts = int(next_bounty_dt.timestamp())
-            weekly_bounties_mention = f"<#{BOUNTY_INFO_CHANNEL_ID}>"
+            threads_channel_mention = f"<#{BOUNTY_THREADS_CHANNEL_ID}>"
 
             embed.description = (
                 f"The following members successfully obtained the drop:\n{winner_lines}\n\n"
-                f"Congratulations to you all, you've each earned 3 Event Points.\n"
-                f"A new bounty will be live <t:{next_bounty_ts}:F> (<t:{next_bounty_ts}:R>), keep your eyes on {weekly_bounties_mention}!"
+                f"Congratulations to you all, you've each earned 3 Event Points.\n\n"
+                f"A new bounty will be live <t:{next_bounty_ts}:F> (<t:{next_bounty_ts}:R>), keep your eyes on {threads_channel_mention}!"
             )
         else:
             embed.description = "No confirmed completions found (no ✅ reactions on any messages yet)."
