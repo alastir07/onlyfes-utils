@@ -2993,7 +2993,8 @@ def _wiki_url(item_name: str) -> str:
 def _wiki_image_url(item_name: str) -> str:
     """Returns the OSRS wiki detail image URL for an item."""
     slug = item_name.replace(" ", "_")
-    return f"https://oldschool.runescape.wiki/images/{quote(slug, safe=\"_'\")}_detail.png"
+    encoded = quote(slug, safe="_'")
+    return f"https://oldschool.runescape.wiki/images/{encoded}_detail.png"
 
 
 def _next_saturday_0600_utc(from_dt: datetime) -> datetime:
