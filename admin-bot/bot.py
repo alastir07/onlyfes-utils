@@ -2909,9 +2909,12 @@ async def before_scheduled_clan_veteran_check():
 # --- 19. WEEKLY BOUNTY QUEST ---
 
 # Channel and message config — swap these out when moving from test to production
-BOUNTY_ANNOUNCEMENT_CHANNEL_ID = 1173640617453174835   # test channel; swap for prod
+BOUNTY_ANNOUNCEMENT_CHANNEL_ID = 1173640617453174835   # test channel (#admin-playground - 1173640617453174835); swap for #event (1054611693197602936) when ready
 BOUNTY_THREADS_CHANNEL_ID = 1517972125246292178        # #weekly-bounty threads channel
 BOUNTY_ITEMS_THREAD_ID = 1517995249153081585           # "Full item list" thread in #weekly-bounties
+BOUNTY_COMPLETIONS_CHANNEL_ID = 1077669229475663893    # #event-winners (completions are posted here)
+BOUNTY_INFO_CHANNEL_ID = 1517994786408108224           # #weekly-bounties info thread (within weekly-bounty channel)
+BOUNTY_ROLE_ID = 1518261554519212176                   # @Weekly bounty role
 BOUNTY_CHECK_EMOJI_GREEN_NAME = "Green_Check"
 BOUNTY_CHECK_EMOJI_WHITE = "✅"
 
@@ -2954,6 +2957,11 @@ def _next_saturday_0600_utc(from_dt: datetime) -> datetime:
         days_until_saturday = 7
     target = from_dt.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=days_until_saturday)
     return target
+
+
+def _monday_after(close_dt: datetime) -> datetime:
+    """Returns the Monday at 06:00 UTC immediately after the given Saturday close datetime."""
+    return close_dt + timedelta(days=2)
 
 
 async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = None) -> tuple[bool, str]:
@@ -3002,19 +3010,23 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
     # Post announcement
     announcement_channel = guild.get_channel(BOUNTY_ANNOUNCEMENT_CHANNEL_ID)
     if announcement_channel:
+        info_channel_mention = f"<#{BOUNTY_INFO_CHANNEL_ID}>"
         embed = discord.Embed(
             title="🎯 New Weekly Bounty!",
             description=(
                 f"This week's bounty item is **[{chosen_item}]({wiki_link})**!\n\n"
                 f"Head over to {thread.mention} to submit your drop screenshot.\n"
                 f"Staff will react with ✅ to confirm eligible submissions.\n\n"
-                f"*Closes <t:{close_ts}:F>*"
+                f"**Reward:** 3 Event Points\n\n"
+                f"For more information on the weekly bounty event, see {info_channel_mention}.\n\n"
+                f"*Closes <t:{close_ts}:F> (<t:{close_ts}:R>)*"
             ),
             color=discord.Color.gold(),
             timestamp=now,
         )
         embed.set_footer(text="Good luck, everyone!")
-        await announcement_channel.send(embed=embed)
+        role_mention = f"<@&{BOUNTY_ROLE_ID}>"
+        await announcement_channel.send(content=role_mention, embed=embed)
 
     return True, f"Created thread **{thread_name}** and posted announcement. Thread: {thread.mention}"
 
@@ -3160,23 +3172,56 @@ async def check_bounty_completion(interaction: discord.Interaction, thread_id: s
 
         winners = await _check_bounty_completions(thread)
 
+        now = datetime.now(ZoneInfo("UTC"))
+        week_label = now.strftime("Week of %b %d, %Y")
+        # Strip "Weekly Bounty – " prefix from thread name to get just the item name
+        raw_name = thread.name
+        for prefix in ("Weekly Bounty – ", "Weekly Bounty - "):
+            if raw_name.startswith(prefix):
+                raw_name = raw_name[len(prefix):]
+                break
+        # Strip trailing "(Week of ...)" if present
+        if " (" in raw_name:
+            raw_name = raw_name[:raw_name.rfind(" (")]
+        item_name = raw_name
+
         embed = discord.Embed(
-            title=f"Bounty Completions: {thread.name}",
+            title=f"Weekly Bounty Completions: {item_name} ({week_label})",
             color=discord.Color.green() if winners else discord.Color.orange(),
-            timestamp=datetime.now(),
+            timestamp=datetime.now(ZoneInfo("UTC")),
         )
 
         if winners:
             def _winner_line(w: dict) -> str:
-                rsn_part = f"`{w['rsn']}`" if w['rsn'] else f"_{w['display_name']} (no RSN linked)_"
-                return f"• <@{w['user_id']}> — {rsn_part}"
+                if w['rsn']:
+                    return f"• <@{w['user_id']}> — `{w['rsn']}`"
+                return f"• <@{w['user_id']}>"
             winner_lines = "\n".join(_winner_line(w) for w in winners)
-            embed.description = f"**{len(winners)} confirmed completion(s):**\n{winner_lines}"
+
+            close_dt = _next_saturday_0600_utc(now)
+            next_bounty_dt = _monday_after(close_dt)
+            next_bounty_ts = int(next_bounty_dt.timestamp())
+            weekly_bounties_mention = f"<#{BOUNTY_INFO_CHANNEL_ID}>"
+
+            embed.description = (
+                f"The following members successfully obtained the drop:\n{winner_lines}\n\n"
+                f"Congratulations to you all, you've each earned 3 Event Points.\n"
+                f"A new bounty will be live <t:{next_bounty_ts}:F> (<t:{next_bounty_ts}:R>), keep your eyes on {weekly_bounties_mention}!"
+            )
         else:
             embed.description = "No confirmed completions found (no ✅ reactions on any messages yet)."
 
         embed.set_footer(text=f"Thread ID: {thread_id}")
-        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+
+        if publish:
+            completions_channel = interaction.guild.get_channel(BOUNTY_COMPLETIONS_CHANNEL_ID)
+            if completions_channel:
+                await completions_channel.send(embed=embed)
+                await interaction.followup.send(f"✅ Posted to {completions_channel.mention}.", ephemeral=True)
+            else:
+                await interaction.followup.send(f"❌ Could not find completions channel (ID `{BOUNTY_COMPLETIONS_CHANNEL_ID}`).", ephemeral=True)
+        else:
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
     except discord.NotFound:
         await interaction.followup.send(f"❌ Could not find a thread with ID `{thread_id}`.", ephemeral=True)
