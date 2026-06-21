@@ -440,8 +440,10 @@ async def on_ready():
         scheduled_overachievers_check.start()
         scheduled_no_discord_check.start()
         scheduled_clan_veteran_check.start()
+        scheduled_bounty_generate.start()
+        scheduled_bounty_close.start()
 
-        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily), no_discord_check (00:05 UTC weekly on Sundays), clan_veteran_check (00:10 UTC monthly on the 1st)")
+        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily), no_discord_check (00:05 UTC weekly on Sundays), clan_veteran_check (00:10 UTC monthly on the 1st), bounty_generate (Mon 06:00 UTC), bounty_close (Sat 06:00 UTC)")
     log.info(f'Logged in as {client.user} (ID: {client.user.id})')
     log.info('Bot is ready and online.')
 
@@ -600,6 +602,18 @@ COMMANDS_HELP = {
     "check-bounty-completion": {
         "syntax": "`/check-bounty-completion <thread_id> [publish]`",
         "description": "Checks a bounty thread for messages with a ✅ reaction and lists the confirmed completions.",
+        "category": "Owner Commands",
+        "min_role": "Owner"
+    },
+    "enable-automatic-bounties": {
+        "syntax": "`/enable-automatic-bounties`",
+        "description": "Enables the automatic weekly bounty tasks (generate on Monday 06:00 UTC, close on Saturday 06:00 UTC).",
+        "category": "Owner Commands",
+        "min_role": "Owner"
+    },
+    "disable-automatic-bounties": {
+        "syntax": "`/disable-automatic-bounties`",
+        "description": "Disables the automatic weekly bounty tasks so bounties can be managed manually.",
         "category": "Owner Commands",
         "min_role": "Owner"
     }
@@ -2918,6 +2932,10 @@ BOUNTY_ROLE_ID = 1518261554519212176                   # @Weekly bounty role
 BOUNTY_CHECK_EMOJI_GREEN_NAME = "Green_Check"
 BOUNTY_CHECK_EMOJI_WHITE = "✅"
 
+# Runtime state for automatic bounty management
+bounty_auto_enabled: bool = False
+bounty_active_thread_id: int | None = None  # set when a bounty thread is created
+
 
 async def fetch_bounty_items() -> list[str]:
     """
@@ -2962,6 +2980,14 @@ def _next_saturday_0600_utc(from_dt: datetime) -> datetime:
 def _monday_after(close_dt: datetime) -> datetime:
     """Returns the Monday at 06:00 UTC immediately after the given Saturday close datetime."""
     return close_dt + timedelta(days=2)
+
+
+def _next_monday_0600_utc(from_dt: datetime) -> datetime:
+    """Returns the next Monday at 06:00 UTC strictly after from_dt."""
+    days_until_monday = (7 - from_dt.weekday()) % 7
+    if days_until_monday == 0 and from_dt.hour >= 6:
+        days_until_monday = 7
+    return from_dt.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=days_until_monday)
 
 
 async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = None) -> tuple[bool, str]:
@@ -3027,6 +3053,9 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
         embed.set_footer(text="Good luck, everyone!")
         role_mention = f"<@&{BOUNTY_ROLE_ID}>"
         await announcement_channel.send(content=role_mention, embed=embed)
+
+    global bounty_active_thread_id
+    bounty_active_thread_id = thread.id
 
     return True, f"Created thread **{thread_name}** and posted announcement. Thread: {thread.mention}"
 
@@ -3228,6 +3257,135 @@ async def check_bounty_completion(interaction: discord.Interaction, thread_id: s
         await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
 
 
-# --- 20. RUN THE BOT ---
+# --- 20. AUTOMATIC BOUNTY SCHEDULED TASKS ---
+
+@tasks.loop(time=[time(hour=6, minute=0, tzinfo=ZoneInfo("UTC"))])
+async def scheduled_bounty_generate():
+    """Runs every Monday at 06:00 UTC. Generates a new bounty if auto mode is enabled."""
+    if not bounty_auto_enabled:
+        return
+    now = datetime.now(ZoneInfo("UTC"))
+    if now.weekday() != 0:  # 0 = Monday
+        return
+    log.info("=== Starting scheduled bounty generation ===")
+    guild = client.guilds[0] if client.guilds else None
+    if not guild:
+        log.error("scheduled_bounty_generate: no guild available.")
+        return
+    try:
+        success, msg = await _run_generate_bounty(guild)
+        if success:
+            log.info(f"Scheduled bounty generation complete: {msg}")
+        else:
+            log.error(f"Scheduled bounty generation failed: {msg}")
+    except Exception as e:
+        log.error(f"ERROR in scheduled_bounty_generate: {e}\n{traceback.format_exc()}")
+
+
+@tasks.loop(time=[time(hour=6, minute=0, tzinfo=ZoneInfo("UTC"))])
+async def scheduled_bounty_close():
+    """Runs every Saturday at 06:00 UTC. Closes the active thread and posts completions if auto mode is enabled."""
+    if not bounty_auto_enabled:
+        return
+    now = datetime.now(ZoneInfo("UTC"))
+    if now.weekday() != 5:  # 5 = Saturday
+        return
+    if not bounty_active_thread_id:
+        log.warning("scheduled_bounty_close: no active bounty thread ID recorded, skipping.")
+        return
+    log.info(f"=== Starting scheduled bounty close (thread {bounty_active_thread_id}) ===")
+    guild = client.guilds[0] if client.guilds else None
+    if not guild:
+        log.error("scheduled_bounty_close: no guild available.")
+        return
+    try:
+        thread = guild.get_channel(bounty_active_thread_id)
+        if not thread:
+            thread = await guild.fetch_channel(bounty_active_thread_id)
+        if not isinstance(thread, discord.Thread):
+            log.error(f"scheduled_bounty_close: channel {bounty_active_thread_id} is not a thread.")
+            return
+
+        # Gather completions and post to completions channel before locking
+        winners = await _check_bounty_completions(thread)
+        completions_channel = guild.get_channel(BOUNTY_COMPLETIONS_CHANNEL_ID)
+        if completions_channel and winners:
+            week_label = now.strftime("Week of %b %d, %Y")
+            raw_name = thread.name
+            for prefix in ("Weekly Bounty – ", "Weekly Bounty - "):
+                if raw_name.startswith(prefix):
+                    raw_name = raw_name[len(prefix):]
+                    break
+            if " (" in raw_name:
+                raw_name = raw_name[:raw_name.rfind(" (")]
+            item_name = raw_name
+
+            winner_lines = "\n".join(f"• <@{w['user_id']}>" for w in winners)
+            next_bounty_dt = _monday_after(now)  # next Monday after this Saturday close
+            next_bounty_ts = int(next_bounty_dt.timestamp())
+            threads_channel_mention = f"<#{BOUNTY_THREADS_CHANNEL_ID}>"
+
+            embed = discord.Embed(
+                title=f"Weekly Bounty Completions: {item_name} ({week_label})",
+                color=discord.Color.green(),
+                timestamp=now,
+            )
+            embed.description = (
+                f"The following members successfully obtained the drop:\n{winner_lines}\n\n"
+                f"Congratulations to you all, you've each earned 3 Event Points.\n\n"
+                f"A new bounty will be live <t:{next_bounty_ts}:F> (<t:{next_bounty_ts}:R>), keep your eyes on {threads_channel_mention}!"
+            )
+            embed.set_footer(text=f"Thread ID: {bounty_active_thread_id}")
+            await completions_channel.send(embed=embed)
+            log.info(f"Scheduled bounty close: posted {len(winners)} completion(s) to completions channel.")
+        elif not winners:
+            log.info("Scheduled bounty close: no confirmed completions found, skipping completions post.")
+
+        await thread.edit(locked=True, archived=True)
+        log.info(f"Scheduled bounty close: thread '{thread.name}' locked and archived.")
+    except Exception as e:
+        log.error(f"ERROR in scheduled_bounty_close: {e}\n{traceback.format_exc()}")
+
+
+@scheduled_bounty_generate.before_loop
+async def before_scheduled_bounty_generate():
+    await client.wait_until_ready()
+
+
+@scheduled_bounty_close.before_loop
+async def before_scheduled_bounty_close():
+    await client.wait_until_ready()
+
+
+@client.tree.command(name="enable-automatic-bounties", description="Enable the automatic weekly bounty generation and close tasks.")
+@check_staff_role("Owner")
+async def enable_automatic_bounties(interaction: discord.Interaction):
+    global bounty_auto_enabled
+    bounty_auto_enabled = True
+    now = datetime.now(ZoneInfo("UTC"))
+    next_generate_dt = _next_monday_0600_utc(now)
+    next_generate_ts = int(next_generate_dt.timestamp())
+    await interaction.response.send_message(
+        f"✅ Automatic bounties enabled. The next bounty will be posted at <t:{next_generate_ts}:F> (<t:{next_generate_ts}:R>).",
+        ephemeral=True,
+    )
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    await log_command_use(f"[{timestamp}] /enable-automatic-bounties used by {interaction.user}")
+
+
+@client.tree.command(name="disable-automatic-bounties", description="Disable the automatic weekly bounty generation and close tasks.")
+@check_staff_role("Owner")
+async def disable_automatic_bounties(interaction: discord.Interaction):
+    global bounty_auto_enabled
+    bounty_auto_enabled = False
+    await interaction.response.send_message(
+        "🚫 Automatic bounties disabled. Use `/generate-new-bounty-quest` and `/close-bounty-quest` to manage bounties manually.",
+        ephemeral=True,
+    )
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    await log_command_use(f"[{timestamp}] /disable-automatic-bounties used by {interaction.user}")
+
+
+# --- 21. RUN THE BOT ---
 
 client.run(DISCORD_TOKEN)
