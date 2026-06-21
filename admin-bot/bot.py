@@ -2990,6 +2990,12 @@ def _wiki_url(item_name: str) -> str:
     return f"https://oldschool.runescape.wiki/w/{quote(slug, safe='_')}"
 
 
+def _wiki_image_url(item_name: str) -> str:
+    """Returns the OSRS wiki detail image URL for an item."""
+    slug = item_name.replace(" ", "_")
+    return f"https://oldschool.runescape.wiki/images/{quote(slug, safe=\"_'\")}_detail.png"
+
+
 def _next_saturday_0600_utc(from_dt: datetime) -> datetime:
     """Returns the next Saturday at 06:00 UTC on or after from_dt."""
     days_until_saturday = (5 - from_dt.weekday()) % 7
@@ -3037,13 +3043,15 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
     close_dt = _next_saturday_0600_utc(now)
     close_ts = int(close_dt.timestamp())
     wiki_link = _wiki_url(chosen_item)
+    image_url = _wiki_image_url(chosen_item)
     event_password = _generate_event_password()
 
     opening_post = (
         f"## Weekly Bounty: **{chosen_item}**\n\n"
         f"This week's bounty item is **[{chosen_item}]({wiki_link})**. The event password is **{event_password}**.\n\n"
         f"Post a screenshot of your drop here. Staff will react with ✅ to confirm it counts.\n\n"
-        f"*Thread closes <t:{close_ts}:F>.*"
+        f"*Thread closes <t:{close_ts}:F>.*\n\n"
+        f"{image_url}"
     )
 
     try:
@@ -3073,6 +3081,7 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
             color=discord.Color.gold(),
             timestamp=now,
         )
+        embed.set_thumbnail(url=image_url)
         embed.set_footer(text="Good luck, everyone!")
         role_mention = f"<@&{BOUNTY_ROLE_ID}>"
         await announcement_channel.send(content=role_mention, embed=embed)
