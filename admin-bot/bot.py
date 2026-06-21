@@ -2936,6 +2936,28 @@ BOUNTY_CHECK_EMOJI_WHITE = "✅"
 bounty_auto_enabled: bool = False
 bounty_active_thread_id: int | None = None  # set when a bounty thread is created
 
+# Word lists for event password generation (all words ≤ 8 chars, max combined length 16)
+_PASSWORD_ADJECTIVES = [
+    "Ancient", "Barrows", "Blazing", "Blessed", "Broken",
+    "Corrupt", "Cursed", "Daring", "Divine", "Draconic",
+    "Emerald", "Fiery", "Frozen", "Gilded", "Glacial",
+    "Glowing", "Golden", "Grim", "Haunted", "Holy",
+    "Infernal", "Iron", "Loyal", "Mystic", "Primal",
+    "Runic", "Sacred", "Shadow", "Sinister", "Twisted",
+]
+_PASSWORD_NOUNS = [
+    "Abyssal", "Adamant", "Ahrim", "Bandos", "Barrows",
+    "Cerberus", "Chaos", "Crystal", "Dharok", "Dragon",
+    "Duel", "Goblin", "Guthan", "Inferno", "Karil",
+    "Kraken", "Mithril", "Monk", "Ranger", "Rune",
+    "Scythe", "Slayer", "Thrall", "Torag", "Trident",
+    "Verac", "Void", "Whip", "Wyrm", "Zulrah",
+]
+
+
+def _generate_event_password() -> str:
+    return random.choice(_PASSWORD_ADJECTIVES) + random.choice(_PASSWORD_NOUNS)
+
 
 async def fetch_bounty_items() -> list[str]:
     """
@@ -3015,10 +3037,11 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
     close_dt = _next_saturday_0600_utc(now)
     close_ts = int(close_dt.timestamp())
     wiki_link = _wiki_url(chosen_item)
+    event_password = _generate_event_password()
 
     opening_post = (
         f"## Weekly Bounty: **{chosen_item}**\n\n"
-        f"This week's bounty is **[{chosen_item}]({wiki_link})**!\n\n"
+        f"This week's bounty item is **[{chosen_item}]({wiki_link})**. The event password is **{event_password}**.\n\n"
         f"Post a screenshot of your drop here. Staff will react with ✅ to confirm it counts.\n\n"
         f"*Thread closes <t:{close_ts}:F>.*"
     )
@@ -3040,7 +3063,7 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
         embed = discord.Embed(
             title="🎯 New Weekly Bounty!",
             description=(
-                f"This week's bounty item is **[{chosen_item}]({wiki_link})**!\n\n"
+                f"This week's bounty item is **[{chosen_item}]({wiki_link})**. The event password is **{event_password}**.\n\n"
                 f"Head over to {thread.mention} to submit your drop screenshot.\n"
                 f"Staff will react with ✅ to confirm eligible submissions.\n\n"
                 f"**Reward:** 3 Event Points\n\n"
