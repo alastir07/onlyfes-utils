@@ -497,7 +497,7 @@ COMMANDS_HELP = {
     },
     "linkrsn": {
         "syntax": "`/linkrsn <rsn> <@user> [publish]`",
-        "description": "Links a member's RSN to their Discord account.",
+        "description": "Links a member's RSN to their Discord account. Staff channels only.",
         "category": "Captain Commands",
         "min_role": "Captain"
     },
@@ -610,13 +610,13 @@ COMMANDS_HELP = {
         "min_role": "Owner"
     },
     "enable-automatic-bounties": {
-        "syntax": "`/enable-automatic-bounties`",
+        "syntax": "`/enable-automatic-bounties [publish]`",
         "description": "Enables the automatic weekly bounty tasks (generate on Monday 06:00 UTC, close on Saturday 06:00 UTC).",
         "category": "Owner Commands",
         "min_role": "Owner"
     },
     "disable-automatic-bounties": {
-        "syntax": "`/disable-automatic-bounties`",
+        "syntax": "`/disable-automatic-bounties [publish]`",
         "description": "Disables the automatic weekly bounty tasks so bounties can be managed manually.",
         "category": "Owner Commands",
         "min_role": "Owner"
@@ -872,14 +872,14 @@ async def rankhistory(interaction: discord.Interaction, rsn: str, num_changes: i
 @app_commands.describe(
     dry_run="True (default) to just see the report. False to execute changes.",
     force_run="False (default). True to bypass the rank mismatch safety check.",
-    publish="False (default). True to post the final report publicly."
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("General")
 async def sync_clan(
-    interaction: discord.Interaction, 
-    dry_run: bool = True, 
-    force_run: bool = False, 
-    publish: bool = False
+    interaction: discord.Interaction,
+    dry_run: bool = True,
+    force_run: bool = False,
+    publish: bool = True
 ):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -1009,7 +1009,7 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
 @app_commands.describe(
     rsn="The member's RSN (current or past).",
     rank_name="The new rank to assign (e.g., 'Ruby', 'Beast').",
-    publish="True to post the confirmation publicly.",
+    publish="False to post privately. Defaults to True (posts publicly).",
     bypass_discord="True to bypass updating the Discord role (useful if member has no Discord)."
 )
 @app_commands.choices(rank_name=[
@@ -1018,7 +1018,7 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
 ])
 
 @check_staff_role("Captain")
-async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False, bypass_discord: bool = False):
+async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = True, bypass_discord: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
@@ -1147,7 +1147,7 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
 @app_commands.describe(
     rank_name="The new rank to assign all members (e.g., 'Beast').",
     rsn_list="A comma-separated list of RSNs.",
-    publish="True to post the confirmation publicly.",
+    publish="False to post privately. Defaults to True (posts publicly).",
     bypass_discord="True to bypass updating Discord roles (useful if members have no Discord)."
 )
 @app_commands.choices(rank_name=[
@@ -1155,7 +1155,7 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
     for rank in DISCORD_RANKS
 ])
 @check_staff_role("Captain")
-async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = False, bypass_discord: bool = False):
+async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = True, bypass_discord: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
@@ -1440,16 +1440,22 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
 @app_commands.describe(
     rsn="The member's RSN (current or past).",
     user="The @discord user to link.",
-    publish="True to post the confirmation publicly."
+    publish="False to post privately. Defaults to True (posts publicly) when used in a staff channel."
 )
 @check_staff_role("Captain")
-async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Member, publish: bool = False):
-    
+async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Member, publish: bool = True):
+
+    channel = interaction.channel
+    matriarch_id = get_matriarch_id(channel)
+    if matriarch_id != 1059296867663491233:
+        await interaction.response.send_message("⛔ This command can only be used in a staff channel.", ephemeral=True)
+        return
+
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /linkrsn rsn='{rsn}' user='{user}' publish={publish} used by {interaction.user}")
     if not publish:
         await log_command_use(f"[{timestamp}] /linkrsn rsn='{rsn}' user='{user}' publish={publish} used by {interaction.user}")
-    
+
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
     
@@ -1513,10 +1519,10 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
     rsn="The member's RSN.",
     points="The amount of points to add (must be positive).",
     reason="The reason for this transaction (e.g., 'Event attendance', 'Store purchase').",
-    publish="True to post the confirmation publicly."
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def add_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = False):
+async def add_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = True):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /addpoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
@@ -1576,10 +1582,10 @@ async def add_points(interaction: discord.Interaction, rsn: str, points: int, re
     rsn="The member's RSN.",
     points="The amount of points to remove (must be positive).",
     reason="The reason for this transaction.",
-    publish="True to post the confirmation publicly."
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def remove_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = False):
+async def remove_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = True):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /removepoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
@@ -1639,10 +1645,10 @@ async def remove_points(interaction: discord.Interaction, rsn: str, points: int,
     points="The amount of points to add (must be positive).",
     reason="The reason for this transaction.",
     rsn_list="A comma-separated list of RSNs.",
-    publish="True to post the confirmation publicly."
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def bulk_add_points(interaction: discord.Interaction, points: int, reason: str, rsn_list: str, publish: bool = False):
+async def bulk_add_points(interaction: discord.Interaction, points: int, reason: str, rsn_list: str, publish: bool = True):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /bulkaddpoints points={points} reason='{reason}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
@@ -1723,10 +1729,10 @@ async def bulk_add_points(interaction: discord.Interaction, points: int, reason:
     rsn="The member's RSN (current or past).",
     reason="The reason for this exemption (e.g., 'Taking a break from the game').",
     days="Number of days for the exemption (defaults to 90).",
-    publish="True to post the confirmation publicly."
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("General")
-async def add_exempt(interaction: discord.Interaction, rsn: str, reason: str, days: int = 90, publish: bool = False):
+async def add_exempt(interaction: discord.Interaction, rsn: str, reason: str, days: int = 90, publish: bool = True):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /addexempt rsn='{rsn}' reason='{reason}' days={days} publish={publish} used by {interaction.user}")
@@ -1913,10 +1919,10 @@ async def process_competition_points(
     second="Comma-separated list of 2nd place RSNs (7 pts each)",
     third="Comma-separated list of 3rd place RSNs (5 pts each)",
     participants="Comma-separated list of other participants (3 pts each)",
-    publish="True to post publicly"
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def add_points_botm(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = False):
+async def add_points_botm(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = True):
     points = {'1st': 12, '2nd': 7, '3rd': 5, 'participation': 3}
     await process_competition_points(interaction, first, second, third, participants, points, "boss of the month", publish)
 
@@ -1927,10 +1933,10 @@ async def add_points_botm(interaction: discord.Interaction, first: str, second: 
     second="Comma-separated list of 2nd place RSNs (7 pts each)",
     third="Comma-separated list of 3rd place RSNs (5 pts each)",
     participants="Comma-separated list of other participants (3 pts each)",
-    publish="True to post publicly"
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def add_points_sotm(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = False):
+async def add_points_sotm(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = True):
     points = {'1st': 12, '2nd': 7, '3rd': 5, 'participation': 3}
     await process_competition_points(interaction, first, second, third, participants, points, "skill of the month", publish)
 
@@ -1941,10 +1947,10 @@ async def add_points_sotm(interaction: discord.Interaction, first: str, second: 
     second="Comma-separated list of 2nd place RSNs (15 pts each)",
     third="Comma-separated list of 3rd place RSNs (10 pts each)",
     participants="Comma-separated list of other participants (5 pts each)",
-    publish="True to post publicly"
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def add_points_bigbooty(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = False):
+async def add_points_bigbooty(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = True):
     points = {'1st': 20, '2nd': 15, '3rd': 10, 'participation': 5}
     await process_competition_points(interaction, first, second, third, participants, points, "big booty", publish)
 
@@ -3518,31 +3524,35 @@ async def before_scheduled_bounty_close():
 
 
 @client.tree.command(name="enable-automatic-bounties", description="Enable the automatic weekly bounty generation and close tasks.")
+@app_commands.describe(publish="False to post privately. Defaults to True (posts publicly).")
 @check_staff_role("Owner")
-async def enable_automatic_bounties(interaction: discord.Interaction):
+async def enable_automatic_bounties(interaction: discord.Interaction, publish: bool = True):
     global bounty_auto_enabled
     bounty_auto_enabled = True
     _save_bot_state('bounty_auto_enabled', 'true')
     now = datetime.now(ZoneInfo("UTC"))
     next_generate_dt = _next_monday_0600_utc(now)
     next_generate_ts = int(next_generate_dt.timestamp())
+    is_ephemeral = not publish
     await interaction.response.send_message(
         f"✅ Automatic bounties enabled. The next bounty will be posted at <t:{next_generate_ts}:F> (<t:{next_generate_ts}:R>).",
-        ephemeral=True,
+        ephemeral=is_ephemeral,
     )
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     await log_command_use(f"[{timestamp}] /enable-automatic-bounties used by {interaction.user}")
 
 
 @client.tree.command(name="disable-automatic-bounties", description="Disable the automatic weekly bounty generation and close tasks.")
+@app_commands.describe(publish="False to post privately. Defaults to True (posts publicly).")
 @check_staff_role("Owner")
-async def disable_automatic_bounties(interaction: discord.Interaction):
+async def disable_automatic_bounties(interaction: discord.Interaction, publish: bool = True):
     global bounty_auto_enabled
     bounty_auto_enabled = False
     _save_bot_state('bounty_auto_enabled', 'false')
+    is_ephemeral = not publish
     await interaction.response.send_message(
         "🚫 Automatic bounties disabled. Use `/generate-new-bounty-quest` and `/close-bounty-quest` to manage bounties manually.",
-        ephemeral=True,
+        ephemeral=is_ephemeral,
     )
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     await log_command_use(f"[{timestamp}] /disable-automatic-bounties used by {interaction.user}")
