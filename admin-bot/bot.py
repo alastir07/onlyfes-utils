@@ -3155,10 +3155,11 @@ async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
                     winners[author.id] = author.display_name
                 break
 
-    # Look up RSNs from DB by discord_id
+    # Look up member_id and RSN from DB by discord_id
     result = []
     for uid, display_name in winners.items():
         rsn = None
+        member_id = None
         try:
             member_res = supabase.table('members').select('id').eq('discord_id', uid).limit(1).execute()
             if member_res.data:
@@ -3173,9 +3174,42 @@ async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
                     rsn = primary_res.data[0]['rsn']
         except Exception as e:
             log.warning(f"Could not look up RSN for discord_id {uid}: {e}")
-        result.append({"user_id": uid, "display_name": display_name, "rsn": rsn})
+        result.append({"user_id": uid, "display_name": display_name, "rsn": rsn, "member_id": member_id})
 
     return result
+
+
+async def _award_bounty_ep(winners: list[dict], item_name: str, guild: discord.Guild) -> None:
+    """
+    Inserts EP transactions for each winner and posts a staff log summary.
+    winners must be the list returned by _check_bounty_completions (includes member_id).
+    """
+    awarded = []
+    for w in winners:
+        if not w.get('member_id'):
+            log.warning(f"_award_bounty_ep: no member_id for discord_id {w['user_id']}, skipping EP award")
+            continue
+        try:
+            supabase.table('event_point_transactions').insert({
+                'member_id': w['member_id'],
+                'modification': 3,
+                'reason': f"Weekly bounty completion: {item_name}",
+            }).execute()
+            awarded.append(w['rsn'] or w['display_name'])
+        except Exception as e:
+            log.error(f"_award_bounty_ep: failed to insert EP for member {w['member_id']}: {e}")
+
+    staff_channel = guild.get_channel(BOUNTY_STAFF_LOG_CHANNEL_ID)
+    if staff_channel:
+        if awarded:
+            rsn_list = ", ".join(f"**{r}**" for r in awarded)
+            await staff_channel.send(
+                f"✅ Bounty check complete — 3 EP awarded to: {rsn_list}"
+            )
+        else:
+            await staff_channel.send(
+                f"⚠️ Bounty check complete — no EP awarded (winners had no linked member records)."
+            )
 
 
 @client.tree.command(name="generate-new-bounty-quest", description="Generate a new weekly bounty quest thread and announcement.")
@@ -3317,6 +3351,8 @@ async def check_bounty_completion(interaction: discord.Interaction, thread_id: s
                 await interaction.followup.send(f"✅ Posted to {completions_channel.mention}.", ephemeral=True)
             else:
                 await interaction.followup.send(f"❌ Could not find completions channel (ID `{BOUNTY_COMPLETIONS_CHANNEL_ID}`).", ephemeral=True)
+            if winners:
+                await _award_bounty_ep(winners, item_name, interaction.guild)
         else:
             await interaction.followup.send(embed=embed, ephemeral=True)
 
@@ -3432,6 +3468,7 @@ async def scheduled_bounty_close():
             if completions_channel:
                 await completions_channel.send(embed=embed)
             log.info(f"Scheduled bounty close: posted {len(winners)} completion(s) to completions channel.")
+            await _award_bounty_ep(winners, item_name, guild)
         else:
             log.info("Scheduled bounty close: no confirmed completions found, skipping completions post.")
             staff_channel = guild.get_channel(BOUNTY_STAFF_LOG_CHANNEL_ID)
