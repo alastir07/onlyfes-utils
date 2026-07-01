@@ -2878,6 +2878,11 @@ async def scheduled_overachievers_check():
             )
             if skill_emb:
                 await channel.send("🏆 **Monthly Overachievers Report**", embeds=[skill_emb, act_emb, boss_emb])
+                if err_str:
+                    log.warning(f"Overachievers sync warnings:\n{err_str}")
+                    if len(err_str) > 1900:
+                        err_str = err_str[:1900] + "\n... (truncated)"
+                    await channel.send(f"⚠️ Overachievers Sync Warnings:\n```text\n{err_str}\n```")
             else:
                 log.error(f"Failed to generate overachievers report: {err_str}")
     except Exception as e:
