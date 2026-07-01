@@ -92,6 +92,12 @@ def get_normalized_rank_from_db(rank_name_input: str) -> dict | None:
         log.error(f"Error fetching ranks for normalization: {e}")
         return None
 
+def get_rank_display_name(rank_name: str) -> str:
+    """Returns the DISCORD_RANKS display_name (includes title, e.g. 'Maxed (Elite Skiller)') for a rank name, falling back to the rank name itself."""
+    normalized_input = normalize_string(rank_name)
+    rank_config = next((r for r in DISCORD_RANKS if normalize_string(r["role_name"]) == normalized_input), None)
+    return rank_config["display_name"] if rank_config else rank_name
+
 def resolve_rsn_to_member(rsn: str) -> dict | None:
     """
     Looks up a member by their RSN (case-insensitive, space/underscore-insensitive).
@@ -1175,7 +1181,7 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         elif bypass_discord:
             discord_msg = " (Bypassed Discord role update.)"
         
-        await interaction.followup.send(f"✅ Success! `{member_rsn}`'s rank has been updated to **{new_rank_name}**.{discord_msg}", ephemeral=is_ephemeral)
+        await interaction.followup.send(f"✅ Success! `{member_rsn}`'s rank has been updated to **{get_rank_display_name(new_rank_name)}**.{discord_msg}", ephemeral=is_ephemeral)
 
     except Exception as e:
         log.error(f"Error in /rankup command: {e}\n{traceback.format_exc()}")
@@ -1353,7 +1359,7 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
             discord_summary = "ℹ️ Bypassed Discord roles update."
 
         embed = discord.Embed(
-            title=f"Bulk Rank Update to '{new_rank_name}' Complete",
+            title=f"Bulk Rank Update to '{get_rank_display_name(new_rank_name)}' Complete",
             description=discord_summary if discord_summary else None,
             color=discord.Color.green() if not report_fail_not_found and not report_fail_no_discord else discord.Color.orange()
         )
@@ -1447,7 +1453,7 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
         tl_status = "✅ Met" if has_tl else "❌ Not Met"
 
         embed = discord.Embed(
-            title=f"Checking if {member_rsn} is eligible for {target_rank['name']}...",
+            title=f"Checking if {member_rsn} is eligible for {get_rank_display_name(target_rank['name'])}...",
             color=discord.Color.gold()
         )
         
