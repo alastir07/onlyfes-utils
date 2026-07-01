@@ -374,9 +374,11 @@ async def sync_discord_clan_member_roles(guild: discord.Guild, sync_metadata: di
             member = guild.get_member(int(d_id))
             if not member:
                 member = await guild.fetch_member(int(d_id))
+                await asyncio.sleep(0.1)  # fetch_member is an API call
             if member and role in member.roles:
                 await member.remove_roles(role, reason="Clan sync: Member deactivated")
                 removed_count += 1
+                await asyncio.sleep(0.1)  # remove_roles is an API call
         except discord.NotFound:
             log.info(f"Deactivated user {d_id} not found in guild.")
         except Exception as e:
@@ -389,9 +391,11 @@ async def sync_discord_clan_member_roles(guild: discord.Guild, sync_metadata: di
             member = guild.get_member(int(a_id))
             if not member:
                 member = await guild.fetch_member(int(a_id))
+                await asyncio.sleep(0.1)  # fetch_member is an API call
             if member and role not in member.roles:
                 await member.add_roles(role, reason="Clan sync: Ensure active member has role")
                 added_count += 1
+                await asyncio.sleep(0.1)  # add_roles is an API call
         except discord.NotFound:
             log.info(f"Active user {a_id} not found in guild.")
         except Exception as e:
@@ -450,6 +454,42 @@ async def on_ready():
 
     log.info(f'Logged in as {client.user} (ID: {client.user.id})')
     log.info('Bot is ready and online.')
+
+# --- Global slash-command error handler ---
+@client.tree.error
+async def on_tree_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    command_name = interaction.command.name if interaction.command else "unknown"
+    user = interaction.user
+
+    # Unwrap CommandInvokeError to get the real cause
+    cause = error.__cause__ if isinstance(error, app_commands.CommandInvokeError) else error
+
+    if isinstance(cause, discord.HTTPException) and cause.status == 429:
+        retry_after = getattr(cause, 'retry_after', None)
+        retry_msg = f"retry_after={retry_after:.2f}s" if retry_after is not None else "retry_after=unknown"
+        log.error(
+            f"[RATE LIMITED] command=/{command_name} user={user} {retry_msg} "
+            f"— global rate limit exceeded (50 req/s). "
+            f"Response: {cause.text!r}"
+        )
+        msg = "The bot is temporarily rate-limited by Discord. Please try again in a few seconds."
+    else:
+        log.error(
+            f"[COMMAND ERROR] command=/{command_name} user={user} "
+            f"error={type(cause).__name__}: {cause}\n{traceback.format_exc()}"
+        )
+        msg = f"An unexpected error occurred: `{cause}`"
+
+    # Try to send a response. If defer() already failed, response.is_done() is False,
+    # so we use send_message. If defer() succeeded but followup failed, use followup.
+    try:
+        if not interaction.response.is_done():
+            await interaction.response.send_message(msg, ephemeral=True)
+        else:
+            await interaction.followup.send(msg, ephemeral=True)
+    except Exception:
+        # If we can't respond at all (e.g. token expired), just log it
+        log.warning(f"[COMMAND ERROR] Could not send error response for /{command_name} to {user}")
 
 # --- 3. /HELP COMMAND ---
 COMMANDS_HELP = {
