@@ -1438,8 +1438,10 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
         req_months = target_rank.get('req_months_in_clan') or 0
         req_tl = target_rank.get('req_total_level') or 0
         
-        has_time = days_in_clan >= (req_months * 28)
+        req_days = req_months * 28
+        has_time = days_in_clan >= req_days
         time_status = "✅ Met" if has_time else "❌ Not Met"
+        days_short = req_days - days_in_clan
 
         has_tl = total_level >= req_tl
         tl_status = "✅ Met" if has_tl else "❌ Not Met"
@@ -1453,9 +1455,12 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
         embed.add_field(name="Current EP", value=f"{member_info.get('total_ep', 0):,}", inline=True)
         embed.add_field(name="Current Rank", value=member_info.get('rank_name', 'Unknown'), inline=True)
         
+        time_value = f"{time_status} (Needs {req_months} mo.)"
+        if not has_time:
+            time_value += f" — {days_short} day{'s' if days_short != 1 else ''} short"
         embed.add_field(
-            name="Time In Clan Requirement", 
-            value=f"{time_status} (Needs {req_months} mo.)", 
+            name="Time In Clan Requirement",
+            value=time_value,
             inline=False
         )
         if req_tl > 0:
