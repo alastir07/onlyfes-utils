@@ -1,6 +1,5 @@
 import os
 import requests
-import time
 import discord
 from supabase import Client
 import logging
@@ -97,74 +96,77 @@ def run_overachievers_check(supabase: Client, dry_run: bool = True) -> tuple:
             latest_db_records[m] = row
             
     categories = [
-        ("🏆 Skill Overachievers", SKILLS, 'skill', 'experience'),
-        ("⚔️ Activity Overachievers", ACTIVITIES, 'activity', 'score'),
-        ("👹 Boss Overachievers", BOSSES, 'boss', 'kills')
+        ("🏆 Skill Overachievers", SKILLS, 'skills', 'experience'),
+        ("⚔️ Activity Overachievers", ACTIVITIES, 'activities', 'score'),
+        ("👹 Boss Overachievers", BOSSES, 'bosses', 'kills')
     ]
-    
+
     embeds = []
     error_lines = []
     inserts_payload = []
-    
-    log.info("Fetching metrics from WOM...")
-    
-    for title, metric_list, category_type, value_key in categories:
+
+    log.info("Fetching group statistics from WOM...")
+
+    stats_url = f"https://api.wiseoldman.net/v2/groups/{WOM_GROUP_ID}/statistics"
+    try:
+        res = requests.get(stats_url, headers=headers)
+        res.raise_for_status()
+        metric_leaders = res.json().get('metricLeaders', {})
+    except Exception as e:
+        log.error(f"Failed to fetch group statistics: {e}")
+        return None, None, None, f"Failed to fetch group statistics: {e}"
+
+    for title, metric_list, leader_category, value_key in categories:
         changes = []
-        
+        leaders_for_category = metric_leaders.get(leader_category, {})
+
         for metric in metric_list:
-            url = f"https://api.wiseoldman.net/v2/groups/{WOM_GROUP_ID}/hiscores?metric={metric}&limit=1"
-            try:
-                time.sleep(0.3)
-                res = requests.get(url, headers=headers)
-                res.raise_for_status()
-                data = res.json()
-                
-                if not data:
-                    continue
-                    
-                top_entry = data[0]
-                player = top_entry['player']
-                player_data = top_entry['data']
-                
-                wom_id = player['id']
-                display_name = player['displayName']
-                username = player['username']
-                
-                val = player_data.get(value_key, 0)
-                rank = player_data.get('rank', -1)
-                
-                normalized_username = normalize_string(username)
-                member_id = db_rsn_map.get(normalized_username)
-                if not member_id:
-                    error_lines.append(f"Skipped {metric}: Top player {display_name} (WOM ID {wom_id}) not found in database.")
-                    continue
-                
-                previous_record = latest_db_records.get(metric)
-                
-                changed = False
-                if not previous_record:
-                    changed = True
-                elif previous_record['member_id'] != member_id:
-                    changed = True
-                
-                if changed:
-                    changes.append({
-                        'metric': metric,
-                        'player_name': display_name,
-                        'value': val,
-                        'rank': rank
-                    })
-                
-                inserts_payload.append({
-                    'member_id': member_id,
+            leader_entry = leaders_for_category.get(metric)
+            if not leader_entry:
+                error_lines.append(f"Skipped {metric}: No leader data returned by WOM.")
+                continue
+
+            player = leader_entry.get('player')
+            if not player:
+                error_lines.append(f"Skipped {metric}: No player leads this metric in the group.")
+                continue
+
+            wom_id = player['id']
+            display_name = player['displayName']
+            username = player['username']
+
+            val = leader_entry.get(value_key, 0)
+            rank = leader_entry.get('rank', -1)
+
+            normalized_username = normalize_string(username)
+            member_id = db_rsn_map.get(normalized_username)
+            if not member_id:
+                error_lines.append(f"Skipped {metric}: Top player {display_name} (WOM ID {wom_id}) not found in database.")
+                continue
+
+            previous_record = latest_db_records.get(metric)
+
+            changed = False
+            if not previous_record:
+                changed = True
+            elif previous_record['member_id'] != member_id:
+                changed = True
+
+            if changed:
+                changes.append({
                     'metric': metric,
+                    'player_name': display_name,
                     'value': val,
-                    'global_rank': rank
+                    'rank': rank
                 })
 
-            except Exception as e:
-                error_lines.append(f"Failed to fetch {metric}: {e}")
-                
+            inserts_payload.append({
+                'member_id': member_id,
+                'metric': metric,
+                'value': val,
+                'global_rank': rank
+            })
+
         embeds.append(create_embed(title, changes))
 
     if not dry_run and inserts_payload:
