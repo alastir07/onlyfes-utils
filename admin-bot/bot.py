@@ -2785,6 +2785,62 @@ async def before_scheduled_inactivity_check():
 
 
 # --- 18.5 OVERACHIEVERS ---
+OVERACHIEVER_ROLE_ID = 1280831567039692908
+
+async def sync_overachiever_roles(guild: discord.Guild) -> str:
+    """
+    Clears the Overachiever role from everyone who has it, then re-applies it
+    only to members who currently hold #1 in at least one metric.
+    """
+    role = guild.get_role(OVERACHIEVER_ROLE_ID)
+    if not role:
+        log.error(f"Could not find Overachiever role with ID {OVERACHIEVER_ROLE_ID}")
+        return f"⚠️ Error: Overachiever role with ID `{OVERACHIEVER_ROLE_ID}` not found in this server."
+
+    current_member_ids = overachievers_logic.get_current_overachiever_member_ids(supabase)
+
+    discord_ids = set()
+    if current_member_ids:
+        members_res = supabase.table('members').select('id, discord_id').in_('id', list(current_member_ids)).execute()
+        discord_ids = {str(m['discord_id']) for m in members_res.data if m.get('discord_id')}
+
+    removed_count = 0
+    added_count = 0
+    failed_count = 0
+
+    # 1. Remove role from anyone who currently has it but shouldn't
+    for member in list(role.members):
+        if str(member.id) not in discord_ids:
+            try:
+                await member.remove_roles(role, reason="Overachievers sync: no longer holds any metric")
+                removed_count += 1
+                await asyncio.sleep(0.1)
+            except Exception as e:
+                log.error(f"Failed to remove Overachiever role from {member.id}: {e}")
+                failed_count += 1
+
+    # 2. Add role to current holders who don't have it
+    for d_id in discord_ids:
+        try:
+            member = guild.get_member(int(d_id))
+            if not member:
+                member = await guild.fetch_member(int(d_id))
+                await asyncio.sleep(0.1)
+            if member and role not in member.roles:
+                await member.add_roles(role, reason="Overachievers sync: holds at least one metric")
+                added_count += 1
+                await asyncio.sleep(0.1)
+        except discord.NotFound:
+            log.info(f"Overachiever member {d_id} not found in guild.")
+        except Exception as e:
+            log.error(f"Failed to add Overachiever role to {d_id}: {e}")
+            failed_count += 1
+
+    summary = f"**Overachiever Role Sync:** Added to {added_count} member(s), Removed from {removed_count} member(s)."
+    if failed_count > 0:
+        summary += f" Failed for {failed_count} member(s)."
+    return summary
+
 @client.tree.command(name="overachievers-sync", description="Run the Overachievers check (1st of month typically).")
 @app_commands.describe(
     dry_run="True (default) to just see report. False to execute DB writes.",
@@ -2812,13 +2868,17 @@ async def check_overachievers_sync(interaction: discord.Interaction, dry_run: bo
             return
             
         await interaction.followup.send(content=f"Overachievers Sync Complete.", embeds=[skill_emb, act_emb, boss_emb], ephemeral=is_ephemeral)
-        
+
         if err_str:
             log.warning(f"Overachievers sync warnings:\n{err_str}")
             if len(err_str) > 1000:
                 err_str = err_str[:1000] + "\n... (truncated)"
             await interaction.followup.send(f"Warnings/Errors:\n```text\n{err_str}\n```", ephemeral=True)
-            
+
+        if not dry_run:
+            role_summary = await sync_overachiever_roles(interaction.guild)
+            await interaction.followup.send(role_summary, ephemeral=True)
+
     except Exception as e:
         log.error(f"CRITICAL Error in /overachievers-sync command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
@@ -2883,6 +2943,13 @@ async def scheduled_overachievers_check():
                     if len(err_str) > 1900:
                         err_str = err_str[:1900] + "\n... (truncated)"
                     await channel.send(f"⚠️ Overachievers Sync Warnings:\n```text\n{err_str}\n```")
+
+                guild = client.guilds[0] if client.guilds else None
+                if guild:
+                    role_summary = await sync_overachiever_roles(guild)
+                    await channel.send(role_summary)
+                else:
+                    log.error("Could not sync Overachiever roles: bot is not in any guild.")
             else:
                 log.error(f"Failed to generate overachievers report: {err_str}")
     except Exception as e:
