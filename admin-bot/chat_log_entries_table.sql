@@ -47,3 +47,8 @@ CREATE POLICY chat_log_receiver_service_access ON public.chat_log_entries
   TO chat_log_receiver
   USING (true)
   WITH CHECK (true);
+
+-- The RLS policy above only governs which rows are visible/writable -- it does not substitute
+-- for command-level privileges, which must be granted separately. DELETE is needed by the daily
+-- dedup sweep (see chat-log-receiver/db.py sweep_duplicates).
+GRANT SELECT, INSERT, DELETE ON public.chat_log_entries TO chat_log_receiver;

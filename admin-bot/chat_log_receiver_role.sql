@@ -1,6 +1,7 @@
 -- Create a dedicated Postgres role for the chat-log-receiver service.
--- Run this in Supabase SQL Editor BEFORE chat_log_entries_table.sql (which grants this role
--- access via a Row Level Security policy).
+-- Run this in Supabase SQL Editor FIRST, then chat_log_entries_table.sql and
+-- dedup_sweep_runs_table.sql, each of which grants this role table-level access
+-- (see the GRANT statements in those files) once the tables exist.
 --
 -- Supabase's default `postgres` connection role has BYPASSRLS, so RLS policies are a no-op
 -- against it. This role deliberately does NOT have BYPASSRLS, so the policy on
@@ -13,7 +14,6 @@
 CREATE ROLE chat_log_receiver WITH LOGIN PASSWORD 'CHANGE_ME' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
 
 GRANT USAGE ON SCHEMA public TO chat_log_receiver;
-GRANT SELECT, INSERT ON public.chat_log_entries TO chat_log_receiver;
 
 -- Needed for member resolution (sender -> member_id lookup on insert); read-only.
 GRANT SELECT ON public.member_rsns TO chat_log_receiver;

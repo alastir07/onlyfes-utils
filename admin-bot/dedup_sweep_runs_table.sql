@@ -18,3 +18,7 @@ CREATE POLICY chat_log_receiver_service_access ON public.dedup_sweep_runs
   TO chat_log_receiver
   USING (true)
   WITH CHECK (true);
+
+-- The RLS policy above only governs which rows are visible/writable -- it does not substitute
+-- for command-level privileges, which must be granted separately.
+GRANT SELECT, INSERT ON public.dedup_sweep_runs TO chat_log_receiver;
