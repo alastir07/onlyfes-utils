@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 import sys # <-- Import sys
 import logging
+import clan_sync_logic
 
 # Initialize the logger for your bot's custom messages
 log = logging.getLogger('ClanBot') 
@@ -76,8 +77,8 @@ def get_active_members_with_snapshots(supabase: Client) -> list:
             })
         
         # Fetch RSNs
-        rsn_response = supabase.table('member_rsns').select('member_id, rsn').eq('is_primary', True).execute()
-        rsn_map = {item['member_id']: item['rsn'] for item in rsn_response.data}
+        rsn_data = clan_sync_logic.fetch_all_rows(supabase.table('member_rsns').select('member_id, rsn').eq('is_primary', True))
+        rsn_map = {item['member_id']: item['rsn'] for item in rsn_data}
         
         # Fetch rank names
         rank_response = supabase.table('ranks').select('id, name').execute()

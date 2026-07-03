@@ -3,6 +3,7 @@ import requests
 import discord
 from supabase import Client
 import logging
+import clan_sync_logic
 
 log = logging.getLogger('ClanBot')
 
@@ -70,8 +71,8 @@ def run_overachievers_check(supabase: Client, dry_run: bool = True) -> tuple:
         return None, None, None, "Missing WOM API credentials."
 
     log.info("Fetching members from DB...")
-    rsn_res = supabase.table('member_rsns').select('rsn, member_id').execute()
-    db_rsn_map = {normalize_string(row['rsn']): row['member_id'] for row in rsn_res.data}
+    rsn_data = clan_sync_logic.fetch_all_rows(supabase.table('member_rsns').select('rsn, member_id'))
+    db_rsn_map = {normalize_string(row['rsn']): row['member_id'] for row in rsn_data}
 
     log.info("Fetching previous overachievers...")
     recent_res = supabase.table('overachievers').select('metric, member_id, value, global_rank, date').order('date', desc=True).execute()
@@ -213,8 +214,8 @@ def get_overachiever_lookup(supabase: Client, query: str) -> tuple[discord.Embed
         
     else:
         # It's an RSN query
-        rsn_res = supabase.table('member_rsns').select('member_id, rsn, is_primary').execute()
-        matched_rows = [row for row in rsn_res.data if normalize_string(row['rsn']) == normalized_query]
+        rsn_data = clan_sync_logic.fetch_all_rows(supabase.table('member_rsns').select('member_id, rsn, is_primary'))
+        matched_rows = [row for row in rsn_data if normalize_string(row['rsn']) == normalized_query]
         
         if not matched_rows:
             return None, f"Could not find any member with RSN: '{query}' or any metric called '{query}'."

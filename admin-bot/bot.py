@@ -108,8 +108,8 @@ def resolve_rsn_to_member(rsn: str) -> dict | None:
         if not normalized_input:
             return None
             
-        res = supabase.table('member_rsns').select('member_id, rsn').execute()
-        for row in res.data:
+        rows = clan_sync_logic.fetch_all_rows(supabase.table('member_rsns').select('member_id, rsn'))
+        for row in rows:
             if normalize_string(row['rsn']) == normalized_input:
                 return {
                     'member_id': row['member_id'],
@@ -1723,10 +1723,10 @@ async def bulk_add_points(interaction: discord.Interaction, points: int, reason:
         # 2. Build RSN Map (Optimization: Fetch all members once)
         # We need to resolve RSN -> Member ID
         log.info("Building RSN map for bulk add points...")
-        all_rsns_res = supabase.table('member_rsns').select('rsn, member_id').execute()
-        
+        all_rsns_data = clan_sync_logic.fetch_all_rows(supabase.table('member_rsns').select('rsn, member_id'))
+
         rsn_map = {}
-        for item in all_rsns_res.data:
+        for item in all_rsns_data:
             rsn_map[normalize_string(item['rsn'])] = {
                 "member_id": item['member_id'],
                 "original_rsn": item['rsn']
@@ -1911,8 +1911,8 @@ async def process_competition_points(
     try:
         # 2. Resolve RSNs to Member IDs
         # Fetch all member RSNs to minimize queries (or we could `in_` query if list is small, but map is safer for normalization)
-        all_rsns_res = supabase.table('member_rsns').select('rsn, member_id').execute()
-        rsn_map = {normalize_string(item['rsn']): item for item in all_rsns_res.data}
+        all_rsns_data = clan_sync_logic.fetch_all_rows(supabase.table('member_rsns').select('rsn, member_id'))
+        rsn_map = {normalize_string(item['rsn']): item for item in all_rsns_data}
 
         transactions = []
         report_lines = []
