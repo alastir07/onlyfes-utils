@@ -131,3 +131,28 @@ CREATE TABLE public.overachievers (
   CONSTRAINT overachievers_pkey PRIMARY KEY (id),
   CONSTRAINT overachievers_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id)
 );
+CREATE TABLE public.bounties (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  item_name character varying NOT NULL,
+  thread_id bigint NOT NULL UNIQUE,
+  password character varying,
+  date_start timestamp with time zone NOT NULL DEFAULT now(),
+  date_end timestamp with time zone,
+  is_active boolean NOT NULL DEFAULT true,
+  CONSTRAINT bounties_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.bounty_winners (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  bounty_id bigint NOT NULL,
+  member_id uuid NOT NULL,
+  completed_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT bounty_winners_pkey PRIMARY KEY (id),
+  CONSTRAINT bounty_winners_bounty_id_fkey FOREIGN KEY (bounty_id) REFERENCES public.bounties(id),
+  CONSTRAINT bounty_winners_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id),
+  CONSTRAINT bounty_winners_bounty_id_member_id_key UNIQUE (bounty_id, member_id)
+);
+CREATE TABLE public.bot_state (
+  key character varying NOT NULL,
+  value text NOT NULL,
+  CONSTRAINT bot_state_pkey PRIMARY KEY (key)
+);

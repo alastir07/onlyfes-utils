@@ -10,7 +10,9 @@ import re
 import json
 from io import StringIO
 import traceback
-from datetime import datetime, time
+import random
+from datetime import datetime, time, timedelta
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 import functools
 import logging
@@ -90,6 +92,12 @@ def get_normalized_rank_from_db(rank_name_input: str) -> dict | None:
         log.error(f"Error fetching ranks for normalization: {e}")
         return None
 
+def get_rank_display_name(rank_name: str) -> str:
+    """Returns the DISCORD_RANKS display_name (includes title, e.g. 'Maxed (Elite Skiller)') for a rank name, falling back to the rank name itself."""
+    normalized_input = normalize_string(rank_name)
+    rank_config = next((r for r in DISCORD_RANKS if normalize_string(r["role_name"]) == normalized_input), None)
+    return rank_config["display_name"] if rank_config else rank_name
+
 def resolve_rsn_to_member(rsn: str) -> dict | None:
     """
     Looks up a member by their RSN (case-insensitive, space/underscore-insensitive).
@@ -146,8 +154,7 @@ def parse_duration(time_str: str) -> datetime | None:
     
     if not matches:
         return None
-        
-    from datetime import timedelta
+
     delta = timedelta()
     for amount_str, unit in matches:
         amount = int(amount_str)
@@ -373,9 +380,11 @@ async def sync_discord_clan_member_roles(guild: discord.Guild, sync_metadata: di
             member = guild.get_member(int(d_id))
             if not member:
                 member = await guild.fetch_member(int(d_id))
+                await asyncio.sleep(0.1)  # fetch_member is an API call
             if member and role in member.roles:
                 await member.remove_roles(role, reason="Clan sync: Member deactivated")
                 removed_count += 1
+                await asyncio.sleep(0.1)  # remove_roles is an API call
         except discord.NotFound:
             log.info(f"Deactivated user {d_id} not found in guild.")
         except Exception as e:
@@ -388,9 +397,11 @@ async def sync_discord_clan_member_roles(guild: discord.Guild, sync_metadata: di
             member = guild.get_member(int(a_id))
             if not member:
                 member = await guild.fetch_member(int(a_id))
+                await asyncio.sleep(0.1)  # fetch_member is an API call
             if member and role not in member.roles:
                 await member.add_roles(role, reason="Clan sync: Ensure active member has role")
                 added_count += 1
+                await asyncio.sleep(0.1)  # add_roles is an API call
         except discord.NotFound:
             log.info(f"Active user {a_id} not found in guild.")
         except Exception as e:
@@ -439,10 +450,52 @@ async def on_ready():
         scheduled_overachievers_check.start()
         scheduled_no_discord_check.start()
         scheduled_clan_veteran_check.start()
+        scheduled_bounty_generate.start()
+        scheduled_bounty_close.start()
 
-        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily), no_discord_check (00:05 UTC weekly on Sundays), clan_veteran_check (00:10 UTC monthly on the 1st)")
+        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily), no_discord_check (00:05 UTC weekly on Sundays), clan_veteran_check (00:10 UTC monthly on the 1st), bounty_generate (Mon 06:00 UTC), bounty_close (Sat 06:00 UTC)")
+
+        # Restore bounty state from DB
+        await _load_bounty_state()
+
     log.info(f'Logged in as {client.user} (ID: {client.user.id})')
     log.info('Bot is ready and online.')
+
+# --- Global slash-command error handler ---
+@client.tree.error
+async def on_tree_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    command_name = interaction.command.name if interaction.command else "unknown"
+    user = interaction.user
+
+    # Unwrap CommandInvokeError to get the real cause
+    cause = error.__cause__ if isinstance(error, app_commands.CommandInvokeError) else error
+
+    if isinstance(cause, discord.HTTPException) and cause.status == 429:
+        retry_after = getattr(cause, 'retry_after', None)
+        retry_msg = f"retry_after={retry_after:.2f}s" if retry_after is not None else "retry_after=unknown"
+        log.error(
+            f"[RATE LIMITED] command=/{command_name} user={user} {retry_msg} "
+            f"— global rate limit exceeded (50 req/s). "
+            f"Response: {cause.text!r}"
+        )
+        msg = "The bot is temporarily rate-limited by Discord. Please try again in a few seconds."
+    else:
+        log.error(
+            f"[COMMAND ERROR] command=/{command_name} user={user} "
+            f"error={type(cause).__name__}: {cause}\n{traceback.format_exc()}"
+        )
+        msg = f"An unexpected error occurred: `{cause}`"
+
+    # Try to send a response. If defer() already failed, response.is_done() is False,
+    # so we use send_message. If defer() succeeded but followup failed, use followup.
+    try:
+        if not interaction.response.is_done():
+            await interaction.response.send_message(msg, ephemeral=True)
+        else:
+            await interaction.followup.send(msg, ephemeral=True)
+    except Exception:
+        # If we can't respond at all (e.g. token expired), just log it
+        log.warning(f"[COMMAND ERROR] Could not send error response for /{command_name} to {user}")
 
 # --- 3. /HELP COMMAND ---
 COMMANDS_HELP = {
@@ -490,7 +543,7 @@ COMMANDS_HELP = {
     },
     "linkrsn": {
         "syntax": "`/linkrsn <rsn> <@user> [publish]`",
-        "description": "Links a member's RSN to their Discord account.",
+        "description": "Links a member's RSN to their Discord account. Staff channels only.",
         "category": "Captain Commands",
         "min_role": "Captain"
     },
@@ -583,6 +636,36 @@ COMMANDS_HELP = {
         "description": "Summarizes the staff channel conversation from a time/message ID to current.",
         "category": "Commander Commands",
         "min_role": "Commander"
+    },
+    "generate-new-bounty-quest": {
+        "syntax": "`/generate-new-bounty-quest [item_name] [publish]`",
+        "description": "Creates a new weekly bounty thread and announcement. Optionally specify an item; otherwise one is chosen randomly.",
+        "category": "Owner Commands",
+        "min_role": "Owner"
+    },
+    "close-bounty-quest": {
+        "syntax": "`/close-bounty-quest <thread_id> [publish]`",
+        "description": "Locks and archives a bounty quest thread.",
+        "category": "Owner Commands",
+        "min_role": "Owner"
+    },
+    "check-bounty-completion": {
+        "syntax": "`/check-bounty-completion <thread_id> [publish]`",
+        "description": "Checks a bounty thread for messages with a ✅ reaction and lists the confirmed completions.",
+        "category": "Owner Commands",
+        "min_role": "Owner"
+    },
+    "enable-automatic-bounties": {
+        "syntax": "`/enable-automatic-bounties [publish]`",
+        "description": "Enables the automatic weekly bounty tasks (generate on Monday 06:00 UTC, close on Saturday 06:00 UTC).",
+        "category": "Owner Commands",
+        "min_role": "Owner"
+    },
+    "disable-automatic-bounties": {
+        "syntax": "`/disable-automatic-bounties [publish]`",
+        "description": "Disables the automatic weekly bounty tasks so bounties can be managed manually.",
+        "category": "Owner Commands",
+        "min_role": "Owner"
     }
 }
 
@@ -661,7 +744,8 @@ async def help(interaction: discord.Interaction, command: str = None, publish: b
         "User Commands": [],
         "Captain Commands": [],
         "General & Master Commands": [],
-        "Commander Commands": []
+        "Commander Commands": [],
+        "Owner Commands": []
     }
     
     for cmd_name, cmd_info in COMMANDS_HELP.items():
@@ -684,7 +768,8 @@ async def help(interaction: discord.Interaction, command: str = None, publish: b
         emoji_prefix = "📋" if category_name == "User Commands" else \
                        "👮" if category_name == "Captain Commands" else \
                        "⭐" if category_name == "General & Master Commands" else \
-                       "🔥"
+                       "🔥" if category_name == "Commander Commands" else \
+                       "👑"
                        
         embed.add_field(
             name=f"{emoji_prefix} {category_name}",
@@ -833,14 +918,14 @@ async def rankhistory(interaction: discord.Interaction, rsn: str, num_changes: i
 @app_commands.describe(
     dry_run="True (default) to just see the report. False to execute changes.",
     force_run="False (default). True to bypass the rank mismatch safety check.",
-    publish="False (default). True to post the final report publicly."
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("General")
 async def sync_clan(
-    interaction: discord.Interaction, 
-    dry_run: bool = True, 
-    force_run: bool = False, 
-    publish: bool = False
+    interaction: discord.Interaction,
+    dry_run: bool = True,
+    force_run: bool = False,
+    publish: bool = True
 ):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -970,7 +1055,7 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
 @app_commands.describe(
     rsn="The member's RSN (current or past).",
     rank_name="The new rank to assign (e.g., 'Ruby', 'Beast').",
-    publish="True to post the confirmation publicly.",
+    publish="False to post privately. Defaults to True (posts publicly).",
     bypass_discord="True to bypass updating the Discord role (useful if member has no Discord)."
 )
 @app_commands.choices(rank_name=[
@@ -979,7 +1064,7 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
 ])
 
 @check_staff_role("Captain")
-async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = False, bypass_discord: bool = False):
+async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = True, bypass_discord: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
@@ -1096,7 +1181,7 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
         elif bypass_discord:
             discord_msg = " (Bypassed Discord role update.)"
         
-        await interaction.followup.send(f"✅ Success! `{member_rsn}`'s rank has been updated to **{new_rank_name}**.{discord_msg}", ephemeral=is_ephemeral)
+        await interaction.followup.send(f"✅ Success! `{member_rsn}`'s rank has been updated to **{get_rank_display_name(new_rank_name)}**.{discord_msg}", ephemeral=is_ephemeral)
 
     except Exception as e:
         log.error(f"Error in /rankup command: {e}\n{traceback.format_exc()}")
@@ -1108,7 +1193,7 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
 @app_commands.describe(
     rank_name="The new rank to assign all members (e.g., 'Beast').",
     rsn_list="A comma-separated list of RSNs.",
-    publish="True to post the confirmation publicly.",
+    publish="False to post privately. Defaults to True (posts publicly).",
     bypass_discord="True to bypass updating Discord roles (useful if members have no Discord)."
 )
 @app_commands.choices(rank_name=[
@@ -1116,7 +1201,7 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
     for rank in DISCORD_RANKS
 ])
 @check_staff_role("Captain")
-async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = False, bypass_discord: bool = False):
+async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list: str, publish: bool = True, bypass_discord: bool = False):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /bulkrankup rank_name='{rank_name}' rsn_list='{rsn_list}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
@@ -1274,7 +1359,7 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
             discord_summary = "ℹ️ Bypassed Discord roles update."
 
         embed = discord.Embed(
-            title=f"Bulk Rank Update to '{new_rank_name}' Complete",
+            title=f"Bulk Rank Update to '{get_rank_display_name(new_rank_name)}' Complete",
             description=discord_summary if discord_summary else None,
             color=discord.Color.green() if not report_fail_not_found and not report_fail_no_discord else discord.Color.orange()
         )
@@ -1359,14 +1444,16 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
         req_months = target_rank.get('req_months_in_clan') or 0
         req_tl = target_rank.get('req_total_level') or 0
         
-        has_time = days_in_clan >= (req_months * 28)
+        req_days = req_months * 28
+        has_time = days_in_clan >= req_days
         time_status = "✅ Met" if has_time else "❌ Not Met"
+        days_short = req_days - days_in_clan
 
         has_tl = total_level >= req_tl
         tl_status = "✅ Met" if has_tl else "❌ Not Met"
 
         embed = discord.Embed(
-            title=f"Checking if {member_rsn} is eligible for {target_rank['name']}...",
+            title=f"Checking if {member_rsn} is eligible for {get_rank_display_name(target_rank['name'])}...",
             color=discord.Color.gold()
         )
         
@@ -1374,9 +1461,12 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
         embed.add_field(name="Current EP", value=f"{member_info.get('total_ep', 0):,}", inline=True)
         embed.add_field(name="Current Rank", value=member_info.get('rank_name', 'Unknown'), inline=True)
         
+        time_value = f"{time_status} (Needs {req_months} mo.)"
+        if not has_time:
+            time_value += f" — {days_short} day{'s' if days_short != 1 else ''} short"
         embed.add_field(
-            name="Time In Clan Requirement", 
-            value=f"{time_status} (Needs {req_months} mo.)", 
+            name="Time In Clan Requirement",
+            value=time_value,
             inline=False
         )
         if req_tl > 0:
@@ -1401,16 +1491,22 @@ async def rankup_check(interaction: discord.Interaction, rsn: str, rank_name: st
 @app_commands.describe(
     rsn="The member's RSN (current or past).",
     user="The @discord user to link.",
-    publish="True to post the confirmation publicly."
+    publish="False to post privately. Defaults to True (posts publicly) when used in a staff channel."
 )
 @check_staff_role("Captain")
-async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Member, publish: bool = False):
-    
+async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Member, publish: bool = True):
+
+    channel = interaction.channel
+    matriarch_id = get_matriarch_id(channel)
+    if matriarch_id != 1059296867663491233:
+        await interaction.response.send_message("⛔ This command can only be used in a staff channel.", ephemeral=True)
+        return
+
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /linkrsn rsn='{rsn}' user='{user}' publish={publish} used by {interaction.user}")
     if not publish:
         await log_command_use(f"[{timestamp}] /linkrsn rsn='{rsn}' user='{user}' publish={publish} used by {interaction.user}")
-    
+
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
     
@@ -1474,10 +1570,10 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
     rsn="The member's RSN.",
     points="The amount of points to add (must be positive).",
     reason="The reason for this transaction (e.g., 'Event attendance', 'Store purchase').",
-    publish="True to post the confirmation publicly."
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def add_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = False):
+async def add_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = True):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /addpoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
@@ -1537,10 +1633,10 @@ async def add_points(interaction: discord.Interaction, rsn: str, points: int, re
     rsn="The member's RSN.",
     points="The amount of points to remove (must be positive).",
     reason="The reason for this transaction.",
-    publish="True to post the confirmation publicly."
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def remove_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = False):
+async def remove_points(interaction: discord.Interaction, rsn: str, points: int, reason: str, publish: bool = True):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /removepoints rsn='{rsn}' points={points} reason='{reason}' publish={publish} used by {interaction.user}")
@@ -1600,10 +1696,10 @@ async def remove_points(interaction: discord.Interaction, rsn: str, points: int,
     points="The amount of points to add (must be positive).",
     reason="The reason for this transaction.",
     rsn_list="A comma-separated list of RSNs.",
-    publish="True to post the confirmation publicly."
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def bulk_add_points(interaction: discord.Interaction, points: int, reason: str, rsn_list: str, publish: bool = False):
+async def bulk_add_points(interaction: discord.Interaction, points: int, reason: str, rsn_list: str, publish: bool = True):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /bulkaddpoints points={points} reason='{reason}' rsn_list='{rsn_list}' publish={publish} used by {interaction.user}")
@@ -1684,10 +1780,10 @@ async def bulk_add_points(interaction: discord.Interaction, points: int, reason:
     rsn="The member's RSN (current or past).",
     reason="The reason for this exemption (e.g., 'Taking a break from the game').",
     days="Number of days for the exemption (defaults to 90).",
-    publish="True to post the confirmation publicly."
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("General")
-async def add_exempt(interaction: discord.Interaction, rsn: str, reason: str, days: int = 90, publish: bool = False):
+async def add_exempt(interaction: discord.Interaction, rsn: str, reason: str, days: int = 90, publish: bool = True):
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /addexempt rsn='{rsn}' reason='{reason}' days={days} publish={publish} used by {interaction.user}")
@@ -1874,10 +1970,10 @@ async def process_competition_points(
     second="Comma-separated list of 2nd place RSNs (7 pts each)",
     third="Comma-separated list of 3rd place RSNs (5 pts each)",
     participants="Comma-separated list of other participants (3 pts each)",
-    publish="True to post publicly"
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def add_points_botm(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = False):
+async def add_points_botm(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = True):
     points = {'1st': 12, '2nd': 7, '3rd': 5, 'participation': 3}
     await process_competition_points(interaction, first, second, third, participants, points, "boss of the month", publish)
 
@@ -1888,10 +1984,10 @@ async def add_points_botm(interaction: discord.Interaction, first: str, second: 
     second="Comma-separated list of 2nd place RSNs (7 pts each)",
     third="Comma-separated list of 3rd place RSNs (5 pts each)",
     participants="Comma-separated list of other participants (3 pts each)",
-    publish="True to post publicly"
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def add_points_sotm(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = False):
+async def add_points_sotm(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = True):
     points = {'1st': 12, '2nd': 7, '3rd': 5, 'participation': 3}
     await process_competition_points(interaction, first, second, third, participants, points, "skill of the month", publish)
 
@@ -1902,10 +1998,10 @@ async def add_points_sotm(interaction: discord.Interaction, first: str, second: 
     second="Comma-separated list of 2nd place RSNs (15 pts each)",
     third="Comma-separated list of 3rd place RSNs (10 pts each)",
     participants="Comma-separated list of other participants (5 pts each)",
-    publish="True to post publicly"
+    publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("Captain")
-async def add_points_bigbooty(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = False):
+async def add_points_bigbooty(interaction: discord.Interaction, first: str, second: str, third: str, participants: str, publish: bool = True):
     points = {'1st': 20, '2nd': 15, '3rd': 10, 'participation': 5}
     await process_competition_points(interaction, first, second, third, participants, points, "big booty", publish)
 
@@ -2695,6 +2791,62 @@ async def before_scheduled_inactivity_check():
 
 
 # --- 18.5 OVERACHIEVERS ---
+OVERACHIEVER_ROLE_ID = 1280831567039692908
+
+async def sync_overachiever_roles(guild: discord.Guild) -> str:
+    """
+    Clears the Overachiever role from everyone who has it, then re-applies it
+    only to members who currently hold #1 in at least one metric.
+    """
+    role = guild.get_role(OVERACHIEVER_ROLE_ID)
+    if not role:
+        log.error(f"Could not find Overachiever role with ID {OVERACHIEVER_ROLE_ID}")
+        return f"⚠️ Error: Overachiever role with ID `{OVERACHIEVER_ROLE_ID}` not found in this server."
+
+    current_member_ids = overachievers_logic.get_current_overachiever_member_ids(supabase)
+
+    discord_ids = set()
+    if current_member_ids:
+        members_res = supabase.table('members').select('id, discord_id').in_('id', list(current_member_ids)).execute()
+        discord_ids = {str(m['discord_id']) for m in members_res.data if m.get('discord_id')}
+
+    removed_count = 0
+    added_count = 0
+    failed_count = 0
+
+    # 1. Remove role from anyone who currently has it but shouldn't
+    for member in list(role.members):
+        if str(member.id) not in discord_ids:
+            try:
+                await member.remove_roles(role, reason="Overachievers sync: no longer holds any metric")
+                removed_count += 1
+                await asyncio.sleep(0.1)
+            except Exception as e:
+                log.error(f"Failed to remove Overachiever role from {member.id}: {e}")
+                failed_count += 1
+
+    # 2. Add role to current holders who don't have it
+    for d_id in discord_ids:
+        try:
+            member = guild.get_member(int(d_id))
+            if not member:
+                member = await guild.fetch_member(int(d_id))
+                await asyncio.sleep(0.1)
+            if member and role not in member.roles:
+                await member.add_roles(role, reason="Overachievers sync: holds at least one metric")
+                added_count += 1
+                await asyncio.sleep(0.1)
+        except discord.NotFound:
+            log.info(f"Overachiever member {d_id} not found in guild.")
+        except Exception as e:
+            log.error(f"Failed to add Overachiever role to {d_id}: {e}")
+            failed_count += 1
+
+    summary = f"**Overachiever Role Sync:** Added to {added_count} member(s), Removed from {removed_count} member(s)."
+    if failed_count > 0:
+        summary += f" Failed for {failed_count} member(s)."
+    return summary
+
 @client.tree.command(name="overachievers-sync", description="Run the Overachievers check (1st of month typically).")
 @app_commands.describe(
     dry_run="True (default) to just see report. False to execute DB writes.",
@@ -2722,13 +2874,17 @@ async def check_overachievers_sync(interaction: discord.Interaction, dry_run: bo
             return
             
         await interaction.followup.send(content=f"Overachievers Sync Complete.", embeds=[skill_emb, act_emb, boss_emb], ephemeral=is_ephemeral)
-        
+
         if err_str:
             log.warning(f"Overachievers sync warnings:\n{err_str}")
             if len(err_str) > 1000:
                 err_str = err_str[:1000] + "\n... (truncated)"
             await interaction.followup.send(f"Warnings/Errors:\n```text\n{err_str}\n```", ephemeral=True)
-            
+
+        if not dry_run:
+            role_summary = await sync_overachiever_roles(interaction.guild)
+            await interaction.followup.send(role_summary, ephemeral=True)
+
     except Exception as e:
         log.error(f"CRITICAL Error in /overachievers-sync command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"A critical error occurred. Check the bot console logs: `{e}`", ephemeral=True)
@@ -2788,6 +2944,18 @@ async def scheduled_overachievers_check():
             )
             if skill_emb:
                 await channel.send("🏆 **Monthly Overachievers Report**", embeds=[skill_emb, act_emb, boss_emb])
+                if err_str:
+                    log.warning(f"Overachievers sync warnings:\n{err_str}")
+                    if len(err_str) > 1900:
+                        err_str = err_str[:1900] + "\n... (truncated)"
+                    await channel.send(f"⚠️ Overachievers Sync Warnings:\n```text\n{err_str}\n```")
+
+                guild = client.guilds[0] if client.guilds else None
+                if guild:
+                    role_summary = await sync_overachiever_roles(guild)
+                    await channel.send(role_summary)
+                else:
+                    log.error("Could not sync Overachiever roles: bot is not in any guild.")
             else:
                 log.error(f"Failed to generate overachievers report: {err_str}")
     except Exception as e:
@@ -2885,6 +3053,634 @@ async def before_scheduled_clan_veteran_check():
     log.info("Bot is ready. Starting scheduled clan veteran check task.")
 
 
-# --- 19. RUN THE BOT ---
+# --- 19. WEEKLY BOUNTY QUEST ---
+
+def _save_bot_state(key: str, value: str) -> None:
+    """Upserts a single key in bot_state."""
+    supabase.table('bot_state').upsert({'key': key, 'value': value}, on_conflict='key').execute()
+
+
+async def _load_bounty_state() -> None:
+    """Restores bounty_auto_enabled and bounty_active_thread_id from DB on startup."""
+    global bounty_auto_enabled, bounty_active_thread_id
+    try:
+        rows = supabase.table('bot_state').select('key,value').in_('key', ['bounty_auto_enabled', 'bounty_active_thread_id']).execute()
+        state = {r['key']: r['value'] for r in (rows.data or [])}
+        bounty_auto_enabled = state.get('bounty_auto_enabled', 'false').lower() == 'true'
+        raw_thread_id = state.get('bounty_active_thread_id')
+        bounty_active_thread_id = int(raw_thread_id) if raw_thread_id else None
+        log.info(f"Bounty state restored: auto_enabled={bounty_auto_enabled}, active_thread_id={bounty_active_thread_id}")
+    except Exception as e:
+        log.error(f"Failed to load bounty state from DB: {e}")
+
+
+# Channel and message config — swap these out when moving from test to production
+BOUNTY_ANNOUNCEMENT_CHANNEL_ID = 1054611693197602936   # test channel (#admin-playground - 1173640617453174835); swap for #event (1054611693197602936) when ready
+BOUNTY_THREADS_CHANNEL_ID = 1517972125246292178        # #weekly-bounty threads channel
+BOUNTY_ITEMS_THREAD_ID = 1517995249153081585           # "Full item list" thread in #weekly-bounties
+BOUNTY_COMPLETIONS_CHANNEL_ID = 1077669229475663893    # #event-winners (completions are posted here)
+BOUNTY_STAFF_LOG_CHANNEL_ID = 1490898354908037191      # #bots-staff (staff notifications)
+BOUNTY_INFO_CHANNEL_ID = 1517994786408108224           # #weekly-bounties info thread (within weekly-bounty channel)
+BOUNTY_ROLE_ID = 1518261554519212176                   # @Weekly bounty role
+BOUNTY_CHECK_EMOJI_GREEN_NAME = "Green_Check"
+BOUNTY_CHECK_EMOJI_WHITE = "✅"
+
+# Runtime state for automatic bounty management
+bounty_auto_enabled: bool = False
+bounty_active_thread_id: int | None = None  # set when a bounty thread is created
+
+# Word lists for event password generation (all words ≤ 8 chars, max combined length 16)
+_PASSWORD_ADJECTIVES = [
+    "Ancient", "Barrows", "Blazing", "Blessed", "Broken",
+    "Corrupt", "Cursed", "Daring", "Divine", "Draconic",
+    "Emerald", "Fiery", "Frozen", "Gilded", "Glacial",
+    "Glowing", "Golden", "Grim", "Haunted", "Holy",
+    "Infernal", "Iron", "Loyal", "Mystic", "Primal",
+    "Runic", "Sacred", "Shadow", "Sinister", "Twisted",
+]
+_PASSWORD_NOUNS = [
+    "Abyssal", "Adamant", "Ahrim", "Bandos", "Barrows",
+    "Cerberus", "Chaos", "Crystal", "Dharok", "Dragon",
+    "Duel", "Goblin", "Guthan", "Inferno", "Karil",
+    "Kraken", "Mithril", "Monk", "Ranger", "Rune",
+    "Scythe", "Slayer", "Thrall", "Torag", "Trident",
+    "Verac", "Void", "Whip", "Wyrm", "Zulrah",
+]
+
+
+def _generate_event_password() -> str:
+    return random.choice(_PASSWORD_ADJECTIVES) + random.choice(_PASSWORD_NOUNS)
+
+
+async def fetch_bounty_items() -> list[str]:
+    """
+    Fetches the bounty item list from the starter message of BOUNTY_ITEMS_THREAD_ID.
+    The message is expected to have one item per line (blank lines and list prefixes ignored).
+    Returns a list of item name strings.
+    """
+    async with aiohttp.ClientSession() as session:
+        # The starter message of a forum thread shares the thread's ID
+        url = f"https://discord.com/api/v10/channels/{BOUNTY_ITEMS_THREAD_ID}/messages/{BOUNTY_ITEMS_THREAD_ID}"
+        data = await discord_api_request(session, "GET", url)
+        if not data:
+            return []
+        content = data.get("content", "")
+        items = []
+        for line in content.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            # Strip markdown list prefixes (-, *, •) so items can be formatted as a list
+            line = line.lstrip("-*•").strip()
+            if line:
+                items.append(line)
+        return items
+
+
+def _wiki_url(item_name: str) -> str:
+    """Returns the OSRS wiki URL for an item, with spaces replaced by underscores."""
+    slug = item_name.replace(" ", "_")
+    return f"https://oldschool.runescape.wiki/w/{quote(slug, safe='_')}"
+
+
+def _wiki_image_url(item_name: str) -> str:
+    """Returns the OSRS wiki detail image URL for an item."""
+    slug = item_name.replace(" ", "_")
+    encoded = quote(slug, safe="_'")
+    return f"https://oldschool.runescape.wiki/images/{encoded}_detail.png"
+
+
+def _next_saturday_0600_utc(from_dt: datetime) -> datetime:
+    """Returns the next Saturday at 06:00 UTC on or after from_dt."""
+    days_until_saturday = (5 - from_dt.weekday()) % 7
+    if days_until_saturday == 0 and from_dt.hour >= 6:
+        days_until_saturday = 7
+    target = from_dt.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=days_until_saturday)
+    return target
+
+
+def _monday_after(close_dt: datetime) -> datetime:
+    """Returns the Monday at 06:00 UTC immediately after a Saturday close datetime."""
+    # Normalise to Saturday 06:00 first so the result is always exactly 2 days later
+    # regardless of what time close_dt actually is.
+    saturday = close_dt.replace(hour=6, minute=0, second=0, microsecond=0)
+    return saturday + timedelta(days=2)
+
+
+def _next_monday_0600_utc(from_dt: datetime) -> datetime:
+    """Returns the next Monday at 06:00 UTC strictly after from_dt."""
+    days_until_monday = (7 - from_dt.weekday()) % 7
+    if days_until_monday == 0 and from_dt.hour >= 6:
+        days_until_monday = 7
+    return from_dt.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=days_until_monday)
+
+
+async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = None) -> tuple[bool, str]:
+    """
+    Core logic: picks an item, creates a thread in BOUNTY_THREADS_CHANNEL_ID,
+    and posts an announcement in BOUNTY_ANNOUNCEMENT_CHANNEL_ID.
+    Returns (success, message).
+    """
+    chosen_item = item_name
+
+    if not chosen_item:
+        items = await fetch_bounty_items()
+        if not items:
+            return False, "Could not fetch bounty items list. Check that the reference message is accessible."
+        chosen_item = random.choice(items)
+
+    threads_channel = guild.get_channel(BOUNTY_THREADS_CHANNEL_ID)
+    if not threads_channel:
+        return False, f"Could not find bounty threads channel (ID `{BOUNTY_THREADS_CHANNEL_ID}`)."
+
+    now = datetime.now(ZoneInfo("UTC"))
+    week_label = now.strftime("Week of %b %d, %Y")
+    thread_name = f"Weekly Bounty – {chosen_item} ({week_label})"
+
+    close_dt = _next_saturday_0600_utc(now)
+    close_ts = int(close_dt.timestamp())
+    wiki_link = _wiki_url(chosen_item)
+    image_url = _wiki_image_url(chosen_item)
+    event_password = _generate_event_password()
+
+    opening_post = (
+        f"## Weekly Bounty: **{chosen_item}**\n\n"
+        f"This week's bounty item is **[{chosen_item}]({wiki_link})**. The event password is **{event_password}**.\n\n"
+        f"Post a screenshot of your drop here. Staff will react with ✅ to confirm it counts.\n\n"
+        f"*Thread closes <t:{close_ts}:F>.*\n\n"
+        f"{image_url}"
+    )
+
+    try:
+        thread_with_msg = await threads_channel.create_thread(
+            name=thread_name,
+            content=opening_post,
+            auto_archive_duration=10080,  # 7 days
+        )
+        thread = thread_with_msg.thread
+    except Exception as e:
+        return False, f"Failed to create thread: {e}"
+
+    # Post announcement
+    announcement_channel = guild.get_channel(BOUNTY_ANNOUNCEMENT_CHANNEL_ID)
+    if announcement_channel:
+        info_channel_mention = f"<#{BOUNTY_INFO_CHANNEL_ID}>"
+        embed = discord.Embed(
+            title="🎯 New Weekly Bounty!",
+            description=(
+                f"This week's bounty item is **[{chosen_item}]({wiki_link})**. The event password is **{event_password}**.\n\n"
+                f"Head over to {thread.mention} to submit your drop screenshot.\n"
+                f"Staff will react with ✅ to confirm eligible submissions.\n\n"
+                f"**Reward:** 3 Event Points\n\n"
+                f"For more information on the weekly bounty event, see {info_channel_mention}.\n\n"
+                f"*Closes <t:{close_ts}:F> (<t:{close_ts}:R>)*"
+            ),
+            color=discord.Color.gold(),
+            timestamp=now,
+        )
+        embed.set_thumbnail(url=image_url)
+        embed.set_footer(text="Good luck, everyone!")
+        role_mention = f"<@&{BOUNTY_ROLE_ID}>"
+        await announcement_channel.send(content=role_mention, embed=embed)
+
+    global bounty_active_thread_id
+    bounty_active_thread_id = thread.id
+    _save_bot_state('bounty_active_thread_id', str(thread.id))
+
+    try:
+        supabase.table('bounties').insert({
+            'item_name': chosen_item,
+            'thread_id': thread.id,
+            'password': event_password,
+            'date_start': now.isoformat(),
+            'date_end': close_dt.isoformat(),
+            'is_active': True,
+        }).execute()
+    except Exception as e:
+        log.error(f"Failed to insert bounty row into DB: {e}")
+
+    return True, f"Created thread **{thread_name}** and posted announcement. Thread: {thread.mention}"
+
+
+async def _check_bounty_completions(thread: discord.Thread) -> list[dict]:
+    """
+    Scans all messages in a bounty thread.
+    Returns a list of dicts {user_id, display_name, rsn} for each unique user whose
+    message has a Green_Check or white_check_mark reaction from staff.
+    RSN is looked up from the database via discord_id; falls back to display_name if not found.
+    """
+    winners: dict[int, str] = {}  # user_id -> display_name
+
+    async for message in thread.history(limit=None, oldest_first=True):
+        if not message.reactions:
+            continue
+        for reaction in message.reactions:
+            emoji = reaction.emoji
+            is_green = isinstance(emoji, discord.PartialEmoji | discord.Emoji) and emoji.name == BOUNTY_CHECK_EMOJI_GREEN_NAME
+            is_white = emoji == BOUNTY_CHECK_EMOJI_WHITE or (hasattr(emoji, "name") and emoji.name == "white_check_mark")
+            if is_green or is_white:
+                author = message.author
+                if author and not author.bot:
+                    winners[author.id] = author.display_name
+                break
+
+    # Look up member_id and RSN from DB by discord_id
+    result = []
+    for uid, display_name in winners.items():
+        rsn = None
+        member_id = None
+        try:
+            member_res = supabase.table('members').select('id').eq('discord_id', uid).limit(1).execute()
+            if member_res.data:
+                member_id = member_res.data[0]['id']
+                primary_res = supabase.table('member_rsns') \
+                    .select('rsn') \
+                    .eq('member_id', member_id) \
+                    .eq('is_primary', True) \
+                    .limit(1) \
+                    .execute()
+                if primary_res.data:
+                    rsn = primary_res.data[0]['rsn']
+        except Exception as e:
+            log.warning(f"Could not look up RSN for discord_id {uid}: {e}")
+        result.append({"user_id": uid, "display_name": display_name, "rsn": rsn, "member_id": member_id})
+
+    return result
+
+
+async def _award_bounty_ep(winners: list[dict], bounty_id: int, guild: discord.Guild) -> None:
+    """
+    Inserts EP transactions for each winner who hasn't already been awarded for this bounty,
+    then posts a staff log summary to BOUNTY_STAFF_LOG_CHANNEL_ID.
+    winners must be the list returned by _check_bounty_completions (includes member_id).
+    """
+    reason = f"Bounty Completion - {bounty_id}"
+    awarded = []
+    already_awarded = []
+    for w in winners:
+        if not w.get('member_id'):
+            log.warning(f"_award_bounty_ep: no member_id for discord_id {w['user_id']}, skipping EP award")
+            continue
+        label = w['rsn'] or w['display_name']
+        try:
+            existing = supabase.table('event_point_transactions') \
+                .select('id') \
+                .eq('member_id', w['member_id']) \
+                .eq('reason', reason) \
+                .limit(1) \
+                .execute()
+            if existing.data:
+                already_awarded.append(label)
+                log.info(f"_award_bounty_ep: skipping {label} — EP already awarded for bounty {bounty_id}")
+                continue
+            supabase.table('event_point_transactions').insert({
+                'member_id': w['member_id'],
+                'modification': 3,
+                'reason': reason,
+            }).execute()
+            awarded.append(label)
+        except Exception as e:
+            log.error(f"_award_bounty_ep: failed to process EP for member {w['member_id']}: {e}")
+
+    staff_channel = guild.get_channel(BOUNTY_STAFF_LOG_CHANNEL_ID)
+    if staff_channel:
+        parts = []
+        if awarded:
+            rsn_list = ", ".join(f"**{r}**" for r in awarded)
+            parts.append(f"3 EP awarded to: {rsn_list}")
+        if already_awarded:
+            skip_list = ", ".join(f"**{r}**" for r in already_awarded)
+            parts.append(f"already awarded (skipped): {skip_list}")
+        if parts:
+            await staff_channel.send(f"✅ Bounty check complete — " + "; ".join(parts))
+        else:
+            await staff_channel.send(
+                f"⚠️ Bounty check complete — no EP awarded (winners had no linked member records)."
+            )
+
+
+@client.tree.command(name="generate-new-bounty-quest", description="Generate a new weekly bounty quest thread and announcement.")
+@app_commands.describe(
+    item_name="Optional: specify the bounty item. If omitted, one is chosen randomly from the list.",
+    publish="True to post the confirmation publicly."
+)
+@check_staff_role("Owner")
+async def generate_new_bounty_quest(interaction: discord.Interaction, item_name: str = None, publish: bool = False):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /generate-new-bounty-quest item_name='{item_name}' publish={publish} used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /generate-new-bounty-quest item_name='{item_name}' publish={publish} used by {interaction.user}")
+
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+
+    try:
+        success, msg = await _run_generate_bounty(interaction.guild, item_name)
+        if success:
+            await interaction.followup.send(f"✅ {msg}", ephemeral=is_ephemeral)
+        else:
+            await interaction.followup.send(f"❌ {msg}", ephemeral=True)
+    except Exception as e:
+        log.error(f"Error in /generate-new-bounty-quest: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
+
+
+@client.tree.command(name="close-bounty-quest", description="Lock a bounty quest thread.")
+@app_commands.describe(
+    thread_id="The ID of the bounty thread to lock.",
+    publish="True to post the confirmation publicly."
+)
+@check_staff_role("Owner")
+async def close_bounty_quest(interaction: discord.Interaction, thread_id: str, publish: bool = False):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /close-bounty-quest thread_id='{thread_id}' publish={publish} used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /close-bounty-quest thread_id='{thread_id}' publish={publish} used by {interaction.user}")
+
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+
+    try:
+        thread_id_int = int(thread_id)
+    except ValueError:
+        await interaction.followup.send("❌ Invalid thread ID — must be a numeric Discord snowflake.", ephemeral=True)
+        return
+
+    try:
+        thread = interaction.guild.get_channel(thread_id_int)
+        if not thread:
+            thread = await interaction.guild.fetch_channel(thread_id_int)
+
+        if not isinstance(thread, discord.Thread):
+            await interaction.followup.send(f"❌ Channel `{thread_id}` is not a thread.", ephemeral=True)
+            return
+
+        await thread.edit(locked=True, archived=True)
+        await interaction.followup.send(f"✅ Thread **{thread.name}** has been locked and archived.", ephemeral=is_ephemeral)
+    except discord.NotFound:
+        await interaction.followup.send(f"❌ Could not find a thread with ID `{thread_id}`.", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.followup.send("❌ Bot lacks permission to lock that thread.", ephemeral=True)
+    except Exception as e:
+        log.error(f"Error in /close-bounty-quest: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
+
+
+@client.tree.command(name="check-bounty-completion", description="Check a bounty thread for confirmed submissions (✅ reactions).")
+@app_commands.describe(
+    thread_id="The ID of the bounty thread to check.",
+    publish="True to post the results publicly."
+)
+@check_staff_role("Owner")
+async def check_bounty_completion(interaction: discord.Interaction, thread_id: str, publish: bool = False):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /check-bounty-completion thread_id='{thread_id}' publish={publish} used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /check-bounty-completion thread_id='{thread_id}' publish={publish} used by {interaction.user}")
+
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+
+    try:
+        thread_id_int = int(thread_id)
+    except ValueError:
+        await interaction.followup.send("❌ Invalid thread ID — must be a numeric Discord snowflake.", ephemeral=True)
+        return
+
+    try:
+        thread = interaction.guild.get_channel(thread_id_int)
+        if not thread:
+            thread = await interaction.guild.fetch_channel(thread_id_int)
+
+        if not isinstance(thread, discord.Thread):
+            await interaction.followup.send(f"❌ Channel `{thread_id}` is not a thread.", ephemeral=True)
+            return
+
+        winners = await _check_bounty_completions(thread)
+
+        now = datetime.now(ZoneInfo("UTC"))
+        week_label = now.strftime("Week of %b %d, %Y")
+        # Strip "Weekly Bounty – " prefix from thread name to get just the item name
+        raw_name = thread.name
+        for prefix in ("Weekly Bounty – ", "Weekly Bounty - "):
+            if raw_name.startswith(prefix):
+                raw_name = raw_name[len(prefix):]
+                break
+        # Strip trailing "(Week of ...)" if present
+        if " (" in raw_name:
+            raw_name = raw_name[:raw_name.rfind(" (")]
+        item_name = raw_name
+
+        embed = discord.Embed(
+            title=f"Weekly Bounty Completions: {item_name} ({week_label})",
+            color=discord.Color.green() if winners else discord.Color.orange(),
+            timestamp=datetime.now(ZoneInfo("UTC")),
+        )
+
+        if winners:
+            winner_lines = "\n".join(f"• <@{w['user_id']}>" for w in winners)
+
+            next_bounty_dt = _next_monday_0600_utc(now)
+            next_bounty_ts = int(next_bounty_dt.timestamp())
+            threads_channel_mention = f"<#{BOUNTY_THREADS_CHANNEL_ID}>"
+
+            embed.description = (
+                f"The following members successfully obtained the drop:\n{winner_lines}\n\n"
+                f"Congratulations to you all, you've each earned 3 Event Points.\n\n"
+                f"A new bounty will be live <t:{next_bounty_ts}:F> (<t:{next_bounty_ts}:R>), keep your eyes on {threads_channel_mention}!"
+            )
+        else:
+            embed.description = "No confirmed completions found (no ✅ reactions on any messages yet)."
+
+        embed.set_footer(text=f"Thread ID: {thread_id}")
+
+        if publish:
+            completions_channel = interaction.guild.get_channel(BOUNTY_COMPLETIONS_CHANNEL_ID)
+            if completions_channel:
+                await completions_channel.send(embed=embed)
+                await interaction.followup.send(f"✅ Posted to {completions_channel.mention}.", ephemeral=True)
+            else:
+                await interaction.followup.send(f"❌ Could not find completions channel (ID `{BOUNTY_COMPLETIONS_CHANNEL_ID}`).", ephemeral=True)
+            if winners:
+                bounty_res = supabase.table('bounties').select('id').eq('thread_id', thread_id_int).limit(1).execute()
+                bounty_db_id = bounty_res.data[0]['id'] if bounty_res.data else None
+                if bounty_db_id:
+                    await _award_bounty_ep(winners, bounty_db_id, interaction.guild)
+                else:
+                    log.warning(f"/check-bounty-completion: no bounties row for thread_id {thread_id_int}, cannot award EP")
+        else:
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+    except discord.NotFound:
+        await interaction.followup.send(f"❌ Could not find a thread with ID `{thread_id}`.", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.followup.send("❌ Bot lacks permission to read that thread.", ephemeral=True)
+    except Exception as e:
+        log.error(f"Error in /check-bounty-completion: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
+
+
+# --- 20. AUTOMATIC BOUNTY SCHEDULED TASKS ---
+
+@tasks.loop(time=[time(hour=6, minute=0, tzinfo=ZoneInfo("UTC"))])
+async def scheduled_bounty_generate():
+    """Runs every Monday at 06:00 UTC. Generates a new bounty if auto mode is enabled."""
+    if not bounty_auto_enabled:
+        return
+    now = datetime.now(ZoneInfo("UTC"))
+    if now.weekday() != 0:  # 0 = Monday
+        return
+    log.info("=== Starting scheduled bounty generation ===")
+    guild = client.guilds[0] if client.guilds else None
+    if not guild:
+        log.error("scheduled_bounty_generate: no guild available.")
+        return
+    try:
+        success, msg = await _run_generate_bounty(guild)
+        if success:
+            log.info(f"Scheduled bounty generation complete: {msg}")
+        else:
+            log.error(f"Scheduled bounty generation failed: {msg}")
+    except Exception as e:
+        log.error(f"ERROR in scheduled_bounty_generate: {e}\n{traceback.format_exc()}")
+
+
+@tasks.loop(time=[time(hour=6, minute=0, tzinfo=ZoneInfo("UTC"))])
+async def scheduled_bounty_close():
+    """Runs every Saturday at 06:00 UTC. Closes the active thread and posts completions if auto mode is enabled."""
+    if not bounty_auto_enabled:
+        return
+    now = datetime.now(ZoneInfo("UTC"))
+    if now.weekday() != 5:  # 5 = Saturday
+        return
+    if not bounty_active_thread_id:
+        log.warning("scheduled_bounty_close: no active bounty thread ID recorded, skipping.")
+        return
+    log.info(f"=== Starting scheduled bounty close (thread {bounty_active_thread_id}) ===")
+    guild = client.guilds[0] if client.guilds else None
+    if not guild:
+        log.error("scheduled_bounty_close: no guild available.")
+        return
+    try:
+        thread = guild.get_channel(bounty_active_thread_id)
+        if not thread:
+            thread = await guild.fetch_channel(bounty_active_thread_id)
+        if not isinstance(thread, discord.Thread):
+            log.error(f"scheduled_bounty_close: channel {bounty_active_thread_id} is not a thread.")
+            return
+
+        # Gather completions and post to completions channel before locking
+        winners = await _check_bounty_completions(thread)
+
+        # Mark bounty closed in DB and record winners
+        try:
+            bounty_res = supabase.table('bounties').select('id').eq('thread_id', bounty_active_thread_id).limit(1).execute()
+            bounty_db_id = bounty_res.data[0]['id'] if bounty_res.data else None
+            if bounty_db_id:
+                supabase.table('bounties').update({'is_active': False, 'date_end': now.isoformat()}).eq('id', bounty_db_id).execute()
+                for w in winners:
+                    try:
+                        member_res = supabase.table('members').select('id').eq('discord_id', w['user_id']).limit(1).execute()
+                        if member_res.data:
+                            supabase.table('bounty_winners').upsert(
+                                {'bounty_id': bounty_db_id, 'member_id': member_res.data[0]['id']},
+                                on_conflict='bounty_id,member_id'
+                            ).execute()
+                    except Exception as we:
+                        log.warning(f"Could not insert bounty_winner for discord_id {w['user_id']}: {we}")
+            else:
+                log.warning(f"scheduled_bounty_close: no bounties row found for thread_id {bounty_active_thread_id}")
+        except Exception as e:
+            log.error(f"scheduled_bounty_close: DB update failed: {e}")
+
+        raw_name = thread.name
+        for prefix in ("Weekly Bounty – ", "Weekly Bounty - "):
+            if raw_name.startswith(prefix):
+                raw_name = raw_name[len(prefix):]
+                break
+        if " (" in raw_name:
+            raw_name = raw_name[:raw_name.rfind(" (")]
+        item_name = raw_name
+        week_label = now.strftime("Week of %b %d, %Y")
+        next_bounty_dt = _monday_after(now)
+        next_bounty_ts = int(next_bounty_dt.timestamp())
+        threads_channel_mention = f"<#{BOUNTY_THREADS_CHANNEL_ID}>"
+
+        completions_channel = guild.get_channel(BOUNTY_COMPLETIONS_CHANNEL_ID)
+        if winners:
+            winner_lines = "\n".join(f"• <@{w['user_id']}>" for w in winners)
+            embed = discord.Embed(
+                title=f"Weekly Bounty Completions: {item_name} ({week_label})",
+                color=discord.Color.green(),
+                timestamp=now,
+            )
+            embed.description = (
+                f"The following members successfully obtained the drop:\n{winner_lines}\n\n"
+                f"Congratulations to you all, you've each earned 3 Event Points.\n\n"
+                f"A new bounty will be live <t:{next_bounty_ts}:F> (<t:{next_bounty_ts}:R>), keep your eyes on {threads_channel_mention}!"
+            )
+            embed.set_footer(text=f"Thread ID: {bounty_active_thread_id}")
+            if completions_channel:
+                await completions_channel.send(embed=embed)
+            log.info(f"Scheduled bounty close: posted {len(winners)} completion(s) to completions channel.")
+            await _award_bounty_ep(winners, bounty_db_id, guild)
+        else:
+            log.info("Scheduled bounty close: no confirmed completions found, skipping completions post.")
+            staff_channel = guild.get_channel(BOUNTY_STAFF_LOG_CHANNEL_ID)
+            if staff_channel:
+                await staff_channel.send(
+                    f"📋 Weekly bounty closed: **{item_name}** ({week_label}) — no confirmed completions found. "
+                    f"Thread: <#{bounty_active_thread_id}>"
+                )
+
+        await thread.edit(locked=True, archived=True)
+        log.info(f"Scheduled bounty close: thread '{thread.name}' locked and archived.")
+    except Exception as e:
+        log.error(f"ERROR in scheduled_bounty_close: {e}\n{traceback.format_exc()}")
+
+
+@scheduled_bounty_generate.before_loop
+async def before_scheduled_bounty_generate():
+    await client.wait_until_ready()
+
+
+@scheduled_bounty_close.before_loop
+async def before_scheduled_bounty_close():
+    await client.wait_until_ready()
+
+
+@client.tree.command(name="enable-automatic-bounties", description="Enable the automatic weekly bounty generation and close tasks.")
+@app_commands.describe(publish="False to post privately. Defaults to True (posts publicly).")
+@check_staff_role("Owner")
+async def enable_automatic_bounties(interaction: discord.Interaction, publish: bool = True):
+    global bounty_auto_enabled
+    bounty_auto_enabled = True
+    _save_bot_state('bounty_auto_enabled', 'true')
+    now = datetime.now(ZoneInfo("UTC"))
+    next_generate_dt = _next_monday_0600_utc(now)
+    next_generate_ts = int(next_generate_dt.timestamp())
+    is_ephemeral = not publish
+    await interaction.response.send_message(
+        f"✅ Automatic bounties enabled. The next bounty will be posted at <t:{next_generate_ts}:F> (<t:{next_generate_ts}:R>).",
+        ephemeral=is_ephemeral,
+    )
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    await log_command_use(f"[{timestamp}] /enable-automatic-bounties used by {interaction.user}")
+
+
+@client.tree.command(name="disable-automatic-bounties", description="Disable the automatic weekly bounty generation and close tasks.")
+@app_commands.describe(publish="False to post privately. Defaults to True (posts publicly).")
+@check_staff_role("Owner")
+async def disable_automatic_bounties(interaction: discord.Interaction, publish: bool = True):
+    global bounty_auto_enabled
+    bounty_auto_enabled = False
+    _save_bot_state('bounty_auto_enabled', 'false')
+    is_ephemeral = not publish
+    await interaction.response.send_message(
+        "🚫 Automatic bounties disabled. Use `/generate-new-bounty-quest` and `/close-bounty-quest` to manage bounties manually.",
+        ephemeral=is_ephemeral,
+    )
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    await log_command_use(f"[{timestamp}] /disable-automatic-bounties used by {interaction.user}")
+
+
+# --- 21. RUN THE BOT ---
 
 client.run(DISCORD_TOKEN)
