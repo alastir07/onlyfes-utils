@@ -2,10 +2,14 @@
 /discord-archiver/DiscordChatExporter.Cli.win-x64
 /discord-archiver/*-Archive
 /admin-bot/.env
+/chat-log-receiver/.env
 /admin-bot/OnlyFEs Event Points Tracker - Tracker.csv
 /admin-bot/OnlyFEs Join Dates - Table.csv
 /admin-bot/__pycache__
+/chat-log-receiver/__pycache__
+/chat-log-receiver/.venv
 *.txt
+!/chat-log-receiver/requirements.txt
 *.csv
 CLAUDE.md
 /discord-mcp/
