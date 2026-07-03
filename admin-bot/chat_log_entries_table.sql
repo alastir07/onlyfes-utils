@@ -15,16 +15,17 @@ CREATE TABLE public.chat_log_entries (
   submitted_by character varying,
   member_id uuid,
   CONSTRAINT chat_log_entries_pkey PRIMARY KEY (id),
-  CONSTRAINT chat_log_entries_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id),
-  CONSTRAINT chat_log_entries_dedup UNIQUE (chat_name, client_message_id, sender, message_timestamp)
+  CONSTRAINT chat_log_entries_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id)
 );
 
 CREATE INDEX idx_chat_log_entries_message_timestamp ON public.chat_log_entries(message_timestamp DESC);
 CREATE INDEX idx_chat_log_entries_member_id ON public.chat_log_entries(member_id);
 CREATE INDEX idx_chat_log_entries_sender ON public.chat_log_entries(sender);
+-- Supports the app-side dedup lookup in chat-log-receiver/db.py (chat_name, sender, message, +/- window on message_timestamp).
+CREATE INDEX idx_chat_log_entries_dedup_lookup ON public.chat_log_entries(chat_name, sender, message, message_timestamp);
 
 COMMENT ON TABLE public.chat_log_entries IS 'Clan/friends chat messages submitted remotely by the chat-logger RuneLite plugin, collected by chat-log-receiver for staff moderation review.';
-COMMENT ON COLUMN public.chat_log_entries.client_message_id IS 'The id field from the plugin payload. Not globally unique on its own (multiple clients may submit the same logical message) -- see chat_log_entries_dedup.';
+COMMENT ON COLUMN public.chat_log_entries.client_message_id IS 'The id field from the plugin payload -- RuneLite''s local per-client message counter, not a server-assigned id. Not usable for dedup: different clients witnessing the same real chat message generate unrelated values for it. See chat-log-receiver/db.py for the actual dedup logic (content + timestamp window).';
 COMMENT ON COLUMN public.chat_log_entries.chat_type IS 'Plugin currently always sends CLAN due to a client-side bug; use chat_name to distinguish channels instead.';
 COMMENT ON COLUMN public.chat_log_entries.message_timestamp IS 'UTC timestamp captured client-side by the plugin when the message was received.';
 COMMENT ON COLUMN public.chat_log_entries.received_at IS 'Server receipt time, for debugging submission lag/gaps.';
