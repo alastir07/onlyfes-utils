@@ -73,6 +73,25 @@ async def _is_duplicate(conn: asyncpg.Connection, chat_name: str, sender: str, m
     )
 
 
+async def _lock_dedup_key(conn: asyncpg.Connection, chat_name: str, sender: str, message: str) -> None:
+    """Serializes concurrent inserts for the same logical message across overlapping /submit requests.
+
+    Two staff clients can submit the same real chat message in requests that race each other on
+    separate connections; without this, both could pass the not-yet-committed _is_duplicate check
+    before either commits. Held for the rest of the transaction (pg_advisory_xact_lock).
+    """
+    await conn.execute(
+        """
+        SELECT pg_advisory_xact_lock(
+            hashtextextended($1, 0) # hashtextextended($2, 0) # hashtextextended($3, 0)
+        )
+        """,
+        chat_name,
+        sender,
+        message,
+    )
+
+
 async def insert_entries(entries: list[dict]) -> int:
     """Bulk inserts chat entries with member resolution and dedup. Returns count of rows actually inserted."""
     pool = await get_pool()
@@ -85,6 +104,8 @@ async def insert_entries(entries: list[dict]) -> int:
             accepted_in_batch: list[tuple] = []
             for e in entries:
                 chat_name, sender, message, timestamp = e["chatName"], e["sender"], e["message"], e["timestamp"]
+
+                await _lock_dedup_key(conn, chat_name, sender, message)
 
                 if await _is_duplicate(conn, chat_name, sender, message, timestamp):
                     continue
