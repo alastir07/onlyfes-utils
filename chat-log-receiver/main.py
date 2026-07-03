@@ -1,3 +1,4 @@
+import asyncio
 import hmac
 import logging
 
@@ -13,9 +14,35 @@ logger = logging.getLogger("chat-log-receiver")
 
 app = FastAPI(title="Chat Log Receiver")
 
+DEDUP_SWEEP_INTERVAL_SECONDS = 24 * 60 * 60
+
+_dedup_sweep_task: asyncio.Task | None = None
+
+
+async def _dedup_sweep_loop() -> None:
+    """Daily safety net: re-checks the last 24h of messages for duplicates the app-side dedup
+    in insert_entries missed (e.g. a deploy gap, or an unforeseen race), so historical data
+    doesn't quietly accumulate cruft between manual spot-checks."""
+    while True:
+        try:
+            deleted = await db.sweep_duplicates(since_hours=24)
+            if deleted:
+                logger.info("Dedup sweep removed %d duplicate row(s)", deleted)
+        except Exception:
+            logger.exception("Dedup sweep failed")
+        await asyncio.sleep(DEDUP_SWEEP_INTERVAL_SECONDS)
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    global _dedup_sweep_task
+    _dedup_sweep_task = asyncio.create_task(_dedup_sweep_loop())
+
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
+    if _dedup_sweep_task is not None:
+        _dedup_sweep_task.cancel()
     await db.close_pool()
 
 

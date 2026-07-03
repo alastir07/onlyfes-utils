@@ -137,3 +137,40 @@ async def insert_entries(entries: list[dict]) -> int:
                 inserted += 1
 
             return inserted
+
+
+async def sweep_duplicates(since_hours: int = 24) -> int:
+    """Deletes rows that duplicate an earlier row within DEDUP_WINDOW, restricted to recent history.
+
+    Safety net for the app-side dedup in insert_entries: catches anything that slipped through
+    (e.g. a deploy gap where the old code was briefly live, or an as-yet-unknown race). Uses the
+    same (chat_name, sender, message) + timestamp-window match, but compares each row against every
+    other row directly rather than bucketing, so a duplicate pair can't be missed by falling on
+    opposite sides of a fixed time bucket. Keeps the lowest id in each duplicate pair.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            deleted_ids = await conn.fetch(
+                f"""
+                DELETE FROM public.chat_log_entries newer
+                WHERE newer.message_timestamp > now() - interval '{since_hours} hours'
+                  AND EXISTS (
+                      SELECT 1 FROM public.chat_log_entries older
+                      WHERE older.id < newer.id
+                        AND older.chat_name = newer.chat_name
+                        AND older.sender = newer.sender
+                        AND older.message = newer.message
+                        AND older.message_timestamp BETWEEN newer.message_timestamp - interval '{DEDUP_WINDOW}'
+                                                          AND newer.message_timestamp + interval '{DEDUP_WINDOW}'
+                  )
+                RETURNING newer.id
+                """
+            )
+            deleted = len(deleted_ids)
+
+            await conn.execute(
+                "INSERT INTO public.dedup_sweep_runs (rows_deleted) VALUES ($1)",
+                deleted,
+            )
+            return deleted
