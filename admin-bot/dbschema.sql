@@ -61,9 +61,14 @@ CREATE TABLE public.member_rsns (
   rsn character varying NOT NULL UNIQUE,
   is_primary boolean NOT NULL DEFAULT true,
   date_changed timestamp with time zone NOT NULL DEFAULT now(),
+  normalized_rsn text GENERATED ALWAYS AS (lower(regexp_replace(rsn, '[ _\-.]', '', 'g'))) STORED,
   CONSTRAINT member_rsns_pkey PRIMARY KEY (id),
   CONSTRAINT member_rsns_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id)
 );
+-- normalized_rsn is not unique: pre-existing rows collide under normalize_string()
+-- (e.g. "Bonnie Moo" / "bonnie moo" both exist as separate rows), so lookups on
+-- this column can still return >1 row for those RSNs. Indexed via
+-- idx_member_rsns_normalized_rsn (see add_member_rsns_normalized_column.sql).
 CREATE TABLE public.members (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   discord_id bigint UNIQUE,

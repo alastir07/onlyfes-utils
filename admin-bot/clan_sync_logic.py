@@ -114,12 +114,15 @@ def fetch_db_ranks_and_rsns(supabase: Client) -> (dict, dict, dict):
             ranks_map_by_id[rank['id']] = rank['name']
         
         
-        rsns_query = supabase.table('member_rsns').select('rsn, member_id, is_primary')
+        rsns_query = supabase.table('member_rsns').select('rsn, member_id, is_primary').order('is_primary', desc=True)
         rsns_data = fetch_all_rows(rsns_query)
-        
+
         db_rsn_map_normalized = {}
         for item in rsns_data:
-            db_rsn_map_normalized[normalize_string(item['rsn'])] = {
+            key = normalize_string(item['rsn'])
+            if key in db_rsn_map_normalized:
+                continue  # already have the is_primary row for this normalized RSN
+            db_rsn_map_normalized[key] = {
                 "member_id": item['member_id'],
                 "is_primary": item['is_primary'],
                 "original_rsn": item['rsn']
