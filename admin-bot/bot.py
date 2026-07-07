@@ -616,6 +616,12 @@ COMMANDS_HELP = {
         "category": "General & Master Commands",
         "min_role": "General"
     },
+    "swap-account": {
+        "syntax": "`/swap-account <old_rsn> <new_rsn> [publish]`",
+        "description": "**⚠️ IRREVERSIBLE.** Merges a member who swapped to a new account (new_rsn, Active) back into their original member record (old_rsn, Inactive), reactivating it and deleting the new record.",
+        "category": "General & Master Commands",
+        "min_role": "General"
+    },
     "purgemember": {
         "syntax": "`/purgemember <rsn>`",
         "description": "**⚠️ IRREVERSIBLE.** Deletes a member and all their associated data from the database.",
@@ -1051,6 +1057,178 @@ async def purge_member(interaction: discord.Interaction, rsn: str):
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
     except Exception as e:
         log.error(f"Error in /purge-member command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+class ConfirmSwapAccountView(ui.View):
+    def __init__(self, *, old_member_id: str, old_rsn: str, new_member_id: str, new_rsn: str,
+                 moved_rsns: list[str], transferred_discord_id: int | None, original_author: discord.User,
+                 publish: bool = True):
+        super().__init__(timeout=60.0)
+        self.old_member_id = old_member_id
+        self.old_rsn = old_rsn
+        self.new_member_id = new_member_id
+        self.new_rsn = new_rsn
+        self.moved_rsns = moved_rsns
+        self.transferred_discord_id = transferred_discord_id
+        self.original_author = original_author
+        self.publish = publish
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.original_author.id:
+            await interaction.response.send_message("You are not authorized to use this button.", ephemeral=True)
+            return False
+        return True
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        log.info(f"Swap-account command for {self.old_rsn} <- {self.new_rsn} timed out.")
+
+    @ui.button(label="Yes, Swap Accounts", style=discord.ButtonStyle.danger, emoji="🔁")
+    async def confirm_button(self, interaction: discord.Interaction, button: ui.Button):
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log.info(f"[{timestamp}] /swap-account CONFIRMED for old_rsn='{self.old_rsn}' new_rsn='{self.new_rsn}' by {interaction.user}")
+        await log_command_use(f"[{timestamp}] /swap-account CONFIRMED for old_rsn='{self.old_rsn}' new_rsn='{self.new_rsn}' by {interaction.user}")
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(view=self)
+        try:
+            # 1. Re-point every RSN currently tied to the new_rsn member record onto the old_rsn member record
+            supabase.table('member_rsns') \
+                .update({'member_id': self.old_member_id}) \
+                .eq('member_id', self.new_member_id) \
+                .execute()
+
+            # 2. The moved RSN(s) are no longer primary for their (surviving) old_rsn member record
+            supabase.table('member_rsns') \
+                .update({'is_primary': False}) \
+                .eq('member_id', self.old_member_id) \
+                .in_('rsn', self.moved_rsns) \
+                .execute()
+
+            # 3. Reactivate the old_rsn member record, carrying over the Discord link if there was one
+            old_member_update = {'status': 'Active'}
+            if self.transferred_discord_id:
+                old_member_update['discord_id'] = self.transferred_discord_id
+            supabase.table('members').update(old_member_update).eq('id', self.old_member_id).execute()
+
+            # 4. Remove the old_rsn member's 'leave' event(s) now that they're active again
+            supabase.table('membership_events') \
+                .delete() \
+                .eq('member_id', self.old_member_id) \
+                .eq('event_type', 'leave') \
+                .execute()
+
+            # 5. Clean up the now-empty new_rsn member record (membership_events isn't cascaded)
+            supabase.table('membership_events').delete().eq('member_id', self.new_member_id).execute()
+            supabase.table('members').delete().eq('id', self.new_member_id).execute()
+
+            log.info(f"Account swap complete: {self.new_rsn} (ID: {self.new_member_id}) merged into {self.old_rsn} (ID: {self.old_member_id}) by {self.original_author}.")
+            embed = discord.Embed(
+                title="🔁 Swap Complete",
+                description=f"**{self.new_rsn}** has been merged into **{self.old_rsn}**'s member record, which is now reactivated.",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Surviving Member ID", value=f"`{self.old_member_id}`", inline=False)
+            embed.add_field(name="RSNs Moved", value=", ".join(self.moved_rsns), inline=False)
+            if self.transferred_discord_id:
+                embed.add_field(name="Discord Link", value=f"Transferred (`{self.transferred_discord_id}`)", inline=False)
+            await interaction.followup.send(embed=embed, ephemeral=not self.publish)
+        except Exception as e:
+            log.error(f"Error during account swap: {e}\n{traceback.format_exc()}")
+            await interaction.followup.send(f"An error occurred during the swap: `{e}`", ephemeral=True)
+
+    @ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
+    async def cancel_button(self, interaction: discord.Interaction, button: ui.Button):
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(content="Account swap cancelled.", embed=None, view=self)
+
+@client.tree.command(name="swap-account", description="Merge a member who swapped to a new account back into their original (inactive) member record.")
+@app_commands.describe(
+    old_rsn="The RSN of the original (now Inactive) member record to reactivate.",
+    new_rsn="The RSN of the new account (currently Active) that will be merged in and removed.",
+    publish="False to post the result privately. Defaults to True (posts publicly)."
+)
+@check_staff_role("General")
+async def swap_account(interaction: discord.Interaction, old_rsn: str, new_rsn: str, publish: bool = True):
+
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /swap-account old_rsn='{old_rsn}' new_rsn='{new_rsn}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /swap-account old_rsn='{old_rsn}' new_rsn='{new_rsn}' publish={publish} used by {interaction.user}")
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        old_resolved = resolve_rsn_to_member(old_rsn)
+        if not old_resolved:
+            await interaction.followup.send(f"Error: Could not find any member matching old RSN `{old_rsn}`.", ephemeral=True)
+            return
+        new_resolved = resolve_rsn_to_member(new_rsn)
+        if not new_resolved:
+            await interaction.followup.send(f"Error: Could not find any member matching new RSN `{new_rsn}`.", ephemeral=True)
+            return
+
+        old_member_id = old_resolved['member_id']
+        new_member_id = new_resolved['member_id']
+
+        if old_member_id == new_member_id:
+            await interaction.followup.send(f"Error: `{old_rsn}` and `{new_rsn}` already resolve to the same member record.", ephemeral=True)
+            return
+
+        old_member_res = supabase.table('members').select('id, status, discord_id').eq('id', old_member_id).limit(1).execute()
+        new_member_res = supabase.table('members').select('id, status, discord_id').eq('id', new_member_id).limit(1).execute()
+        if not old_member_res.data or not new_member_res.data:
+            await interaction.followup.send("Error: Member data not found in the database.", ephemeral=True)
+            return
+
+        old_member = old_member_res.data[0]
+        new_member = new_member_res.data[0]
+
+        if old_member['status'] != 'Inactive':
+            await interaction.followup.send(f"Error: `{old_rsn}`'s member record must have status **Inactive** to swap into (currently **{old_member['status']}**).", ephemeral=True)
+            return
+        if new_member['status'] != 'Active':
+            await interaction.followup.send(f"Error: `{new_rsn}`'s member record must have status **Active** to swap from (currently **{new_member['status']}**).", ephemeral=True)
+            return
+
+        if old_member.get('discord_id') and new_member.get('discord_id') and old_member['discord_id'] != new_member['discord_id']:
+            await interaction.followup.send(
+                f"Error: Both `{old_rsn}` (`{old_member['discord_id']}`) and `{new_rsn}` (`{new_member['discord_id']}`) have "
+                f"different linked Discord accounts. Please resolve this manually before swapping.",
+                ephemeral=True
+            )
+            return
+
+        transferred_discord_id = new_member.get('discord_id') or None
+
+        moved_rsns_res = supabase.table('member_rsns').select('rsn').eq('member_id', new_member_id).execute()
+        moved_rsns = [r['rsn'] for r in moved_rsns_res.data] if moved_rsns_res.data else [new_rsn]
+
+        embed = discord.Embed(
+            title="🔁 Confirm Account Swap",
+            description=(
+                f"This will merge **{new_rsn}**'s member record into **{old_rsn}**'s (currently Inactive) member record, "
+                f"reactivate it, and permanently delete **{new_rsn}**'s standalone member record."
+            ),
+            color=discord.Color.orange()
+        )
+        embed.add_field(name="Old RSN (reactivated)", value=f"{old_rsn}\n`{old_member_id}`", inline=True)
+        embed.add_field(name="New RSN (merged & removed)", value=f"{new_rsn}\n`{new_member_id}`", inline=True)
+        embed.add_field(name="RSNs to be moved", value=", ".join(moved_rsns), inline=False)
+        if transferred_discord_id:
+            embed.add_field(name="Discord Link", value=f"Will transfer `{transferred_discord_id}` to the reactivated record.", inline=False)
+        embed.set_footer(text="This operation cannot be undone. The buttons will time out in 60 seconds.")
+
+        view = ConfirmSwapAccountView(
+            old_member_id=old_member_id, old_rsn=old_rsn,
+            new_member_id=new_member_id, new_rsn=new_rsn,
+            moved_rsns=moved_rsns, transferred_discord_id=transferred_discord_id,
+            original_author=interaction.user, publish=publish
+        )
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+    except Exception as e:
+        log.error(f"Error in /swap-account command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 # --- 8. /RANKUP COMMAND ---
