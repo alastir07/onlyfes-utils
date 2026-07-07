@@ -14,6 +14,7 @@ Before first run, execute (in order) in the Supabase SQL Editor:
 1. `../admin-bot/chat_log_receiver_role.sql` — creates the restricted `chat_log_receiver` Postgres role (set a real password before running).
 2. `../admin-bot/chat_log_entries_table.sql` — creates the table, indexes, and RLS policy.
 3. `../admin-bot/dedup_sweep_runs_table.sql` — creates the table that records each daily dedup sweep's result.
+4. `../admin-bot/chat_log_search_indexes.sql` — adds the trigram index the search UI's message search relies on.
 
 `SUPABASE_DB_URL` should use the `chat_log_receiver` role's credentials, not the default `postgres` superuser connection string (which has `BYPASSRLS` and would make the table's RLS policy a no-op).
 

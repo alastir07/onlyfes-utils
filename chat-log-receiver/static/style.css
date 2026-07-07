@@ -1,0 +1,315 @@
+@font-face {
+  font-family: "OSRSPlain12";
+  src: url("osrs-plain-12.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #1e1e22;
+  color: #e8e8e8;
+}
+
+h1 {
+  font-size: 22px;
+  margin: 0 0 16px;
+  flex-shrink: 0;
+}
+
+.panel {
+  background: #2a2a30;
+  border: 1px solid #40404a;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field label {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.field input[type="text"],
+.field input[type="date"],
+.field select {
+  background: #1a1a1e;
+  border: 1px solid #45454f;
+  border-radius: 4px;
+  color: #f0f0f0;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+
+.checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.date-presets button {
+  font-size: 12px;
+  padding: 4px 8px;
+  background: #35353d;
+  border: 1px solid #45454f;
+  border-radius: 4px;
+  color: #ddd;
+  cursor: pointer;
+}
+
+.date-presets button.active {
+  background: #4a6cf7;
+  border-color: #4a6cf7;
+  color: #fff;
+}
+
+.custom-range {
+  display: none;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.custom-range.visible {
+  display: flex;
+}
+
+#applyFiltersBtn {
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #4a6cf7;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+#applyFiltersBtn:hover {
+  background: #3a5ce0;
+}
+
+.typeahead-wrap {
+  position: relative;
+}
+
+.typeahead-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #1a1a1e;
+  border: 1px solid #45454f;
+  border-top: none;
+  max-height: 180px;
+  overflow-y: auto;
+  z-index: 10;
+  display: none;
+}
+
+.typeahead-results.visible {
+  display: block;
+}
+
+.typeahead-results div {
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.typeahead-results div:hover,
+.typeahead-results div.highlighted {
+  background: #4a6cf7;
+}
+
+.page-options {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.page-options .toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.page-options button {
+  padding: 6px 14px;
+  background: #35353d;
+  border: 1px solid #45454f;
+  border-radius: 4px;
+  color: #ddd;
+  cursor: pointer;
+}
+
+/* --- Standard results view --- */
+
+#resultsContainer {
+  position: relative;
+  flex: 1;
+  min-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #40404a;
+  border-radius: 6px;
+  background: #26262c;
+}
+
+#resultsContainer.old-school {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+  border-bottom: 1px solid #33333a;
+  align-items: baseline;
+}
+
+.chat-row .timestamp {
+  color: #888;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-row .rank-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.broadcast-icon {
+  width: 15px;
+  height: 15px;
+  vertical-align: text-bottom;
+  margin: 0 1px;
+}
+
+.chat-row .sender {
+  font-weight: 600;
+  color: #cfd8ff;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.chat-row .message {
+  color: #e8e8e8;
+  word-break: break-word;
+}
+
+.loading-more,
+.no-results {
+  text-align: center;
+  padding: 12px;
+  color: #888;
+  font-size: 13px;
+}
+
+/* --- Old School UI mode --- */
+
+/* #resultsContainer itself remains the single scrollable element in both modes (the JS scroll
+   listener for infinite-scroll-up and "stick to bottom" targets it directly) -- old-school mode
+   only changes how the content inside it is painted, via a sticky top/bottom chrome overlay and
+   a repeating parchment background, not a second nested scroll region. */
+
+.chatbox-top,
+.chatbox-bottom {
+  position: sticky;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 24px;
+  background: url("chatbox-assets/chatbox-top.png") no-repeat top center;
+  background-size: 100% auto;
+  z-index: 1;
+}
+
+.chatbox-top {
+  top: 0;
+}
+
+.chatbox-bottom {
+  bottom: 0;
+  background-image: url("chatbox-assets/chatbox-bottom.png");
+  background-position: bottom center;
+}
+
+.chatbox-middle {
+  background: url("chatbox-assets/chatbox-middle.png") repeat-y center;
+  background-size: 100% auto;
+  padding: 8px 28px;
+  min-height: calc(100% - 48px);
+}
+
+.old-school .results-list {
+  font-family: "OSRSPlain12", "Courier New", monospace;
+}
+
+.old-school .chat-row {
+  border-bottom: none;
+  padding: 1px 0;
+  font-size: 16px;
+  gap: 4px;
+}
+
+.old-school .chat-row .timestamp {
+  color: #4b4b4b;
+}
+
+.old-school .chat-row .sender {
+  color: #0000cc;
+}
+
+.old-school .chat-row .message {
+  color: #0000cc;
+}
+
+.old-school .chat-row.broadcast .message {
+  color: #007800;
+}

@@ -1,6 +1,9 @@
+from typing import AsyncIterator
+
 import asyncpg
 
 from config import SUPABASE_DB_URL
+from models import ChatSearchFilters
 from rsn import normalize_string
 
 _pool: asyncpg.Pool | None = None
@@ -174,3 +177,157 @@ async def sweep_duplicates(since_hours: int = 24) -> int:
                 deleted,
             )
             return deleted
+
+
+SEARCH_PAGE_SIZE = 100
+
+# chat_log_entries.id is a monotonically increasing IDENTITY column assigned in insertion
+# order, so keyset pagination on it alone doubles as "most recent first" / "older on scroll up"
+# without needing a composite (message_timestamp, id) key -- simpler and just as correct here.
+
+
+def _build_search_where(
+    filters: ChatSearchFilters, params: list, before_id: int | None = None, after_id: int | None = None
+) -> str:
+    """Appends filter values to params (in place) and returns the WHERE clause body (no leading WHERE)."""
+    clauses = ["1=1"]
+
+    if filters.query:
+        params.append(filters.query)
+        if filters.regex:
+            clauses.append(f"message ~ ${len(params)}")
+        else:
+            clauses.append(f"message ILIKE '%' || ${len(params)} || '%'")
+
+    if filters.member_id is not None:
+        params.append(filters.member_id)
+        clauses.append(f"member_id = ${len(params)}")
+
+    if filters.exclude_broadcasts:
+        # Broadcasts (drops, level-ups, clog unlocks, system notices) are sent with sender
+        # set to the clan/chat name itself and rank -2 -- confirmed against production data,
+        # see chat-log-receiver phase 2 plan for the query used to verify this.
+        clauses.append("NOT (lower(sender) = lower(chat_name) AND rank = -2)")
+
+    if filters.date_from is not None:
+        params.append(filters.date_from)
+        clauses.append(f"message_timestamp >= ${len(params)}")
+
+    if filters.date_to is not None:
+        params.append(filters.date_to)
+        clauses.append(f"message_timestamp <= ${len(params)}")
+
+    if before_id is not None:
+        params.append(before_id)
+        clauses.append(f"chat_log_entries.id < ${len(params)}")
+
+    if after_id is not None:
+        params.append(after_id)
+        clauses.append(f"chat_log_entries.id > ${len(params)}")
+
+    return " AND ".join(clauses)
+
+
+_SEARCH_SELECT = """
+    SELECT
+        chat_log_entries.id,
+        chat_log_entries.chat_name,
+        chat_log_entries.chat_type,
+        chat_log_entries.sender,
+        chat_log_entries.rank,
+        chat_log_entries.message,
+        chat_log_entries.message_timestamp,
+        chat_log_entries.member_id,
+        ranks.name AS sender_rank_name
+    FROM public.chat_log_entries
+    LEFT JOIN public.members ON members.id = chat_log_entries.member_id
+    LEFT JOIN public.ranks ON ranks.id = members.current_rank_id
+"""
+
+
+async def validate_search_filters(filters: ChatSearchFilters) -> None:
+    """Runs the filters' WHERE clause with LIMIT 0 so Postgres validates the regex (if any) up
+    front. Used before starting a StreamingResponse, which can't be turned into a clean error
+    response once headers are already sent."""
+    pool = await get_pool()
+    params: list = []
+    where = _build_search_where(filters, params)
+    query = f"SELECT 1 FROM public.chat_log_entries WHERE {where} LIMIT 0"
+    async with pool.acquire() as conn:
+        await conn.fetch(query, *params)
+
+
+async def search_entries(filters: ChatSearchFilters, before_id: int | None = None) -> list[asyncpg.Record]:
+    """Returns up to SEARCH_PAGE_SIZE matching entries, newest first.
+
+    `before_id` paginates backward in time (for infinite-scroll-up over older messages);
+    omit it for the initial "most recent 100" load.
+    """
+    pool = await get_pool()
+    params: list = []
+    where = _build_search_where(filters, params, before_id=before_id)
+    query = f"""
+        {_SEARCH_SELECT}
+        WHERE {where}
+        ORDER BY chat_log_entries.id DESC
+        LIMIT {SEARCH_PAGE_SIZE}
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(query, *params)
+
+
+async def search_entries_since(filters: ChatSearchFilters, after_id: int) -> list[asyncpg.Record]:
+    """Returns all matching entries newer than after_id, oldest first -- used by live mode polling."""
+    pool = await get_pool()
+    params: list = []
+    where = _build_search_where(filters, params, after_id=after_id)
+    query = f"""
+        {_SEARCH_SELECT}
+        WHERE {where}
+        ORDER BY chat_log_entries.id ASC
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(query, *params)
+
+
+async def search_entries_all(filters: ChatSearchFilters) -> AsyncIterator[asyncpg.Record]:
+    """Streams every matching entry (oldest first), for /api/export -- no page limit.
+
+    Uses a server-side cursor so a large matching set doesn't get materialized in memory at once.
+    """
+    pool = await get_pool()
+    params: list = []
+    where = _build_search_where(filters, params)
+    query = f"""
+        {_SEARCH_SELECT}
+        WHERE {where}
+        ORDER BY chat_log_entries.id ASC
+    """
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            async for record in conn.cursor(query, *params):
+                yield record
+
+
+async def search_members(q: str, limit: int = 20) -> list[asyncpg.Record]:
+    """Typeahead: normalized substring match against member_rsns.rsn (current or past), deduped to
+    one row per member using their current primary RSN for display."""
+    pool = await get_pool()
+    normalized_q = normalize_string(q)
+    if not normalized_q:
+        return []
+
+    query = """
+        SELECT DISTINCT ON (member_rsns.member_id)
+            member_rsns.member_id,
+            primary_rsn.rsn AS display_rsn
+        FROM public.member_rsns
+        JOIN public.member_rsns AS primary_rsn
+            ON primary_rsn.member_id = member_rsns.member_id AND primary_rsn.is_primary = true
+        WHERE lower(replace(replace(replace(replace(member_rsns.rsn, ' ', ''), '_', ''), '-', ''), '.', ''))
+            LIKE '%' || $1 || '%'
+        ORDER BY member_rsns.member_id, primary_rsn.rsn
+        LIMIT $2
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(query, normalized_q, limit)
