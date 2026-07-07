@@ -1099,11 +1099,16 @@ class ConfirmSwapAccountView(ui.View):
                 .eq('member_id', self.new_member_id) \
                 .execute()
 
-            # 2. The moved RSN(s) are no longer primary for their (surviving) old_rsn member record
+            # 2. new_rsn becomes the primary RSN going forward; demote every other RSN on the surviving record
             supabase.table('member_rsns') \
                 .update({'is_primary': False}) \
                 .eq('member_id', self.old_member_id) \
-                .in_('rsn', self.moved_rsns) \
+                .neq('rsn', self.new_rsn) \
+                .execute()
+            supabase.table('member_rsns') \
+                .update({'is_primary': True}) \
+                .eq('member_id', self.old_member_id) \
+                .eq('rsn', self.new_rsn) \
                 .execute()
 
             # 3. Reactivate the old_rsn member record, carrying over the Discord link if there was one
@@ -1131,6 +1136,7 @@ class ConfirmSwapAccountView(ui.View):
             )
             embed.add_field(name="Surviving Member ID", value=f"`{self.old_member_id}`", inline=False)
             embed.add_field(name="RSNs Moved", value=", ".join(self.moved_rsns), inline=False)
+            embed.add_field(name="New Primary RSN", value=self.new_rsn, inline=False)
             if self.transferred_discord_id:
                 embed.add_field(name="Discord Link", value=f"Transferred (`{self.transferred_discord_id}`)", inline=False)
             await interaction.followup.send(embed=embed, ephemeral=not self.publish)
@@ -1214,7 +1220,7 @@ async def swap_account(interaction: discord.Interaction, old_rsn: str, new_rsn: 
             color=discord.Color.orange()
         )
         embed.add_field(name="Old RSN (reactivated)", value=f"{old_rsn}\n`{old_member_id}`", inline=True)
-        embed.add_field(name="New RSN (merged & removed)", value=f"{new_rsn}\n`{new_member_id}`", inline=True)
+        embed.add_field(name="New RSN (becomes primary)", value=f"{new_rsn}\n`{new_member_id}`", inline=True)
         embed.add_field(name="RSNs to be moved", value=", ".join(moved_rsns), inline=False)
         if transferred_discord_id:
             embed.add_field(name="Discord Link", value=f"Will transfer `{transferred_discord_id}` to the reactivated record.", inline=False)
