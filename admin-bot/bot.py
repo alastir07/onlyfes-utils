@@ -620,7 +620,7 @@ COMMANDS_HELP = {
         "syntax": "`/swap-account <old_rsn> <new_rsn> [publish]`",
         "description": "**⚠️ IRREVERSIBLE.** Merges a member who swapped to a new account (new_rsn, Active) back into their original member record (old_rsn, Inactive), reactivating it and deleting the new record.",
         "category": "General & Master Commands",
-        "min_role": "General"
+        "min_role": "Master"
     },
     "purgemember": {
         "syntax": "`/purgemember <rsn>`",
@@ -1156,7 +1156,7 @@ class ConfirmSwapAccountView(ui.View):
     new_rsn="The RSN of the new account (currently Active) that will be merged in and removed.",
     publish="False to post the result privately. Defaults to True (posts publicly)."
 )
-@check_staff_role("General")
+@check_staff_role("Master")
 async def swap_account(interaction: discord.Interaction, old_rsn: str, new_rsn: str, publish: bool = True):
 
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
