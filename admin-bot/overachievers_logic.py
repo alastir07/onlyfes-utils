@@ -3,6 +3,7 @@ import requests
 import discord
 from supabase import Client
 import logging
+import clan_sync_logic
 
 log = logging.getLogger('ClanBot')
 
@@ -70,8 +71,14 @@ def run_overachievers_check(supabase: Client, dry_run: bool = True) -> tuple:
         return None, None, None, "Missing WOM API credentials."
 
     log.info("Fetching members from DB...")
-    rsn_res = supabase.table('member_rsns').select('rsn, member_id').execute()
-    db_rsn_map = {normalize_string(row['rsn']): row['member_id'] for row in rsn_res.data}
+    rsn_data = clan_sync_logic.fetch_all_rows(
+        supabase.table('member_rsns').select('rsn, member_id, is_primary').order('is_primary', desc=True)
+    )
+    db_rsn_map = {}
+    for row in rsn_data:
+        key = normalize_string(row['rsn'])
+        if key not in db_rsn_map:
+            db_rsn_map[key] = row['member_id']  # first-seen wins; is_primary rows sort first
 
     log.info("Fetching previous overachievers...")
     recent_res = supabase.table('overachievers').select('metric, member_id, value, global_rank, date').order('date', desc=True).execute()
@@ -213,13 +220,16 @@ def get_overachiever_lookup(supabase: Client, query: str) -> tuple[discord.Embed
         
     else:
         # It's an RSN query
-        rsn_res = supabase.table('member_rsns').select('member_id, rsn, is_primary').execute()
-        matched_rows = [row for row in rsn_res.data if normalize_string(row['rsn']) == normalized_query]
-        
-        if not matched_rows:
+        rsn_res = supabase.table('member_rsns') \
+            .select('member_id, rsn, is_primary') \
+            .eq('normalized_rsn', normalized_query) \
+            .order('is_primary', desc=True) \
+            .execute()
+
+        if not rsn_res.data:
             return None, f"Could not find any member with RSN: '{query}' or any metric called '{query}'."
-            
-        member_record = next((r for r in matched_rows if r['is_primary']), matched_rows[0])
+
+        member_record = rsn_res.data[0]
         member_id = member_record['member_id']
         display_rsn = member_record['rsn']
         

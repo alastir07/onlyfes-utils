@@ -107,15 +107,18 @@ def resolve_rsn_to_member(rsn: str) -> dict | None:
         normalized_input = normalize_string(rsn)
         if not normalized_input:
             return None
-            
-        res = supabase.table('member_rsns').select('member_id, rsn').execute()
-        for row in res.data:
-            if normalize_string(row['rsn']) == normalized_input:
-                return {
-                    'member_id': row['member_id'],
-                    'rsn': row['rsn']
-                }
-        return None
+
+        res = supabase.table('member_rsns') \
+            .select('member_id, rsn') \
+            .eq('normalized_rsn', normalized_input) \
+            .order('is_primary', desc=True) \
+            .execute()
+        if not res.data:
+            return None
+        return {
+            'member_id': res.data[0]['member_id'],
+            'rsn': res.data[0]['rsn']
+        }
     except Exception as e:
         log.error(f"Error resolving RSN '{rsn}': {e}")
         return None
@@ -1094,8 +1097,8 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
 
         member_res = supabase.table('member_rsns') \
             .select('member_id, rsn, members(current_rank_id, discord_id, ranks(hierarchy_level))') \
-            .ilike('rsn', rsn) \
-            .limit(1) \
+            .eq('normalized_rsn', normalize_string(rsn)) \
+            .order('is_primary', desc=True) \
             .execute()
 
         if not member_res.data:
@@ -1229,18 +1232,26 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
         new_rank_id = new_rank['id']
         new_rank_name = new_rank['name']
 
+        rsns_to_process = [r.strip() for r in rsn_list.split(',') if r.strip()]
+
         log.info("Building RSN map for bulk rankup...")
+        normalized_inputs = list({normalize_string(r) for r in rsns_to_process})
         rsns_res = supabase.table('member_rsns') \
             .select('rsn, member_id, members(current_rank_id, discord_id, ranks(hierarchy_level))') \
+            .in_('normalized_rsn', normalized_inputs) \
+            .order('is_primary', desc=True) \
             .execute()
-        
+
         rsn_map = {}
         for item in rsns_res.data:
+            key = normalize_string(item['rsn'])
+            if key in rsn_map:
+                continue  # already have the is_primary row for this normalized RSN
             if item.get('members'):
                 old_h = 0
                 if item['members'].get('ranks'):
                     old_h = item['members']['ranks'].get('hierarchy_level', 0)
-                rsn_map[normalize_string(item['rsn'])] = {
+                rsn_map[key] = {
                     "member_id": item['member_id'],
                     "original_rsn": item['rsn'],
                     "old_rank_id": item['members']['current_rank_id'],
@@ -1249,8 +1260,6 @@ async def bulkrankup(interaction: discord.Interaction, rank_name: str, rsn_list:
                 }
         log.info("RSN map built.")
 
-        rsns_to_process = [r.strip() for r in rsn_list.split(',')]
-        
         member_ids_to_update = []
         history_payload = []
         successful_discord_members = []
@@ -1720,14 +1729,22 @@ async def bulk_add_points(interaction: discord.Interaction, points: int, reason:
             await interaction.followup.send("Error: No RSNs provided.", ephemeral=True)
             return
 
-        # 2. Build RSN Map (Optimization: Fetch all members once)
+        # 2. Build RSN Map (Optimization: only fetch rows matching the requested RSNs)
         # We need to resolve RSN -> Member ID
         log.info("Building RSN map for bulk add points...")
-        all_rsns_res = supabase.table('member_rsns').select('rsn, member_id').execute()
-        
+        normalized_inputs = list({normalize_string(r) for r in rsns_to_process})
+        all_rsns_res = supabase.table('member_rsns') \
+            .select('rsn, member_id') \
+            .in_('normalized_rsn', normalized_inputs) \
+            .order('is_primary', desc=True) \
+            .execute()
+
         rsn_map = {}
         for item in all_rsns_res.data:
-            rsn_map[normalize_string(item['rsn'])] = {
+            key = normalize_string(item['rsn'])
+            if key in rsn_map:
+                continue  # already have the is_primary row for this normalized RSN
+            rsn_map[key] = {
                 "member_id": item['member_id'],
                 "original_rsn": item['rsn']
             }
@@ -1909,10 +1926,18 @@ async def process_competition_points(
         return
 
     try:
-        # 2. Resolve RSNs to Member IDs
-        # Fetch all member RSNs to minimize queries (or we could `in_` query if list is small, but map is safer for normalization)
-        all_rsns_res = supabase.table('member_rsns').select('rsn, member_id').execute()
-        rsn_map = {normalize_string(item['rsn']): item for item in all_rsns_res.data}
+        # 2. Resolve RSNs to Member IDs (only fetch rows matching the requested RSNs)
+        normalized_inputs = list({normalize_string(t['rsn']) for t in targets})
+        all_rsns_res = supabase.table('member_rsns') \
+            .select('rsn, member_id') \
+            .in_('normalized_rsn', normalized_inputs) \
+            .order('is_primary', desc=True) \
+            .execute()
+        rsn_map = {}
+        for item in all_rsns_res.data:
+            key = normalize_string(item['rsn'])
+            if key not in rsn_map:
+                rsn_map[key] = item  # first-seen wins; is_primary rows sort first
 
         transactions = []
         report_lines = []
@@ -2145,12 +2170,14 @@ async def check_inactivity_exemptions(interaction: discord.Interaction, publish:
             await interaction.followup.send("✅ No active inactivity exemptions found.", ephemeral=is_ephemeral)
             return
 
-        # Fetch all primary RSNs to build a mapping from member_id -> RSN
+        # Fetch primary RSNs for the affected members to build a mapping from member_id -> RSN
+        exempt_member_ids = list({e['member_id'] for e in exemptions_data})
         rsn_res = supabase.table('member_rsns') \
             .select('member_id, rsn') \
             .eq('is_primary', True) \
+            .in_('member_id', exempt_member_ids) \
             .execute()
-        
+
         rsn_map = {item['member_id']: item['rsn'] for item in rsn_res.data or []}
         
         # Sort exemptions by expiration_date ascending (closest to expire first)
@@ -2222,18 +2249,14 @@ async def expire_exemption(interaction: discord.Interaction, rsn: str, publish: 
     
     try:
         # 1. Find the member by RSN
-        member_res = supabase.table('member_rsns') \
-            .select('member_id, rsn') \
-            .ilike('rsn', rsn) \
-            .limit(1) \
-            .execute()
-            
-        if not member_res.data:
+        resolved = resolve_rsn_to_member(rsn)
+
+        if not resolved:
             await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
             return
-            
-        member_id = member_res.data[0]['member_id']
-        member_rsn = member_res.data[0]['rsn']
+
+        member_id = resolved['member_id']
+        member_rsn = resolved['rsn']
         
         # 2. Check if they have an active exemption
         now_str = datetime.now().isoformat()
