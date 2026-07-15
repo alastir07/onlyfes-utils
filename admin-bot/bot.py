@@ -57,6 +57,7 @@ SYNC_REPORT_CHANNEL_ID = os.getenv("SYNC_REPORT_CHANNEL_ID")
 INACTIVITY_REPORT_CHANNEL_ID = os.getenv("INACTIVITY_REPORT_CHANNEL_ID")
 INACTIVITY_REPORT_THREAD_ID = os.getenv("INACTIVITY_REPORT_THREAD_ID")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+BOUNTY_REROLL_EXCLUSION_WEEKS = int(os.getenv("BOUNTY_REROLL_EXCLUSION_WEEKS", "12"))
 
 SUMMARIZE_PROMPT = "Briefly summarize the conversation contained in these discord messages. \
 All conversation participants are staff for an Old School Runescape Clan and are friendly with each other. \
@@ -3382,6 +3383,20 @@ def _next_monday_0600_utc(from_dt: datetime) -> datetime:
     return from_dt.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=days_until_monday)
 
 
+async def _recently_used_bounty_items() -> set[str]:
+    """
+    Returns the set of item_name values used by any bounty (auto or manual) started within
+    the last BOUNTY_REROLL_EXCLUSION_WEEKS weeks, for the auto-roll reroll-exclusion check.
+    """
+    cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(weeks=BOUNTY_REROLL_EXCLUSION_WEEKS)
+    try:
+        res = supabase.table('bounties').select('item_name').gte('date_start', cutoff.isoformat()).execute()
+        return {row['item_name'] for row in (res.data or [])}
+    except Exception as e:
+        log.error(f"_recently_used_bounty_items: failed to query bounties table: {e}")
+        return set()
+
+
 async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = None) -> tuple[bool, str]:
     """
     Core logic: picks an item, creates a thread in BOUNTY_THREADS_CHANNEL_ID,
@@ -3394,7 +3409,23 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
         items = await fetch_bounty_items()
         if not items:
             return False, "Could not fetch bounty items list. Check that the reference message is accessible."
+
+        recently_used = await _recently_used_bounty_items()
         chosen_item = random.choice(items)
+        reroll_attempts = 0
+        while chosen_item in recently_used and reroll_attempts < len(items):
+            log.info(
+                f"_run_generate_bounty: rolled duplicate item '{chosen_item}' "
+                f"(used within {BOUNTY_REROLL_EXCLUSION_WEEKS} weeks) — rerolling."
+            )
+            chosen_item = random.choice(items)
+            reroll_attempts += 1
+        else:
+            if chosen_item in recently_used:
+                log.warning(
+                    f"_run_generate_bounty: every item in the list has been used within "
+                    f"{BOUNTY_REROLL_EXCLUSION_WEEKS} weeks; ignoring exclusion for this roll ('{chosen_item}')."
+                )
 
     threads_channel = guild.get_channel(BOUNTY_THREADS_CHANNEL_ID)
     if not threads_channel:
