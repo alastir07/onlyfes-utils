@@ -33,7 +33,7 @@
     "hierarchy_level": 4,
     "req_months_in_clan": 3,
     "req_total_level": 1500,
-    "notes": "3 Months Member, 1500 Total Level, 6 Completed Easy Diaries."
+    "notes": "3 Months Member, 1500 Total Level, All Completed Easy Diaries, Easy CAs."
   },
   {
     "id": 14,
@@ -42,7 +42,7 @@
     "hierarchy_level": 5,
     "req_months_in_clan": 4,
     "req_total_level": 1750,
-    "notes": "4 Months Member, 1750 Total Level, 6 Completed Medium Diaries."
+    "notes": "4 Months Member, 1750 Total Level, All Completed Medium Diaries, Medium CAs."
   },
   {
     "id": 15,
@@ -50,8 +50,8 @@
     "rank_type": "Permanent",
     "hierarchy_level": 6,
     "req_months_in_clan": 5,
-    "req_total_level": 1900,
-    "notes": "5 Months Member, 1900 Total Level, 6 Completed Hard Diaries, Quest Point Cape, AND EITHER Hard CAs OR 3x Skill Masteries."
+    "req_total_level": 2000,
+    "notes": "5 Months Member, 2000 Total Level, All Completed Hard Diaries, Hard CAs, Quest Point Cape."
   },
   {
     "id": 16,
@@ -59,8 +59,8 @@
     "rank_type": "Permanent",
     "hierarchy_level": 7,
     "req_months_in_clan": 6,
-    "req_total_level": 2000,
-    "notes": "6 Months Member, 2000 Total Level, Diary Cape (t), AND EITHER Elite CAs OR 6x Skill Masteries."
+    "req_total_level": 2200,
+    "notes": "6 Months Member, 2200 Total Level, Quest Point Cape, Achievement Diary Cape (t), Elite CAs."
   },
   {
     "id": 17,
@@ -68,8 +68,8 @@
     "rank_type": "Permanent",
     "hierarchy_level": 8,
     "req_months_in_clan": 6,
-    "req_total_level": 2000,
-    "notes": "Elite Skiller. 6 Months Member, All Non-Combat Skills 99."
+    "req_total_level": 2376,
+    "notes": "Elite Skiller. 6 Months Member, 2376 Total Level, All Completed Hard Diaries, Hard CAs, Quest Point Cape, Maxed Overall."
   },
   {
     "id": 18,
@@ -78,16 +78,16 @@
     "hierarchy_level": 9,
     "req_months_in_clan": 6,
     "req_total_level": 2000,
-    "notes": "Elite PvMer. 6 Months Member, Dizana's Quiver, Infernal Cape, 1500 Combat Points."
+    "notes": "Elite PvMer. 6 Months Member, 2000 Total Level, All Completed Hard Diaries, Quest Point Cape, Dizana's Quiver, Infernal Cape, Master CAs."
   },
   {
     "id": 19,
     "name": "Myth",
     "rank_type": "Permanent",
     "hierarchy_level": 10,
-    "req_months_in_clan": 8,
+    "req_months_in_clan": 6,
     "req_total_level": 2376,
-    "notes": "Living Legend. 8 Months Member, Maxed Overall, Music Cape (t), Master CAs, Dizana's Quiver, Infernal Cape."
+    "notes": "Living Legend. 6 Months Member, 2376 Total Level, Maxed Overall, Quest Point Cape, Achievement Diary Cape (t), Dizana's Quiver, Infernal Cape, Master CAs, Music Cape, 1000 Collection Logs."
   },
   {
     "id": 20,

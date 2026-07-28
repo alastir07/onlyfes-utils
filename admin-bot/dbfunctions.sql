@@ -247,3 +247,29 @@ BEGIN
   WHERE m.status = 'Active' AND m.current_rank_id IN (10, 11);
 END;
 $$;
+
+
+-- DB FUNCTION: get_active_members_time_in_clan
+-- Returns all active members and their calculated time in the clan
+CREATE OR REPLACE FUNCTION get_active_members_time_in_clan()
+RETURNS TABLE (
+  member_id uuid,
+  primary_rsn character varying,
+  discord_id bigint,
+  days_in_clan integer
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    m.id AS member_id,
+    mr.rsn AS primary_rsn,
+    m.discord_id,
+    calculate_days_in_clan(m.id) AS days_in_clan
+  FROM public.members m
+  LEFT JOIN public.member_rsns mr ON m.id = mr.member_id AND mr.is_primary = true
+  WHERE m.status = 'Active';
+END;
+$$;
+
