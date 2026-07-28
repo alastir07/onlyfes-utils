@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OSRS Bank Alch Analyser</title>
+  <style>
+    :root {
+      --bg: #17130d;
+      --panel: #282014;
+      --panel-2: #342818;
+      --border: #6f552d;
+      --gold: #d6b45f;
+      --text: #f3ead2;
+      --muted: #b8aa88;
+      --good: #9bd478;
+      --bad: #e28a78;
+      --input: #110e0a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top, rgba(116, 84, 38, .23), transparent 34rem),
+        linear-gradient(#16120c, #0d0b08);
+      color: var(--text);
+      font: 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .wrap { width: min(1400px, calc(100% - 32px)); margin: 32px auto 64px; }
+    header { margin-bottom: 20px; }
+    h1 { margin: 0 0 6px; color: var(--gold); font-family: Georgia, serif; font-size: clamp(28px, 4vw, 44px); }
+    .subtitle { margin: 0; color: var(--muted); max-width: 800px; }
+    .panel {
+      background: linear-gradient(180deg, rgba(52,40,24,.97), rgba(35,28,18,.97));
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.35), inset 0 1px rgba(255,255,255,.04);
+      padding: 18px;
+      margin-top: 16px;
+    }
+    label { display: block; color: var(--gold); font-weight: 700; margin-bottom: 8px; }
+    textarea {
+      display: block;
+      width: 100%;
+      min-height: 260px;
+      resize: vertical;
+      border: 1px solid #5c4828;
+      border-radius: 7px;
+      padding: 14px;
+      color: var(--text);
+      background: var(--input);
+      font: 13px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+      outline: none;
+    }
+    textarea:focus, input:focus, select:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(214,180,95,.12); }
+    .actions, .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+    button {
+      border: 1px solid #94713c;
+      border-radius: 6px;
+      padding: 10px 15px;
+      color: #211707;
+      background: linear-gradient(#e1c779, #b68b3d);
+      font-weight: 800;
+      cursor: pointer;
+    }
+    button.secondary { color: var(--text); background: #302619; border-color: #69512f; }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: .55; cursor: wait; }
+    .status { color: var(--muted); }
+    .status.error { color: var(--bad); }
+    .status.ok { color: var(--good); }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .card {
+      background: rgba(14,11,8,.55);
+      border: 1px solid #5b4729;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .card span { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+    .card strong { display: block; margin-top: 4px; color: var(--gold); font-size: 22px; }
+    .toolbar input, .toolbar select {
+      min-height: 38px;
+      border: 1px solid #5c4828;
+      border-radius: 6px;
+      background: var(--input);
+      color: var(--text);
+      padding: 8px 10px;
+    }
+    .toolbar input { flex: 1 1 260px; }
+    .table-wrap { overflow: auto; border: 1px solid #5b4729; border-radius: 8px; margin-top: 12px; max-height: 70vh; }
+    table { width: 100%; border-collapse: collapse; min-width: 900px; background: rgba(10,8,6,.52); }
+    th, td { padding: 10px 12px; border-bottom: 1px solid #3f321f; text-align: left; white-space: nowrap; }
+    th {
+      position: sticky; top: 0; z-index: 1;
+      background: #312616; color: var(--gold); cursor: pointer;
+      user-select: none;
+    }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tbody tr:hover { background: rgba(214,180,95,.07); }
+    .missing { color: var(--bad); }
+    .hidden { display: none !important; }
+    .note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+    @media (max-width: 760px) {
+      .summary { grid-template-columns: repeat(2, 1fr); }
+      .wrap { width: min(100% - 18px, 1400px); margin-top: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>OSRS Bank Alch Analyser</h1>
+      <p class="subtitle">Paste a fresh bank export in the same three-column format, then calculate the High and Low Alchemy values for every stack.</p>
+    </header>
+
+    <section class="panel">
+      <label for="bankInput">Paste bank export</label>
+      <textarea id="bankInput" spellcheck="false" placeholder="Item id	Item name	Item quantity
+299	Mithril seeds	40
+5972	Papaya fruit	534
+1381	Staff of air	9"></textarea>
+      <div class="actions">
+        <button id="analyseBtn">Analyse bank</button>
+        <button id="clearBtn" class="secondary" type="button">Clear</button>
+        <span id="status" class="status">Alchemy data will be loaded from the OSRS Wiki when you analyse.</span>
+      </div>
+      <p class="note">Your pasted bank data stays in your browser and is not uploaded anywhere by this page.</p>
+    </section>
+
+    <section id="resultsPanel" class="panel hidden">
+      <div class="summary">
+        <div class="card"><span>Matched items</span><strong id="matchedCount">0</strong></div>
+        <div class="card"><span>Unmatched items</span><strong id="missingCount">0</strong></div>
+        <div class="card"><span>Total low alch</span><strong id="lowTotal">0 gp</strong></div>
+        <div class="card"><span>Total high alch</span><strong id="highTotal">0 gp</strong></div>
+      </div>
+
+      <div class="toolbar">
+        <input id="searchInput" type="search" placeholder="Search items…" />
+        <select id="filterSelect">
+          <option value="all">All items</option>
+          <option value="alchable">Alchable only</option>
+          <option value="missing">Unmatched only</option>
+        </select>
+        <button id="exportBtn" class="secondary" type="button">Export CSV</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-sort="id">ID</th>
+              <th data-sort="name">Item</th>
+              <th class="num" data-sort="quantity">Quantity</th>
+              <th class="num" data-sort="lowEach">Low alch each</th>
+              <th class="num" data-sort="lowTotal">Low alch stack</th>
+              <th class="num" data-sort="highEach">High alch each</th>
+              <th class="num" data-sort="highTotal">High alch stack</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+<script>
+(() => {
+  const API_URL = "https://prices.runescape.wiki/api/v1/osrs/mapping";
+  const CACHE_KEY = "osrs_alch_mapping_v1";
+  const CACHE_TIME_KEY = "osrs_alch_mapping_time_v1";
+  const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+
+  const els = {
+    input: document.getElementById("bankInput"),
+    analyse: document.getElementById("analyseBtn"),
+    clear: document.getElementById("clearBtn"),
+    status: document.getElementById("status"),
+    panel: document.getElementById("resultsPanel"),
+    body: document.getElementById("resultsBody"),
+    matched: document.getElementById("matchedCount"),
+    missing: document.getElementById("missingCount"),
+    low: document.getElementById("lowTotal"),
+    high: document.getElementById("highTotal"),
+    search: document.getElementById("searchInput"),
+    filter: document.getElementById("filterSelect"),
+    export: document.getElementById("exportBtn")
+  };
+
+  let rows = [];
+  let filteredRows = [];
+  let sortKey = "highTotal";
+  let sortDirection = -1;
+
+  const fmt = new Intl.NumberFormat("en-GB");
+  const gp = value => `${fmt.format(value || 0)} gp`;
+
+  function setStatus(message, type = "") {
+    els.status.textContent = message;
+    els.status.className = `status ${type}`.trim();
+  }
+
+  function parseBank(text) {
+    const lines = text.replace(/\r/g, "").split("\n").filter(line => line.trim());
+    if (!lines.length) throw new Error("Paste your bank export first.");
+
+    const parsed = [];
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index].trim();
+      if (!line) continue;
+
+      let parts = line.split("\t");
+      if (parts.length < 3) parts = line.split(/\s{2,}/);
+
+      if (index === 0 && /item\s*id/i.test(parts[0] || "")) continue;
+      if (parts.length < 3) continue;
+
+      const id = Number(String(parts[0]).replace(/[^\d-]/g, ""));
+      const quantity = Number(String(parts[parts.length - 1]).replace(/[,\s]/g, ""));
+      const name = parts.slice(1, -1).join(" ").trim();
+
+      if (Number.isInteger(id) && id >= 0 && Number.isFinite(quantity) && quantity >= 0 && name) {
+        parsed.push({ id, name, quantity });
+      }
+    }
+
+    if (!parsed.length) {
+      throw new Error("No valid rows were found. Keep the columns as Item id, Item name and Item quantity.");
+    }
+    return parsed;
+  }
+
+  function getCachedMapping() {
+    try {
+      const timestamp = Number(localStorage.getItem(CACHE_TIME_KEY));
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw || !timestamp || Date.now() - timestamp > CACHE_MAX_AGE) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  async function getMapping() {
+    const cached = getCachedMapping();
+    if (cached) return cached;
+
+    const response = await fetch(API_URL, {
+      headers: { "Accept": "application/json" }
+    });
+    if (!response.ok) throw new Error(`OSRS Wiki request failed (${response.status}).`);
+    const data = await response.json();
+
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      localStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
+    } catch {}
+    return data;
+  }
+
+  function calculate(bank, mapping) {
+    const byId = new Map(mapping.map(item => [Number(item.id), item]));
+    return bank.map(item => {
+      const match = byId.get(item.id);
+      const lowEach = Number.isFinite(match?.lowalch) ? match.lowalch : null;
+      const highEach = Number.isFinite(match?.highalch) ? match.highalch : null;
+      return {
+        ...item,
+        matched: Boolean(match),
+        displayName: match?.name || item.name,
+        lowEach,
+        highEach,
+        lowTotal: lowEach === null ? null : lowEach * item.quantity,
+        highTotal: highEach === null ? null : highEach * item.quantity
+      };
+    });
+  }
+
+  function applyFiltersAndRender() {
+    const query = els.search.value.trim().toLowerCase();
+    const filter = els.filter.value;
+
+    filteredRows = rows.filter(row => {
+      const matchesSearch = !query ||
+        row.displayName.toLowerCase().includes(query) ||
+        String(row.id).includes(query);
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "alchable" && row.highEach !== null) ||
+        (filter === "missing" && !row.matched);
+      return matchesSearch && matchesFilter;
+    });
+
+    filteredRows.sort((a, b) => {
+      const av = sortKey === "name" ? a.displayName.toLowerCase() : a[sortKey];
+      const bv = sortKey === "name" ? b.displayName.toLowerCase() : b[sortKey];
+      if (av === null && bv !== null) return 1;
+      if (bv === null && av !== null) return -1;
+      if (av < bv) return -1 * sortDirection;
+      if (av > bv) return 1 * sortDirection;
+      return 0;
+    });
+
+    els.body.innerHTML = filteredRows.map(row => `
+      <tr>
+        <td>${row.id}</td>
+        <td class="${row.matched ? "" : "missing"}">${escapeHtml(row.displayName)}${row.matched ? "" : " (not found)"}</td>
+        <td class="num">${fmt.format(row.quantity)}</td>
+        <td class="num">${row.lowEach === null ? "—" : fmt.format(row.lowEach)}</td>
+        <td class="num">${row.lowTotal === null ? "—" : fmt.format(row.lowTotal)}</td>
+        <td class="num">${row.highEach === null ? "—" : fmt.format(row.highEach)}</td>
+        <td class="num">${row.highTotal === null ? "—" : fmt.format(row.highTotal)}</td>
+      </tr>
+    `).join("");
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function updateSummary() {
+    const matched = rows.filter(row => row.matched).length;
+    const missing = rows.length - matched;
+    const lowTotal = rows.reduce((sum, row) => sum + (row.lowTotal || 0), 0);
+    const highTotal = rows.reduce((sum, row) => sum + (row.highTotal || 0), 0);
+
+    els.matched.textContent = fmt.format(matched);
+    els.missing.textContent = fmt.format(missing);
+    els.low.textContent = gp(lowTotal);
+    els.high.textContent = gp(highTotal);
+  }
+
+  async function analyse() {
+    els.analyse.disabled = true;
+    setStatus("Reading bank export…");
+    try {
+      const bank = parseBank(els.input.value);
+      setStatus(`Found ${fmt.format(bank.length)} bank rows. Loading alchemy data…`);
+      const mapping = await getMapping();
+      rows = calculate(bank, mapping);
+      updateSummary();
+      applyFiltersAndRender();
+      els.panel.classList.remove("hidden");
+      const missing = rows.filter(row => !row.matched).length;
+      setStatus(
+        missing
+          ? `Analysis complete. ${fmt.format(missing)} item${missing === 1 ? "" : "s"} could not be matched.`
+          : "Analysis complete. All items matched.",
+        missing ? "" : "ok"
+      );
+      els.panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      setStatus(error.message || "Something went wrong.", "error");
+    } finally {
+      els.analyse.disabled = false;
+    }
+  }
+
+  function exportCsv() {
+    if (!filteredRows.length) return;
+    const header = ["Item id","Item name","Item quantity","Low alch each","Low alch total","High alch each","High alch total"];
+    const values = filteredRows.map(row => [
+      row.id, row.displayName, row.quantity,
+      row.lowEach ?? "", row.lowTotal ?? "",
+      row.highEach ?? "", row.highTotal ?? ""
+    ]);
+    const csv = [header, ...values]
+      .map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(","))
+      .join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "osrs-bank-alch-analysis.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  els.analyse.addEventListener("click", analyse);
+  els.clear.addEventListener("click", () => {
+    els.input.value = "";
+    rows = [];
+    els.panel.classList.add("hidden");
+    setStatus("Alchemy data will be loaded from the OSRS Wiki when you analyse.");
+    els.input.focus();
+  });
+  els.search.addEventListener("input", applyFiltersAndRender);
+  els.filter.addEventListener("change", applyFiltersAndRender);
+  els.export.addEventListener("click", exportCsv);
+
+  document.querySelectorAll("th[data-sort]").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.sort;
+      if (sortKey === key) sortDirection *= -1;
+      else {
+        sortKey = key;
+        sortDirection = key === "name" ? 1 : -1;
+      }
+      applyFiltersAndRender();
+    });
+  });
+})();
+</script>
+</body>
+</html>
