@@ -1758,6 +1758,60 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
 
+# --- 11. /UNLINK-RSN COMMAND ---
+@client.tree.command(name="unlinkrsn", description="Unlinks a member's RSN from their Discord account.")
+@app_commands.describe(
+    rsn="The member's RSN (current or past).",
+    publish="False to post privately. Defaults to True (posts publicly) when used in a staff channel."
+)
+@check_staff_role("Captain")
+async def unlink_rsn(interaction: discord.Interaction, rsn: str, publish: bool = True):
+
+    channel = interaction.channel
+    matriarch_id = get_matriarch_id(channel)
+    if matriarch_id != 1059296867663491233:
+        await interaction.response.send_message("⛔ This command can only be used in a staff channel.", ephemeral=True)
+        return
+
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /unlinkrsn rsn='{rsn}' publish={publish} used by {interaction.user}")
+    if not publish:
+        await log_command_use(f"[{timestamp}] /unlinkrsn rsn='{rsn}' publish={publish} used by {interaction.user}")
+
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+
+    try:
+        # 1. Find the member by RSN
+        resolved = resolve_rsn_to_member(rsn)
+        if not resolved:
+            await interaction.followup.send(f"Error: RSN `{rsn}` not found in the database.", ephemeral=True)
+            return
+
+        member_id = resolved['member_id']
+        member_rsn = resolved['rsn']
+
+        # 2. Check if they are actually linked
+        member_res = supabase.table('members').select('discord_id').eq('id', member_id).limit(1).execute()
+        if not member_res.data:
+            await interaction.followup.send(f"Error: Member data not found in the database.", ephemeral=True)
+            return
+
+        old_discord_id = member_res.data[0].get('discord_id')
+        if not old_discord_id:
+            await interaction.followup.send(f"ℹ️ No change: `{member_rsn}` is not currently linked to a Discord account.", ephemeral=True)
+            return
+
+        # 3. Execute the update
+        supabase.table('members').update({'discord_id': None}).eq('id', member_id).execute()
+
+        await interaction.followup.send(f"✅ Success! `{member_rsn}` has been unlinked from <@{old_discord_id}>.", ephemeral=is_ephemeral)
+
+    except Exception as e:
+        log.error(f"Error in /unlink-rsn command: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
+
+
 # --- 11. /ADD-POINTS COMMAND ---
 @client.tree.command(name="addpoints", description="Add Event Points (EP) for a member.")
 @app_commands.describe(
