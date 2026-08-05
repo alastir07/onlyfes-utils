@@ -362,20 +362,23 @@ async def sync_discord_clan_member_roles(guild: discord.Guild, sync_metadata: di
     Returns a summary string of the actions taken.
     """
     CLAN_MEMBERS_ROLE_ID = 1516942589503340604
+    GUEST_ROLE_ID = 1224780423385841796
     role = guild.get_role(CLAN_MEMBERS_ROLE_ID)
     if not role:
         log.error(f"Could not find Clan Members role with ID {CLAN_MEMBERS_ROLE_ID}")
         return f"⚠️ Error: Clan Members role with ID `{CLAN_MEMBERS_ROLE_ID}` not found in this server."
+    guest_role = guild.get_role(GUEST_ROLE_ID)
 
     active_ids = sync_metadata.get("active_discord_ids", [])
     deactivated_ids = sync_metadata.get("deactivated_discord_ids", [])
-    
+
     if dry_run:
         return (f"Discord Role Sync (DRY RUN): Would ensure {len(active_ids)} active member(s) have the role "
                 f"and remove it from {len(deactivated_ids)} deactivated member(s).")
 
     added_count = 0
     removed_count = 0
+    guest_removed_count = 0
     failed_count = 0
 
     # 1. Remove role from deactivated members
@@ -395,7 +398,7 @@ async def sync_discord_clan_member_roles(guild: discord.Guild, sync_metadata: di
             log.error(f"Failed to remove role from deactivated user {d_id}: {e}")
             failed_count += 1
 
-    # 2. Add role to active members if they don't have it
+    # 2. Add role to active members if they don't have it, and remove Guest if present
     for a_id in active_ids:
         try:
             member = guild.get_member(int(a_id))
@@ -406,6 +409,10 @@ async def sync_discord_clan_member_roles(guild: discord.Guild, sync_metadata: di
                 await member.add_roles(role, reason="Clan sync: Ensure active member has role")
                 added_count += 1
                 await asyncio.sleep(0.1)  # add_roles is an API call
+            if member and guest_role and guest_role in member.roles:
+                await member.remove_roles(guest_role, reason="Clan sync: Active member is no longer a guest")
+                guest_removed_count += 1
+                await asyncio.sleep(0.1)  # remove_roles is an API call
         except discord.NotFound:
             log.info(f"Active user {a_id} not found in guild.")
         except Exception as e:
@@ -413,6 +420,8 @@ async def sync_discord_clan_member_roles(guild: discord.Guild, sync_metadata: di
             failed_count += 1
 
     summary = f"**Discord Role Sync:** Added to {added_count} member(s), Removed from {removed_count} member(s)."
+    if guest_removed_count > 0:
+        summary += f" Removed Guest role from {guest_removed_count} member(s)."
     if failed_count > 0:
         summary += f" Failed for {failed_count} member(s)."
     return summary
@@ -1739,9 +1748,10 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
         # 3. Execute the update
         supabase.table('members').update({'discord_id': user.id}).eq('id', member_id).execute()
         
-        # 4. Assign Clan Members role immediately
+        # 4. Assign Clan Members role immediately, and remove Guest if present
         role_msg = ""
         CLAN_MEMBERS_ROLE_ID = 1516942589503340604
+        GUEST_ROLE_ID = 1224780423385841796
         guild = interaction.guild
         if guild:
             role = guild.get_role(CLAN_MEMBERS_ROLE_ID)
@@ -1757,6 +1767,15 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
                     role_msg = f" (Already has **{role.name}** role.)"
             else:
                 log.error(f"Could not find Clan Members role with ID {CLAN_MEMBERS_ROLE_ID}")
+
+            guest_role = guild.get_role(GUEST_ROLE_ID)
+            if guest_role and guest_role in user.roles:
+                try:
+                    await user.remove_roles(guest_role, reason=f"RSN {member_rsn} linked by {interaction.user} (no longer a guest)")
+                    role_msg += f" Removed **{guest_role.name}** role."
+                except Exception as de:
+                    log.warning(f"Could not remove Guest role: {de}")
+                    role_msg += " ⚠️ Could not remove Guest role (lacks permission)."
 
         # 5. Assign the Discord role matching their current clan rank
         rank_role_msg = ""
