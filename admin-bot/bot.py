@@ -528,8 +528,8 @@ COMMANDS_HELP = {
         "min_role": None
     },
     "rankup": {
-        "syntax": "`/rankup <rsn> <rank_name> [publish] [bypass_discord]`",
-        "description": "Manually promotes/demotes a single member.",
+        "syntax": "`/rankup <rsn> <rank_name> [publish] [bypass_discord] [force]`",
+        "description": "Manually promotes/demotes a single member. Use force=True to re-apply the Discord role when the member's DB rank is already rank_name.",
         "category": "Captain Commands",
         "min_role": "Captain"
     },
@@ -1238,13 +1238,65 @@ async def swap_account(interaction: discord.Interaction, old_rsn: str, new_rsn: 
         log.error(f"Error in /swap-account command: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred. Please tell an admin: `{e}`", ephemeral=True)
 
+async def apply_discord_rank_role(guild: discord.Guild, discord_id: int, rank_name: str, reason: str) -> str:
+    """
+    Assigns the Discord role for rank_name to discord_id, removing any other exclusive-rank
+    roles they hold. Returns a human-readable message describing what happened.
+    """
+    rank_config = next((r for r in DISCORD_RANKS if r["role_name"] == rank_name), None)
+    if rank_config and rank_config.get("auto_apply_discord") is False:
+        return " (Discord role auto-apply is disabled for staff ranks.)"
+    if not rank_config or not rank_config.get("role_id"):
+        return " (Discord role ID not configured yet.)" if rank_config else ""
+
+    role_id = rank_config["role_id"]
+    if not guild:
+        return " ⚠️ Command was not run in a server, cannot assign Discord role."
+
+    role = guild.get_role(int(role_id))
+    if not role:
+        return f" ⚠️ Discord role ID `{role_id}` not found in this server."
+
+    try:
+        discord_member = guild.get_member(int(discord_id))
+        if not discord_member:
+            discord_member = await guild.fetch_member(int(discord_id))
+
+        roles_to_remove = []
+        if rank_config.get("is_exclusive"):
+            for r_cfg in DISCORD_RANKS:
+                if r_cfg.get("is_exclusive") and r_cfg.get("role_id") and int(r_cfg["role_id"]) != int(role_id):
+                    role_obj = guild.get_role(int(r_cfg["role_id"]))
+                    if role_obj and role_obj in discord_member.roles:
+                        roles_to_remove.append(role_obj)
+
+        removed_msg = ""
+        if roles_to_remove:
+            await discord_member.remove_roles(*roles_to_remove, reason=reason)
+            removed_names = ", ".join([r.name for r in roles_to_remove])
+            removed_msg = f" and removed **{removed_names}**"
+
+        if role not in discord_member.roles:
+            await discord_member.add_roles(role, reason=reason)
+            return f" Also added Discord role **{role.name}**{removed_msg}."
+        else:
+            if removed_msg:
+                return f" (Removed old exclusive rank(s): {', '.join([r.name for r in roles_to_remove])}.)"
+            return f" (Already has Discord role **{role.name}**.)"
+    except discord.Forbidden:
+        return " ⚠️ Could not assign Discord role (Bot lacks 'Manage Roles' permission or role is higher than Bot's role)."
+    except discord.HTTPException as de:
+        return f" ⚠️ Failed to assign Discord role: {de}"
+
+
 # --- 8. /RANKUP COMMAND ---
 @client.tree.command(name="rankup", description="Promote or demote a single member.")
 @app_commands.describe(
     rsn="The member's RSN (current or past).",
     rank_name="The new rank to assign (e.g., 'Ruby', 'Beast').",
     publish="False to post privately. Defaults to True (posts publicly).",
-    bypass_discord="True to bypass updating the Discord role (useful if member has no Discord)."
+    bypass_discord="True to bypass updating the Discord role (useful if member has no Discord).",
+    force="True to re-apply the Discord role even if the member's DB rank is already rank_name (useful for a fresh Discord account)."
 )
 @app_commands.choices(rank_name=[
     app_commands.Choice(name=rank["display_name"], value=rank["role_name"])
@@ -1252,12 +1304,12 @@ async def swap_account(interaction: discord.Interaction, old_rsn: str, new_rsn: 
 ])
 
 @check_staff_role("Captain")
-async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = True, bypass_discord: bool = False):
-    
+async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, publish: bool = True, bypass_discord: bool = False, force: bool = False):
+
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log.info(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
+    log.info(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} bypass_discord={bypass_discord} force={force} used by {interaction.user}")
     if not publish:
-        await log_command_use(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} bypass_discord={bypass_discord} used by {interaction.user}")
+        await log_command_use(f"[{timestamp}] /rankup rsn='{rsn}' rank_name='{rank_name}' publish={publish} bypass_discord={bypass_discord} force={force} used by {interaction.user}")
     
     is_ephemeral = not publish
     await interaction.response.defer(ephemeral=is_ephemeral)
@@ -1303,73 +1355,33 @@ async def rankup(interaction: discord.Interaction, rsn: str, rank_name: str, pub
             await interaction.followup.send(f"⛔ Permission Denied: You cannot modify the rank of a member whose current hierarchy level ({old_hierarchy}) is higher than your own staff role.", ephemeral=True)
             return
 
-        if old_rank_id == new_rank_id:
-            await interaction.followup.send(f"Error: `{member_rsn}` already has the rank `{new_rank_name}`.", ephemeral=True)
+        already_at_rank = old_rank_id == new_rank_id
+        if already_at_rank and not force:
+            await interaction.followup.send(f"Error: `{member_rsn}` already has the rank `{new_rank_name}`. Use `force:True` to re-apply the Discord role anyway.", ephemeral=True)
             return
 
-        supabase.table('members').update({'current_rank_id': new_rank_id}).eq('id', member_id).execute()
-        
-        supabase.table('rank_history').insert({
-            'member_id': member_id, 
-            'previous_rank_id': old_rank_id, 
-            'new_rank_id': new_rank_id,
-            'enacted_by_member_id': staff_member_id
-        }).execute()
-        
+        if not already_at_rank:
+            supabase.table('members').update({'current_rank_id': new_rank_id}).eq('id', member_id).execute()
+
+            supabase.table('rank_history').insert({
+                'member_id': member_id,
+                'previous_rank_id': old_rank_id,
+                'new_rank_id': new_rank_id,
+                'enacted_by_member_id': staff_member_id
+            }).execute()
+
         # Update Discord role if linked and role_id is configured
         discord_msg = ""
         if discord_id and not bypass_discord:
-            rank_config = next((r for r in DISCORD_RANKS if r["role_name"] == rank_name), None)
-            if rank_config and rank_config.get("auto_apply_discord") is False:
-                discord_msg = " (Discord role auto-apply is disabled for staff ranks.)"
-            elif rank_config and rank_config.get("role_id"):
-                role_id = rank_config["role_id"]
-                guild = interaction.guild
-                if guild:
-                    role = guild.get_role(int(role_id))
-                    if role:
-                        try:
-                            discord_member = guild.get_member(int(discord_id))
-                            if not discord_member:
-                                discord_member = await guild.fetch_member(int(discord_id))
-                            
-                            # Clean up old exclusive roles
-                            roles_to_remove = []
-                            if rank_config.get("is_exclusive"):
-                                for r_cfg in DISCORD_RANKS:
-                                    if r_cfg.get("is_exclusive") and r_cfg.get("role_id") and int(r_cfg["role_id"]) != int(role_id):
-                                        role_obj = guild.get_role(int(r_cfg["role_id"]))
-                                        if role_obj and role_obj in discord_member.roles:
-                                            roles_to_remove.append(role_obj)
-                            
-                            removed_msg = ""
-                            if roles_to_remove:
-                                await discord_member.remove_roles(*roles_to_remove, reason=f"Rankup to {new_rank_name} (exclusive ranks cleanup)")
-                                removed_names = ", ".join([r.name for r in roles_to_remove])
-                                removed_msg = f" and removed **{removed_names}**"
-                            
-                            if role not in discord_member.roles:
-                                await discord_member.add_roles(role, reason=f"Rankup to {new_rank_name} by {interaction.user}")
-                                discord_msg = f" Also added Discord role **{role.name}**{removed_msg}."
-                            else:
-                                if removed_msg:
-                                    discord_msg = f" (Removed old exclusive rank(s): {', '.join([r.name for r in roles_to_remove])}.)"
-                                else:
-                                    discord_msg = f" (Already has Discord role **{role.name}**.)"
-                        except discord.Forbidden:
-                            discord_msg = " ⚠️ Could not assign Discord role (Bot lacks 'Manage Roles' permission or role is higher than Bot's role)."
-                        except discord.HTTPException as de:
-                            discord_msg = f" ⚠️ Failed to assign Discord role: {de}"
-                    else:
-                        discord_msg = f" ⚠️ Discord role ID `{role_id}` not found in this server."
-                else:
-                    discord_msg = " ⚠️ Command was not run in a server, cannot assign Discord role."
-            elif rank_config:
-                discord_msg = " (Discord role ID not configured yet.)"
+            discord_msg = await apply_discord_rank_role(
+                interaction.guild, discord_id, rank_name,
+                reason=f"Rankup to {new_rank_name} by {interaction.user}" + (" (forced)" if already_at_rank else "")
+            )
         elif bypass_discord:
             discord_msg = " (Bypassed Discord role update.)"
-        
-        await interaction.followup.send(f"✅ Success! `{member_rsn}`'s rank has been updated to **{get_rank_display_name(new_rank_name)}**.{discord_msg}", ephemeral=is_ephemeral)
+
+        status_verb = "re-applied for" if already_at_rank else "updated to"
+        await interaction.followup.send(f"✅ Success! `{member_rsn}`'s rank has been {status_verb} **{get_rank_display_name(new_rank_name)}**.{discord_msg}", ephemeral=is_ephemeral)
 
     except Exception as e:
         log.error(f"Error in /rankup command: {e}\n{traceback.format_exc()}")
@@ -1715,10 +1727,12 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
         member_rsn = resolved['rsn']
         
         # 2. Check if they are already linked
-        member_res = supabase.table('members').select('discord_id').eq('id', member_id).limit(1).execute()
+        member_res = supabase.table('members').select('discord_id, ranks(name)').eq('id', member_id).limit(1).execute()
         if not member_res.data:
             await interaction.followup.send(f"Error: Member data not found in the database.", ephemeral=True)
             return
+
+        current_rank_name = (member_res.data[0].get('ranks') or {}).get('name')
 
         if member_res.data[0].get('discord_id'):
             old_discord_id = member_res.data[0]['discord_id']
@@ -1750,8 +1764,18 @@ async def link_rsn(interaction: discord.Interaction, rsn: str, user: discord.Mem
                     role_msg = f" (Already has **{role.name}** role.)"
             else:
                 log.error(f"Could not find Clan Members role with ID {CLAN_MEMBERS_ROLE_ID}")
-                
-        await interaction.followup.send(f"✅ Success! `{member_rsn}` is now linked to {user.mention}.{role_msg}", ephemeral=is_ephemeral)
+
+        # 5. Assign the Discord role matching their current clan rank
+        rank_role_msg = ""
+        if current_rank_name:
+            rank_role_msg = await apply_discord_rank_role(
+                guild, user.id, current_rank_name,
+                reason=f"RSN {member_rsn} linked by {interaction.user} (rank: {current_rank_name})"
+            )
+        else:
+            rank_role_msg = " ⚠️ Could not determine current rank to assign Discord role."
+
+        await interaction.followup.send(f"✅ Success! `{member_rsn}` is now linked to {user.mention}.{role_msg}{rank_role_msg}", ephemeral=is_ephemeral)
 
     except Exception as e:
         log.error(f"Error in /link-rsn command: {e}\n{traceback.format_exc()}")
