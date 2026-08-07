@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clan Chat Log Search</title>
+  <link rel="stylesheet" href="static/style.css" />
+</head>
+<body>
+  <h1>Clan Chat Log Search</h1>
+
+  <div class="panel">
+    <div class="filters-grid">
+      <div class="field">
+        <label for="queryInput">Message search</label>
+        <input type="text" id="queryInput" placeholder="Search text or regex..." />
+      </div>
+
+      <div class="field checkbox-field">
+        <input type="checkbox" id="regexToggle" />
+        <label for="regexToggle">Treat as regex</label>
+      </div>
+
+      <div class="field typeahead-wrap">
+        <label for="rsnInput">RSN (current or past)</label>
+        <input type="text" id="rsnInput" placeholder="Type a username..." autocomplete="off" />
+        <div class="typeahead-results" id="rsnResults"></div>
+      </div>
+
+      <div class="field checkbox-field">
+        <input type="checkbox" id="excludeBroadcastsToggle" />
+        <label for="excludeBroadcastsToggle">Exclude broadcasts</label>
+      </div>
+
+      <div class="field" style="grid-column: 1 / -1">
+        <label>Date range</label>
+        <div class="date-presets" id="datePresets">
+          <button type="button" data-preset="today">Today</button>
+          <button type="button" data-preset="yesterday">Yesterday</button>
+          <button type="button" data-preset="7days">Last 7 Days</button>
+          <button type="button" data-preset="30days">Last 30 Days</button>
+          <button type="button" data-preset="ytd">Year to Date</button>
+          <button type="button" data-preset="custom">Custom</button>
+          <button type="button" data-preset="all" class="active">All Time</button>
+        </div>
+        <div class="custom-range" id="customRange">
+          <input type="date" id="dateFromInput" />
+          <input type="date" id="dateToInput" />
+        </div>
+      </div>
+    </div>
+
+    <button id="applyFiltersBtn">Apply Filters</button>
+  </div>
+
+  <div class="page-options">
+    <label class="toggle-field">
+      <input type="checkbox" id="oldSchoolToggle" />
+      Old School UI
+    </label>
+    <label class="toggle-field">
+      <input type="checkbox" id="liveModeToggle" />
+      Live Mode
+    </label>
+    <button id="exportBtn">Export results</button>
+    <span id="statusText" style="color: #888; font-size: 13px"></span>
+  </div>
+
+  <div id="resultsContainer">
+    <div class="results-list" id="resultsList"></div>
+  </div>
+
+  <script src="static/app.js"></script>
+</body>
+</html>
