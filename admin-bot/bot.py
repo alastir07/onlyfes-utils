@@ -464,9 +464,10 @@ async def on_ready():
         scheduled_no_discord_check.start()
         scheduled_clan_veteran_check.start()
         scheduled_bounty_generate.start()
-        scheduled_bounty_close.start()
+        scheduled_bounty_lock.start()
+        scheduled_bounty_finalize.start()
 
-        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily), no_discord_check (00:05 UTC weekly on Sundays), clan_veteran_check (00:10 UTC monthly on the 1st), bounty_generate (Mon 06:00 UTC), bounty_close (Sat 06:00 UTC)")
+        log.info("Scheduled tasks started: ep_leaderboard (hourly), clan_sync (00:00, 12:00 UTC), inactivity_check (14:00 UTC), overachievers (00:00 daily), no_discord_check (00:05 UTC weekly on Sundays), clan_veteran_check (00:10 UTC monthly on the 1st), bounty_generate (Mon 06:00 UTC), bounty_lock (Sat 06:00 UTC), bounty_finalize (Sat 12:00 UTC)")
 
         # Restore bounty state from DB
         await _load_bounty_state()
@@ -3359,15 +3360,22 @@ def _save_bot_state(key: str, value: str) -> None:
 
 
 async def _load_bounty_state() -> None:
-    """Restores bounty_auto_enabled and bounty_active_thread_id from DB on startup."""
-    global bounty_auto_enabled, bounty_active_thread_id
+    """Restores bounty_auto_enabled, bounty_active_thread_id, and bounty_pending_finalize_thread_id from DB on startup."""
+    global bounty_auto_enabled, bounty_active_thread_id, bounty_pending_finalize_thread_id
     try:
-        rows = supabase.table('bot_state').select('key,value').in_('key', ['bounty_auto_enabled', 'bounty_active_thread_id']).execute()
+        rows = supabase.table('bot_state').select('key,value').in_(
+            'key', ['bounty_auto_enabled', 'bounty_active_thread_id', 'bounty_pending_finalize_thread_id']
+        ).execute()
         state = {r['key']: r['value'] for r in (rows.data or [])}
         bounty_auto_enabled = state.get('bounty_auto_enabled', 'false').lower() == 'true'
         raw_thread_id = state.get('bounty_active_thread_id')
         bounty_active_thread_id = int(raw_thread_id) if raw_thread_id else None
-        log.info(f"Bounty state restored: auto_enabled={bounty_auto_enabled}, active_thread_id={bounty_active_thread_id}")
+        raw_pending_id = state.get('bounty_pending_finalize_thread_id')
+        bounty_pending_finalize_thread_id = int(raw_pending_id) if raw_pending_id else None
+        log.info(
+            f"Bounty state restored: auto_enabled={bounty_auto_enabled}, active_thread_id={bounty_active_thread_id}, "
+            f"pending_finalize_thread_id={bounty_pending_finalize_thread_id}"
+        )
     except Exception as e:
         log.error(f"Failed to load bounty state from DB: {e}")
 
@@ -3386,6 +3394,7 @@ BOUNTY_CHECK_EMOJI_WHITE = "✅"
 # Runtime state for automatic bounty management
 bounty_auto_enabled: bool = False
 bounty_active_thread_id: int | None = None  # set when a bounty thread is created
+bounty_pending_finalize_thread_id: int | None = None  # set when a thread is locked at 06:00, awaiting 12:00 finalization
 
 # Word lists for event password generation (all words ≤ 8 chars, max combined length 16)
 _PASSWORD_ADJECTIVES = [
@@ -3446,6 +3455,18 @@ def _wiki_image_url(item_name: str) -> str:
     slug = item_name.replace(" ", "_")
     encoded = quote(slug, safe="_'")
     return f"https://oldschool.runescape.wiki/images/{encoded}_detail.png"
+
+
+def _bounty_item_name_from_thread(thread_name: str) -> str:
+    """Strips the 'Weekly Bounty – ' prefix and trailing '(Week of ...)' suffix from a bounty thread name."""
+    raw_name = thread_name
+    for prefix in ("Weekly Bounty – ", "Weekly Bounty - "):
+        if raw_name.startswith(prefix):
+            raw_name = raw_name[len(prefix):]
+            break
+    if " (" in raw_name:
+        raw_name = raw_name[:raw_name.rfind(" (")]
+    return raw_name
 
 
 def _next_saturday_0600_utc(from_dt: datetime) -> datetime:
@@ -3531,7 +3552,9 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
     image_url = _wiki_image_url(chosen_item)
     event_password = _generate_event_password()
 
+    role_mention = f"<@&{BOUNTY_ROLE_ID}>"
     opening_post = (
+        f"{role_mention}\n\n"
         f"## Weekly Bounty: **{chosen_item}**\n\n"
         f"This week's bounty item is **[{chosen_item}]({wiki_link})**. The event password is **{event_password}**.\n\n"
         f"Post a screenshot of your drop here. Staff will react with ✅ to confirm it counts.\n\n"
@@ -3544,12 +3567,13 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
             name=thread_name,
             content=opening_post,
             auto_archive_duration=10080,  # 7 days
+            allowed_mentions=discord.AllowedMentions(roles=True),
         )
         thread = thread_with_msg.thread
     except Exception as e:
         return False, f"Failed to create thread: {e}"
 
-    # Post announcement
+    # Post announcement (no role ping here — the ping happens in the thread's opening message)
     announcement_channel = guild.get_channel(BOUNTY_ANNOUNCEMENT_CHANNEL_ID)
     if announcement_channel:
         info_channel_mention = f"<#{BOUNTY_INFO_CHANNEL_ID}>"
@@ -3568,8 +3592,7 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
         )
         embed.set_thumbnail(url=image_url)
         embed.set_footer(text="Good luck, everyone!")
-        role_mention = f"<@&{BOUNTY_ROLE_ID}>"
-        await announcement_channel.send(content=role_mention, embed=embed)
+        await announcement_channel.send(embed=embed)
 
     global bounty_active_thread_id
     bounty_active_thread_id = thread.id
@@ -3785,16 +3808,7 @@ async def check_bounty_completion(interaction: discord.Interaction, thread_id: s
 
         now = datetime.now(ZoneInfo("UTC"))
         week_label = now.strftime("Week of %b %d, %Y")
-        # Strip "Weekly Bounty – " prefix from thread name to get just the item name
-        raw_name = thread.name
-        for prefix in ("Weekly Bounty – ", "Weekly Bounty - "):
-            if raw_name.startswith(prefix):
-                raw_name = raw_name[len(prefix):]
-                break
-        # Strip trailing "(Week of ...)" if present
-        if " (" in raw_name:
-            raw_name = raw_name[:raw_name.rfind(" (")]
-        item_name = raw_name
+        item_name = _bounty_item_name_from_thread(thread.name)
 
         embed = discord.Embed(
             title=f"Weekly Bounty Completions: {item_name} ({week_label})",
@@ -3845,6 +3859,79 @@ async def check_bounty_completion(interaction: discord.Interaction, thread_id: s
         await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
 
 
+@client.tree.command(name="grant-bounty-completion", description="Manually grant a bounty completion (RSN + bounty password) for a submission that was missed.")
+@app_commands.describe(
+    rsn="The RSN of the member to grant the completion to.",
+    password="The event password of the bounty (shown in the bounty thread's opening post).",
+    publish="True to post the confirmation publicly."
+)
+@check_staff_role("Owner")
+async def grant_bounty_completion(interaction: discord.Interaction, rsn: str, password: str, publish: bool = False):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /grant-bounty-completion rsn='{rsn}' password='{password}' publish={publish} used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /grant-bounty-completion rsn='{rsn}' password='{password}' publish={publish} used by {interaction.user}")
+
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+
+    try:
+        bounty_res = supabase.table('bounties').select('id, item_name, thread_id').eq('password', password).limit(1).execute()
+        if not bounty_res.data:
+            await interaction.followup.send(f"❌ No bounty found with password `{password}`.", ephemeral=True)
+            return
+        bounty = bounty_res.data[0]
+        bounty_db_id = bounty['id']
+
+        member = resolve_rsn_to_member(rsn)
+        if not member:
+            await interaction.followup.send(f"❌ Could not find a member with RSN `{rsn}`.", ephemeral=True)
+            return
+        member_id = member['member_id']
+        resolved_rsn = member['rsn']
+
+        existing_winner = supabase.table('bounty_winners') \
+            .select('id') \
+            .eq('bounty_id', bounty_db_id) \
+            .eq('member_id', member_id) \
+            .limit(1) \
+            .execute()
+        already_winner = bool(existing_winner.data)
+        if not already_winner:
+            supabase.table('bounty_winners').upsert(
+                {'bounty_id': bounty_db_id, 'member_id': member_id},
+                on_conflict='bounty_id,member_id'
+            ).execute()
+
+        reason = f"Bounty Completion - {bounty_db_id}"
+        existing_ep = supabase.table('event_point_transactions') \
+            .select('id') \
+            .eq('member_id', member_id) \
+            .eq('reason', reason) \
+            .limit(1) \
+            .execute()
+        if existing_ep.data:
+            await interaction.followup.send(
+                f"⚠️ **{resolved_rsn}** was already granted a completion for bounty **{bounty['item_name']}** — no EP awarded.",
+                ephemeral=True,
+            )
+            return
+
+        supabase.table('event_point_transactions').insert({
+            'member_id': member_id,
+            'modification': 3,
+            'reason': reason,
+        }).execute()
+
+        thread_mention = f"<#{bounty['thread_id']}>"
+        await interaction.followup.send(
+            f"✅ Granted bounty completion for **{resolved_rsn}** — bounty **{bounty['item_name']}** ({thread_mention}). 3 EP awarded.",
+            ephemeral=is_ephemeral,
+        )
+    except Exception as e:
+        log.error(f"Error in /grant-bounty-completion: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
+
+
 # --- 20. AUTOMATIC BOUNTY SCHEDULED TASKS ---
 
 @tasks.loop(time=[time(hour=6, minute=0, tzinfo=ZoneInfo("UTC"))])
@@ -3870,98 +3957,164 @@ async def scheduled_bounty_generate():
         log.error(f"ERROR in scheduled_bounty_generate: {e}\n{traceback.format_exc()}")
 
 
+async def _finalize_bounty(thread: discord.Thread, guild: discord.Guild) -> None:
+    """
+    Core finalize logic for the 12:00 UTC scheduled task: checks completions, marks the
+    bounty inactive, records bounty_winners, awards EP, posts the winners embed (or a
+    no-completions staff note), and archives the thread.
+    """
+    now = datetime.now(ZoneInfo("UTC"))
+    winners = await _check_bounty_completions(thread)
+
+    bounty_db_id = None
+    try:
+        bounty_res = supabase.table('bounties').select('id').eq('thread_id', thread.id).limit(1).execute()
+        bounty_db_id = bounty_res.data[0]['id'] if bounty_res.data else None
+        if bounty_db_id:
+            supabase.table('bounties').update({'is_active': False, 'date_end': now.isoformat()}).eq('id', bounty_db_id).execute()
+            for w in winners:
+                try:
+                    member_res = supabase.table('members').select('id').eq('discord_id', w['user_id']).limit(1).execute()
+                    if member_res.data:
+                        supabase.table('bounty_winners').upsert(
+                            {'bounty_id': bounty_db_id, 'member_id': member_res.data[0]['id']},
+                            on_conflict='bounty_id,member_id'
+                        ).execute()
+                except Exception as we:
+                    log.warning(f"Could not insert bounty_winner for discord_id {w['user_id']}: {we}")
+        else:
+            log.warning(f"_finalize_bounty: no bounties row found for thread_id {thread.id}")
+    except Exception as e:
+        log.error(f"_finalize_bounty: DB update failed: {e}")
+
+    item_name = _bounty_item_name_from_thread(thread.name)
+    week_label = now.strftime("Week of %b %d, %Y")
+    next_bounty_dt = _monday_after(now)
+    next_bounty_ts = int(next_bounty_dt.timestamp())
+    threads_channel_mention = f"<#{BOUNTY_THREADS_CHANNEL_ID}>"
+
+    completions_channel = guild.get_channel(BOUNTY_COMPLETIONS_CHANNEL_ID)
+    if winners:
+        winner_lines = "\n".join(f"• <@{w['user_id']}>" for w in winners)
+        embed = discord.Embed(
+            title=f"Weekly Bounty Completions: {item_name} ({week_label})",
+            color=discord.Color.green(),
+            timestamp=now,
+        )
+        embed.description = (
+            f"The following members successfully obtained the drop:\n{winner_lines}\n\n"
+            f"Congratulations to you all, you've each earned 3 Event Points.\n\n"
+            f"A new bounty will be live <t:{next_bounty_ts}:F> (<t:{next_bounty_ts}:R>), keep your eyes on {threads_channel_mention}!"
+        )
+        embed.set_footer(text=f"Thread ID: {thread.id}")
+        if completions_channel:
+            await completions_channel.send(embed=embed)
+        log.info(f"_finalize_bounty: posted {len(winners)} completion(s) to completions channel.")
+        if bounty_db_id:
+            await _award_bounty_ep(winners, bounty_db_id, guild)
+    else:
+        log.info("_finalize_bounty: no confirmed completions found, skipping completions post.")
+        staff_channel = guild.get_channel(BOUNTY_STAFF_LOG_CHANNEL_ID)
+        if staff_channel:
+            await staff_channel.send(
+                f"📋 Weekly bounty closed: **{item_name}** ({week_label}) — no confirmed completions found. "
+                f"Thread: <#{thread.id}>"
+            )
+
+    await thread.edit(locked=True, archived=True)
+    log.info(f"_finalize_bounty: thread '{thread.name}' locked and archived.")
+
+
 @tasks.loop(time=[time(hour=6, minute=0, tzinfo=ZoneInfo("UTC"))])
-async def scheduled_bounty_close():
-    """Runs every Saturday at 06:00 UTC. Closes the active thread and posts completions if auto mode is enabled."""
+async def scheduled_bounty_lock():
+    """
+    Runs every Saturday at 06:00 UTC. Locks the active thread (submissions window ends),
+    posts a closing notice in the thread, and notifies staff to review submissions before
+    the 12:00 UTC finalize step. Does not award EP or post winners yet.
+    """
+    global bounty_active_thread_id, bounty_pending_finalize_thread_id
     if not bounty_auto_enabled:
         return
     now = datetime.now(ZoneInfo("UTC"))
     if now.weekday() != 5:  # 5 = Saturday
         return
     if not bounty_active_thread_id:
-        log.warning("scheduled_bounty_close: no active bounty thread ID recorded, skipping.")
+        log.warning("scheduled_bounty_lock: no active bounty thread ID recorded, skipping.")
         return
-    log.info(f"=== Starting scheduled bounty close (thread {bounty_active_thread_id}) ===")
+    log.info(f"=== Starting scheduled bounty lock (thread {bounty_active_thread_id}) ===")
     guild = client.guilds[0] if client.guilds else None
     if not guild:
-        log.error("scheduled_bounty_close: no guild available.")
+        log.error("scheduled_bounty_lock: no guild available.")
         return
     try:
         thread = guild.get_channel(bounty_active_thread_id)
         if not thread:
             thread = await guild.fetch_channel(bounty_active_thread_id)
         if not isinstance(thread, discord.Thread):
-            log.error(f"scheduled_bounty_close: channel {bounty_active_thread_id} is not a thread.")
+            log.error(f"scheduled_bounty_lock: channel {bounty_active_thread_id} is not a thread.")
             return
 
-        # Gather completions and post to completions channel before locking
-        winners = await _check_bounty_completions(thread)
+        item_name = _bounty_item_name_from_thread(thread.name)
+        finalize_dt = now.replace(hour=12, minute=0, second=0, microsecond=0)
+        finalize_ts = int(finalize_dt.timestamp())
 
-        # Mark bounty closed in DB and record winners
-        try:
-            bounty_res = supabase.table('bounties').select('id').eq('thread_id', bounty_active_thread_id).limit(1).execute()
-            bounty_db_id = bounty_res.data[0]['id'] if bounty_res.data else None
-            if bounty_db_id:
-                supabase.table('bounties').update({'is_active': False, 'date_end': now.isoformat()}).eq('id', bounty_db_id).execute()
-                for w in winners:
-                    try:
-                        member_res = supabase.table('members').select('id').eq('discord_id', w['user_id']).limit(1).execute()
-                        if member_res.data:
-                            supabase.table('bounty_winners').upsert(
-                                {'bounty_id': bounty_db_id, 'member_id': member_res.data[0]['id']},
-                                on_conflict='bounty_id,member_id'
-                            ).execute()
-                    except Exception as we:
-                        log.warning(f"Could not insert bounty_winner for discord_id {w['user_id']}: {we}")
-            else:
-                log.warning(f"scheduled_bounty_close: no bounties row found for thread_id {bounty_active_thread_id}")
-        except Exception as e:
-            log.error(f"scheduled_bounty_close: DB update failed: {e}")
+        await thread.send(
+            f"🔒 This week's bounty (**{item_name}**) is now closed to new submissions. "
+            f"Staff are reviewing outstanding drops and points will be awarded <t:{finalize_ts}:R>."
+        )
+        await thread.edit(locked=True)
 
-        raw_name = thread.name
-        for prefix in ("Weekly Bounty – ", "Weekly Bounty - "):
-            if raw_name.startswith(prefix):
-                raw_name = raw_name[len(prefix):]
-                break
-        if " (" in raw_name:
-            raw_name = raw_name[:raw_name.rfind(" (")]
-        item_name = raw_name
-        week_label = now.strftime("Week of %b %d, %Y")
-        next_bounty_dt = _monday_after(now)
-        next_bounty_ts = int(next_bounty_dt.timestamp())
-        threads_channel_mention = f"<#{BOUNTY_THREADS_CHANNEL_ID}>"
-
-        completions_channel = guild.get_channel(BOUNTY_COMPLETIONS_CHANNEL_ID)
-        if winners:
-            winner_lines = "\n".join(f"• <@{w['user_id']}>" for w in winners)
-            embed = discord.Embed(
-                title=f"Weekly Bounty Completions: {item_name} ({week_label})",
-                color=discord.Color.green(),
-                timestamp=now,
+        staff_channel = guild.get_channel(BOUNTY_STAFF_LOG_CHANNEL_ID)
+        if staff_channel:
+            await staff_channel.send(
+                f"📋 The weekly bounty **{item_name}** has ended — please check {thread.mention} for any "
+                f"unmarked submissions (react ✅) before finalization <t:{finalize_ts}:R>."
             )
-            embed.description = (
-                f"The following members successfully obtained the drop:\n{winner_lines}\n\n"
-                f"Congratulations to you all, you've each earned 3 Event Points.\n\n"
-                f"A new bounty will be live <t:{next_bounty_ts}:F> (<t:{next_bounty_ts}:R>), keep your eyes on {threads_channel_mention}!"
-            )
-            embed.set_footer(text=f"Thread ID: {bounty_active_thread_id}")
-            if completions_channel:
-                await completions_channel.send(embed=embed)
-            log.info(f"Scheduled bounty close: posted {len(winners)} completion(s) to completions channel.")
-            await _award_bounty_ep(winners, bounty_db_id, guild)
-        else:
-            log.info("Scheduled bounty close: no confirmed completions found, skipping completions post.")
-            staff_channel = guild.get_channel(BOUNTY_STAFF_LOG_CHANNEL_ID)
-            if staff_channel:
-                await staff_channel.send(
-                    f"📋 Weekly bounty closed: **{item_name}** ({week_label}) — no confirmed completions found. "
-                    f"Thread: <#{bounty_active_thread_id}>"
-                )
 
-        await thread.edit(locked=True, archived=True)
-        log.info(f"Scheduled bounty close: thread '{thread.name}' locked and archived.")
+        bounty_pending_finalize_thread_id = bounty_active_thread_id
+        _save_bot_state('bounty_pending_finalize_thread_id', str(bounty_pending_finalize_thread_id))
+        bounty_active_thread_id = None
+        _save_bot_state('bounty_active_thread_id', '')
+
+        log.info(f"Scheduled bounty lock complete: thread '{thread.name}' locked, awaiting 12:00 UTC finalize.")
     except Exception as e:
-        log.error(f"ERROR in scheduled_bounty_close: {e}\n{traceback.format_exc()}")
+        log.error(f"ERROR in scheduled_bounty_lock: {e}\n{traceback.format_exc()}")
+
+
+@tasks.loop(time=[time(hour=12, minute=0, tzinfo=ZoneInfo("UTC"))])
+async def scheduled_bounty_finalize():
+    """
+    Runs every Saturday at 12:00 UTC. Finalizes the thread locked at 06:00: checks completions,
+    awards EP, posts the winners embed, and archives the thread.
+    """
+    global bounty_pending_finalize_thread_id
+    if not bounty_auto_enabled:
+        return
+    now = datetime.now(ZoneInfo("UTC"))
+    if now.weekday() != 5:  # 5 = Saturday
+        return
+    if not bounty_pending_finalize_thread_id:
+        log.warning("scheduled_bounty_finalize: no pending finalize thread ID recorded, skipping.")
+        return
+    log.info(f"=== Starting scheduled bounty finalize (thread {bounty_pending_finalize_thread_id}) ===")
+    guild = client.guilds[0] if client.guilds else None
+    if not guild:
+        log.error("scheduled_bounty_finalize: no guild available.")
+        return
+    try:
+        thread = guild.get_channel(bounty_pending_finalize_thread_id)
+        if not thread:
+            thread = await guild.fetch_channel(bounty_pending_finalize_thread_id)
+        if not isinstance(thread, discord.Thread):
+            log.error(f"scheduled_bounty_finalize: channel {bounty_pending_finalize_thread_id} is not a thread.")
+            return
+
+        await _finalize_bounty(thread, guild)
+
+        bounty_pending_finalize_thread_id = None
+        _save_bot_state('bounty_pending_finalize_thread_id', '')
+    except Exception as e:
+        log.error(f"ERROR in scheduled_bounty_finalize: {e}\n{traceback.format_exc()}")
 
 
 @scheduled_bounty_generate.before_loop
@@ -3969,8 +4122,13 @@ async def before_scheduled_bounty_generate():
     await client.wait_until_ready()
 
 
-@scheduled_bounty_close.before_loop
-async def before_scheduled_bounty_close():
+@scheduled_bounty_lock.before_loop
+async def before_scheduled_bounty_lock():
+    await client.wait_until_ready()
+
+
+@scheduled_bounty_finalize.before_loop
+async def before_scheduled_bounty_finalize():
     await client.wait_until_ready()
 
 
