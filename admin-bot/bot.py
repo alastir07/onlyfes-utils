@@ -668,6 +668,12 @@ COMMANDS_HELP = {
         "category": "Captain Commands",
         "min_role": "Captain"
     },
+    "list-bounty-targets": {
+        "syntax": "`/list-bounty-targets [publish]`",
+        "description": "Lists all items currently in the weekly bounty target pool (staff-only reference).",
+        "category": "Captain Commands",
+        "min_role": "Captain"
+    },
     "generate-new-bounty-quest": {
         "syntax": "`/generate-new-bounty-quest [item_name] [publish]`",
         "description": "Creates a new weekly bounty thread and announcement. Optionally specify an item; otherwise one is chosen randomly.",
@@ -4000,6 +4006,48 @@ async def delete_bounty_target(interaction: discord.Interaction, bounty_name: st
         await interaction.followup.send(f"✅ Removed **{target['bounty_name']}** from the bounty target pool.", ephemeral=is_ephemeral)
     except Exception as e:
         log.error(f"Error in /delete-bounty-target: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
+
+
+@client.tree.command(name="list-bounty-targets", description="List all items in the weekly bounty target pool.")
+@app_commands.describe(publish="True to post the list publicly (staff channels only — this is a staff reference).")
+@check_staff_role("Captain")
+async def list_bounty_targets(interaction: discord.Interaction, publish: bool = False):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /list-bounty-targets publish={publish} used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /list-bounty-targets publish={publish} used by {interaction.user}")
+
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+
+    try:
+        targets = await fetch_bounty_targets()
+        if not targets:
+            await interaction.followup.send("No bounty targets found in the pool.", ephemeral=True)
+            return
+
+        names = sorted((t['bounty_name'] for t in targets), key=str.lower)
+
+        embed = discord.Embed(
+            title=f"🎯 Bounty Target Pool ({len(names)})",
+            color=discord.Color.gold(),
+        )
+
+        # Chunk into fields to stay under Discord's 1024-char-per-field limit.
+        chunk, chunk_len = [], 0
+        for name in names:
+            line = f"• {name}"
+            if chunk_len + len(line) + 1 > 1000:
+                embed.add_field(name="​", value="\n".join(chunk), inline=False)
+                chunk, chunk_len = [], 0
+            chunk.append(line)
+            chunk_len += len(line) + 1
+        if chunk:
+            embed.add_field(name="​", value="\n".join(chunk), inline=False)
+
+        await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+    except Exception as e:
+        log.error(f"Error in /list-bounty-targets: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
 
 
