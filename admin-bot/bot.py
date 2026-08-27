@@ -659,14 +659,14 @@ COMMANDS_HELP = {
     "add-bounty-target": {
         "syntax": "`/add-bounty-target <bounty_name> [wiki_link] [image_url] [publish]`",
         "description": "Adds a new item to the weekly bounty target pool.",
-        "category": "Commander Commands",
-        "min_role": "Commander"
+        "category": "Captain Commands",
+        "min_role": "Captain"
     },
     "delete-bounty-target": {
         "syntax": "`/delete-bounty-target <bounty_name> [publish]`",
         "description": "Removes an item from the weekly bounty target pool. Refuses if the item has been used in a past bounty.",
-        "category": "Commander Commands",
-        "min_role": "Commander"
+        "category": "Captain Commands",
+        "min_role": "Captain"
     },
     "generate-new-bounty-quest": {
         "syntax": "`/generate-new-bounty-quest [item_name] [publish]`",
@@ -3937,7 +3937,7 @@ async def grant_bounty_completion(interaction: discord.Interaction, rsn: str, pa
     image_url="Optional: URL to an image for this item.",
     publish="True to post the confirmation publicly."
 )
-@check_staff_role("Commander")
+@check_staff_role("Captain")
 async def add_bounty_target(
     interaction: discord.Interaction,
     bounty_name: str,
@@ -3969,7 +3969,7 @@ async def add_bounty_target(
     bounty_name="The exact name of the bounty target to remove.",
     publish="True to post the confirmation publicly."
 )
-@check_staff_role("Commander")
+@check_staff_role("Captain")
 async def delete_bounty_target(interaction: discord.Interaction, bounty_name: str, publish: bool = False):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log.info(f"[{timestamp}] /delete-bounty-target bounty_name='{bounty_name}' publish={publish} used by {interaction.user}")
