@@ -12,7 +12,6 @@ from io import StringIO
 import traceback
 import random
 from datetime import datetime, time, timedelta
-from urllib.parse import quote
 from zoneinfo import ZoneInfo
 import functools
 import logging
@@ -654,6 +653,18 @@ COMMANDS_HELP = {
     "tldr": {
         "syntax": "`/tldr [time] [message_id] [testing]`",
         "description": "Summarizes the staff channel conversation from a time/message ID to current.",
+        "category": "Commander Commands",
+        "min_role": "Commander"
+    },
+    "add-bounty-target": {
+        "syntax": "`/add-bounty-target <bounty_name> [wiki_link] [image_url] [publish]`",
+        "description": "Adds a new item to the weekly bounty target pool.",
+        "category": "Commander Commands",
+        "min_role": "Commander"
+    },
+    "delete-bounty-target": {
+        "syntax": "`/delete-bounty-target <bounty_name> [publish]`",
+        "description": "Removes an item from the weekly bounty target pool. Refuses if the item has been used in a past bounty.",
         "category": "Commander Commands",
         "min_role": "Commander"
     },
@@ -3383,7 +3394,6 @@ async def _load_bounty_state() -> None:
 # Channel and message config — swap these out when moving from test to production
 BOUNTY_ANNOUNCEMENT_CHANNEL_ID = 1054611693197602936   # test channel (#admin-playground - 1173640617453174835); swap for #event (1054611693197602936) when ready
 BOUNTY_THREADS_CHANNEL_ID = 1517972125246292178        # #weekly-bounty threads channel
-BOUNTY_ITEMS_THREAD_ID = 1517995249153081585           # "Full item list" thread in #weekly-bounties
 BOUNTY_COMPLETIONS_CHANNEL_ID = 1077669229475663893    # #event-winners (completions are posted here)
 BOUNTY_STAFF_LOG_CHANNEL_ID = 1490898354908037191      # #bots-staff (staff notifications)
 BOUNTY_INFO_CHANNEL_ID = 1517994786408108224           # #weekly-bounties info thread (within weekly-bounty channel)
@@ -3419,42 +3429,17 @@ def _generate_event_password() -> str:
     return random.choice(_PASSWORD_ADJECTIVES) + random.choice(_PASSWORD_NOUNS)
 
 
-async def fetch_bounty_items() -> list[str]:
+async def fetch_bounty_targets() -> list[dict]:
     """
-    Fetches the bounty item list from the starter message of BOUNTY_ITEMS_THREAD_ID.
-    The message is expected to have one item per line (blank lines and list prefixes ignored).
-    Returns a list of item name strings.
+    Fetches all bounty targets from the bounty_targets table.
+    Returns a list of dicts with keys: id, bounty_name, wiki_link, image_url.
     """
-    async with aiohttp.ClientSession() as session:
-        # The starter message of a forum thread shares the thread's ID
-        url = f"https://discord.com/api/v10/channels/{BOUNTY_ITEMS_THREAD_ID}/messages/{BOUNTY_ITEMS_THREAD_ID}"
-        data = await discord_api_request(session, "GET", url)
-        if not data:
-            return []
-        content = data.get("content", "")
-        items = []
-        for line in content.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            # Strip markdown list prefixes (-, *, •) so items can be formatted as a list
-            line = line.lstrip("-*•").strip()
-            if line:
-                items.append(line)
-        return items
-
-
-def _wiki_url(item_name: str) -> str:
-    """Returns the OSRS wiki URL for an item, with spaces replaced by underscores."""
-    slug = item_name.replace(" ", "_")
-    return f"https://oldschool.runescape.wiki/w/{quote(slug, safe='_')}"
-
-
-def _wiki_image_url(item_name: str) -> str:
-    """Returns the OSRS wiki detail image URL for an item."""
-    slug = item_name.replace(" ", "_")
-    encoded = quote(slug, safe="_'")
-    return f"https://oldschool.runescape.wiki/images/{encoded}_detail.png"
+    try:
+        res = supabase.table('bounty_targets').select('id, bounty_name, wiki_link, image_url').execute()
+        return res.data or []
+    except Exception as e:
+        log.error(f"fetch_bounty_targets: failed to query bounty_targets table: {e}")
+        return []
 
 
 def _bounty_item_name_from_thread(thread_name: str) -> str:
@@ -3494,49 +3479,60 @@ def _next_monday_0600_utc(from_dt: datetime) -> datetime:
     return from_dt.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=days_until_monday)
 
 
-async def _recently_used_bounty_items() -> set[str]:
+async def _recently_used_bounty_targets() -> set[int]:
     """
-    Returns the set of item_name values used by any bounty (auto or manual) started within
-    the last BOUNTY_REROLL_EXCLUSION_WEEKS weeks, for the auto-roll reroll-exclusion check.
+    Returns the set of bounty_target_id values used by any bounty (auto or manual) started
+    within the last BOUNTY_REROLL_EXCLUSION_WEEKS weeks, for the auto-roll reroll-exclusion check.
     """
     cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(weeks=BOUNTY_REROLL_EXCLUSION_WEEKS)
     try:
-        res = supabase.table('bounties').select('item_name').gte('date_start', cutoff.isoformat()).execute()
-        return {row['item_name'] for row in (res.data or [])}
+        res = supabase.table('bounties').select('bounty_target_id').gte('date_start', cutoff.isoformat()).execute()
+        return {row['bounty_target_id'] for row in (res.data or []) if row['bounty_target_id'] is not None}
     except Exception as e:
-        log.error(f"_recently_used_bounty_items: failed to query bounties table: {e}")
+        log.error(f"_recently_used_bounty_targets: failed to query bounties table: {e}")
         return set()
 
 
 async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = None) -> tuple[bool, str]:
     """
-    Core logic: picks an item, creates a thread in BOUNTY_THREADS_CHANNEL_ID,
+    Core logic: picks a bounty target, creates a thread in BOUNTY_THREADS_CHANNEL_ID,
     and posts an announcement in BOUNTY_ANNOUNCEMENT_CHANNEL_ID.
     Returns (success, message).
     """
-    chosen_item = item_name
+    chosen_target = None
 
-    if not chosen_item:
-        items = await fetch_bounty_items()
-        if not items:
-            return False, "Could not fetch bounty items list. Check that the reference message is accessible."
+    if item_name:
+        targets = await fetch_bounty_targets()
+        chosen_target = next((t for t in targets if t['bounty_name'].lower() == item_name.lower()), None)
+        if not chosen_target:
+            # Freeform override with no matching bounty_targets row — proceed without a wiki link/image.
+            chosen_target = {'id': None, 'bounty_name': item_name, 'wiki_link': None, 'image_url': None}
+    else:
+        targets = await fetch_bounty_targets()
+        if not targets:
+            return False, "Could not fetch bounty targets. Check that the bounty_targets table has entries."
 
-        recently_used = await _recently_used_bounty_items()
-        chosen_item = random.choice(items)
+        recently_used = await _recently_used_bounty_targets()
+        chosen_target = random.choice(targets)
         reroll_attempts = 0
-        while chosen_item in recently_used and reroll_attempts < len(items):
+        while chosen_target['id'] in recently_used and reroll_attempts < len(targets):
             log.info(
-                f"_run_generate_bounty: rolled duplicate item '{chosen_item}' "
+                f"_run_generate_bounty: rolled duplicate target '{chosen_target['bounty_name']}' "
                 f"(used within {BOUNTY_REROLL_EXCLUSION_WEEKS} weeks) — rerolling."
             )
-            chosen_item = random.choice(items)
+            chosen_target = random.choice(targets)
             reroll_attempts += 1
         else:
-            if chosen_item in recently_used:
+            if chosen_target['id'] in recently_used:
                 log.warning(
-                    f"_run_generate_bounty: every item in the list has been used within "
-                    f"{BOUNTY_REROLL_EXCLUSION_WEEKS} weeks; ignoring exclusion for this roll ('{chosen_item}')."
+                    f"_run_generate_bounty: every target has been used within "
+                    f"{BOUNTY_REROLL_EXCLUSION_WEEKS} weeks; ignoring exclusion for this roll "
+                    f"('{chosen_target['bounty_name']}')."
                 )
+
+    chosen_item = chosen_target['bounty_name']
+    wiki_link = chosen_target.get('wiki_link')
+    image_url = chosen_target.get('image_url')
 
     threads_channel = guild.get_channel(BOUNTY_THREADS_CHANNEL_ID)
     if not threads_channel:
@@ -3548,18 +3544,18 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
 
     close_dt = _next_saturday_0600_utc(now)
     close_ts = int(close_dt.timestamp())
-    wiki_link = _wiki_url(chosen_item)
-    image_url = _wiki_image_url(chosen_item)
     event_password = _generate_event_password()
+
+    item_display = f"[{chosen_item}]({wiki_link})" if wiki_link else chosen_item
 
     role_mention = f"<@&{BOUNTY_ROLE_ID}>"
     opening_post = (
         f"{role_mention}\n\n"
         f"## Weekly Bounty: **{chosen_item}**\n\n"
-        f"This week's bounty item is **[{chosen_item}]({wiki_link})**. The event password is **{event_password}**.\n\n"
+        f"This week's bounty item is **{item_display}**. The event password is **{event_password}**.\n\n"
         f"Post a screenshot of your drop here. Staff will react with ✅ to confirm it counts.\n\n"
         f"*Thread closes <t:{close_ts}:F>.*\n\n"
-        f"{image_url}"
+        + (f"{image_url}" if image_url else "")
     )
 
     try:
@@ -3580,7 +3576,7 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
         embed = discord.Embed(
             title="🎯 New Weekly Bounty!",
             description=(
-                f"This week's bounty item is **[{chosen_item}]({wiki_link})**. The event password is **{event_password}**.\n\n"
+                f"This week's bounty item is **{item_display}**. The event password is **{event_password}**.\n\n"
                 f"Head over to {thread.mention} to submit your drop screenshot.\n"
                 f"Staff will react with ✅ to confirm eligible submissions.\n\n"
                 f"**Reward:** 3 Event Points\n\n"
@@ -3590,7 +3586,8 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
             color=discord.Color.gold(),
             timestamp=now,
         )
-        embed.set_thumbnail(url=image_url)
+        if image_url:
+            embed.set_thumbnail(url=image_url)
         embed.set_footer(text="Good luck, everyone!")
         await announcement_channel.send(embed=embed)
 
@@ -3601,6 +3598,7 @@ async def _run_generate_bounty(guild: discord.Guild, item_name: str | None = Non
     try:
         supabase.table('bounties').insert({
             'item_name': chosen_item,
+            'bounty_target_id': chosen_target['id'],
             'thread_id': thread.id,
             'password': event_password,
             'date_start': now.isoformat(),
@@ -3929,6 +3927,79 @@ async def grant_bounty_completion(interaction: discord.Interaction, rsn: str, pa
         )
     except Exception as e:
         log.error(f"Error in /grant-bounty-completion: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
+
+
+@client.tree.command(name="add-bounty-target", description="Add a new item to the weekly bounty target pool.")
+@app_commands.describe(
+    bounty_name="The item(s) of the bounty (e.g. 'Dragon Axe' or 'Berserker ring / Warrior ring').",
+    wiki_link="Optional: URL to the OSRS wiki page for this item.",
+    image_url="Optional: URL to an image for this item.",
+    publish="True to post the confirmation publicly."
+)
+@check_staff_role("Commander")
+async def add_bounty_target(
+    interaction: discord.Interaction,
+    bounty_name: str,
+    wiki_link: str = None,
+    image_url: str = None,
+    publish: bool = False,
+):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /add-bounty-target bounty_name='{bounty_name}' wiki_link='{wiki_link}' image_url='{image_url}' publish={publish} used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /add-bounty-target bounty_name='{bounty_name}' wiki_link='{wiki_link}' image_url='{image_url}' publish={publish} used by {interaction.user}")
+
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+
+    try:
+        supabase.table('bounty_targets').insert({
+            'bounty_name': bounty_name,
+            'wiki_link': wiki_link,
+            'image_url': image_url,
+        }).execute()
+        await interaction.followup.send(f"✅ Added **{bounty_name}** to the bounty target pool.", ephemeral=is_ephemeral)
+    except Exception as e:
+        log.error(f"Error in /add-bounty-target: {e}\n{traceback.format_exc()}")
+        await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
+
+
+@client.tree.command(name="delete-bounty-target", description="Remove an item from the weekly bounty target pool.")
+@app_commands.describe(
+    bounty_name="The exact name of the bounty target to remove.",
+    publish="True to post the confirmation publicly."
+)
+@check_staff_role("Commander")
+async def delete_bounty_target(interaction: discord.Interaction, bounty_name: str, publish: bool = False):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"[{timestamp}] /delete-bounty-target bounty_name='{bounty_name}' publish={publish} used by {interaction.user}")
+    await log_command_use(f"[{timestamp}] /delete-bounty-target bounty_name='{bounty_name}' publish={publish} used by {interaction.user}")
+
+    is_ephemeral = not publish
+    await interaction.response.defer(ephemeral=is_ephemeral)
+
+    try:
+        target_res = supabase.table('bounty_targets').select('id, bounty_name').ilike('bounty_name', bounty_name).limit(1).execute()
+        if not target_res.data:
+            await interaction.followup.send(f"❌ No bounty target found named `{bounty_name}`.", ephemeral=True)
+            return
+        target = target_res.data[0]
+
+        # Historical bounties reference bounty_targets via a NO ACTION foreign key, so a
+        # target that's ever been rolled must be kept — its past completions/EP awards stay intact.
+        usage_res = supabase.table('bounties').select('id').eq('bounty_target_id', target['id']).limit(1).execute()
+        if usage_res.data:
+            await interaction.followup.send(
+                f"❌ **{target['bounty_name']}** has been used in a past bounty and can't be deleted "
+                f"— historical records depend on it.",
+                ephemeral=True,
+            )
+            return
+
+        supabase.table('bounty_targets').delete().eq('id', target['id']).execute()
+        await interaction.followup.send(f"✅ Removed **{target['bounty_name']}** from the bounty target pool.", ephemeral=is_ephemeral)
+    except Exception as e:
+        log.error(f"Error in /delete-bounty-target: {e}\n{traceback.format_exc()}")
         await interaction.followup.send(f"An error occurred: `{e}`", ephemeral=True)
 
 
