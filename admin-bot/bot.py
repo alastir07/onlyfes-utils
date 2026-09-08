@@ -953,14 +953,14 @@ async def rankhistory(interaction: discord.Interaction, rsn: str, num_changes: i
 # --- 6. /SYNC-CLAN COMMAND ---
 @client.tree.command(name="syncclan", description="Manually run the daily sync with WOM.")
 @app_commands.describe(
-    dry_run="True (default) to just see the report. False to execute changes.",
+    dry_run="True to just see the report. False (default) to execute changes.",
     force_run="False (default). True to bypass the rank mismatch safety check.",
     publish="False to post privately. Defaults to True (posts publicly)."
 )
 @check_staff_role("General")
 async def sync_clan(
     interaction: discord.Interaction,
-    dry_run: bool = True,
+    dry_run: bool = False,
     force_run: bool = False,
     publish: bool = True
 ):
