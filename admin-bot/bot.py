@@ -93,7 +93,7 @@ def get_normalized_rank_from_db(rank_name_input: str) -> dict | None:
         return None
 
 def get_rank_display_name(rank_name: str) -> str:
-    """Returns the DISCORD_RANKS display_name (includes title, e.g. 'Maxed (Elite Skiller)') for a rank name, falling back to the rank name itself."""
+    """Returns the DISCORD_RANKS display_name (includes title, e.g. 'Maxed (Master Skiller)') for a rank name, falling back to the rank name itself."""
     normalized_input = normalize_string(rank_name)
     rank_config = next((r for r in DISCORD_RANKS if normalize_string(r["role_name"]) == normalized_input), None)
     return rank_config["display_name"] if rank_config else rank_name
@@ -279,8 +279,8 @@ DISCORD_RANKS = [
     {"role_id": 1225511118005604453, "role_name": "Dragonstone", "display_name": "Dragonstone", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
     {"role_id": 1225511151526346844, "role_name": "Onyx", "display_name": "Onyx", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
     {"role_id": 1225511181528334346, "role_name": "Zenyte", "display_name": "Zenyte", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
-    {"role_id": 1282755027399868468, "role_name": "Maxed", "display_name": "Maxed (Elite Skiller)", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
-    {"role_id": 1282755185013166100, "role_name": "TzKal", "display_name": "TzKal (Elite PvMer)", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1282755027399868468, "role_name": "Maxed", "display_name": "Maxed (Master Skiller)", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
+    {"role_id": 1282755185013166100, "role_name": "TzKal", "display_name": "TzKal (Master PvMer)", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
     {"role_id": 1419123726015922297, "role_name": "Myth", "display_name": "Myth (Living Legend)", "is_rankup_check": True, "auto_apply_discord": True, "is_exclusive": True},
     {"role_id": 1170648724968587324, "role_name": "Beast", "display_name": "Beast (BOTM Winner)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
     {"role_id": 1170648918414082120, "role_name": "Skiller", "display_name": "Skiller (SOTM Winner)", "is_rankup_check": False, "auto_apply_discord": True, "is_exclusive": False},
